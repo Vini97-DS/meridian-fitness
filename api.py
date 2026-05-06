@@ -1,0 +1,363 @@
+"""
+api.py — Backend Meridian Fitness
+Auth: JWT proprio com bcrypt + python-jose
+Banco: Neon (Postgres)
+Rodar: uvicorn api:app --reload --port 8000
+"""
+
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Optional
+from datetime import date, datetime, timedelta
+import psycopg2
+import psycopg2.extras
+import os
+import bcrypt
+from jose import jwt, JWTError
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(title="Meridian Fitness API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/css",    StaticFiles(directory="css"),    name="css")
+app.mount("/js",     StaticFiles(directory="js"),     name="js")
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
+@app.get("/Ativo 8.png")
+def serve_logo():
+    return FileResponse("Ativo 8.png")
+
+JWT_SECRET    = os.getenv("JWT_SECRET", "meridian-dev-secret-mude-em-producao")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRES   = 60 * 24 * 7
+
+def get_db():
+    conn = psycopg2.connect(
+        os.getenv("DATABASE_URL"),
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def query(conn, sql, params=None):
+    with conn.cursor() as cur:
+        cur.execute(sql, params or ())
+        return [dict(row) for row in cur.fetchall()]
+
+def execute(conn, sql, params=None):
+    with conn.cursor() as cur:
+        cur.execute(sql, params or ())
+        conn.commit()
+        try:
+            return dict(cur.fetchone())
+        except Exception:
+            return {"ok": True}
+
+# ── Paginas HTML ─────────────────────────────────────────────────
+@app.get("/")
+def serve_login():
+    return FileResponse("index.html")
+
+@app.get("/dashboard")
+def serve_dashboard():
+    return FileResponse("dashboard.html")
+
+@app.get("/primeiro-acesso")
+def serve_first_access():
+    return FileResponse("primeiro-acesso.html")
+
+# ── JWT helpers ──────────────────────────────────────────────────
+def create_token(user_id: str, email: str, name: str) -> str:
+    payload = {
+        "sub":   user_id,
+        "email": email,
+        "name":  name,
+        "exp":   datetime.utcnow() + timedelta(minutes=JWT_EXPIRES),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token invalido ou expirado")
+
+security = HTTPBearer(auto_error=False)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Token nao fornecido")
+    return verify_token(credentials.credentials)
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def check_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+# ── Cria tabela users no startup ─────────────────────────────────
+@app.on_event("startup")
+def create_users_table():
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name       TEXT NOT NULL,
+                    email      TEXT UNIQUE NOT NULL,
+                    password   TEXT NOT NULL,
+                    role       TEXT DEFAULT 'personal',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            conn.commit()
+        conn.close()
+        print("Tabela users OK")
+    except Exception as e:
+        print(f"Erro startup: {e}")
+
+# ═══════════════════════════════════════════════════════════════
+#  AUTH
+# ═══════════════════════════════════════════════════════════════
+class RegisterData(BaseModel):
+    name:     str
+    email:    str
+    password: str
+
+class LoginData(BaseModel):
+    email:    str
+    password: str
+
+@app.post("/api/auth/register")
+def register(data: RegisterData, conn=Depends(get_db)):
+    existing = query(conn, "SELECT id FROM users WHERE email = %s", (data.email.lower(),))
+    if existing:
+        raise HTTPException(status_code=400, detail="Email ja cadastrado")
+    if len(data.password) < 8:
+        raise HTTPException(status_code=400, detail="Senha deve ter minimo 8 caracteres")
+    hashed = hash_password(data.password)
+    user   = execute(conn, """
+        INSERT INTO users (name, email, password)
+        VALUES (%s, %s, %s)
+        RETURNING id, name, email
+    """, (data.name.strip(), data.email.lower().strip(), hashed))
+    token = create_token(str(user["id"]), user["email"], user["name"])
+    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
+
+@app.post("/api/auth/login")
+def login(data: LoginData, conn=Depends(get_db)):
+    rows = query(conn, "SELECT id, name, email, password FROM users WHERE email = %s", (data.email.lower(),))
+    if not rows:
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+    user = rows[0]
+    if not check_password(data.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+    token = create_token(str(user["id"]), user["email"], user["name"])
+    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
+
+@app.get("/api/auth/me")
+def me(current_user=Depends(get_current_user)):
+    return current_user
+
+# ═══════════════════════════════════════════════════════════════
+#  HEALTH
+# ═══════════════════════════════════════════════════════════════
+@app.get("/api/health")
+def health(conn=Depends(get_db)):
+    result = query(conn, "SELECT NOW() as time")
+    return {"status": "ok", "db": result[0]}
+
+# ═══════════════════════════════════════════════════════════════
+#  METRICAS BI
+# ═══════════════════════════════════════════════════════════════
+@app.get("/api/metrics/{personal_id}")
+def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    mrr = query(conn, """
+        SELECT COUNT(*) AS active_students,
+               COALESCE(SUM(price_paid),0) AS mrr,
+               COALESCE(AVG(price_paid),0) AS avg_ticket
+        FROM subscriptions WHERE personal_id = %s AND status = 'active'
+    """, (personal_id,))
+    e7 = query(conn, """
+        SELECT COUNT(*) AS count, COALESCE(SUM(price_paid),0) AS value
+        FROM subscriptions WHERE personal_id = %s AND status = 'active'
+          AND expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
+    """, (personal_id,))
+    e30 = query(conn, """
+        SELECT COUNT(*) AS count, COALESCE(SUM(price_paid),0) AS value
+        FROM subscriptions WHERE personal_id = %s AND status = 'active'
+          AND expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
+    """, (personal_id,))
+    mrr_history = query(conn, """
+        SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
+               SUM(price_paid) AS mrr
+        FROM subscriptions WHERE personal_id = %s
+          AND starts_at >= NOW() - INTERVAL '12 months'
+        GROUP BY DATE_TRUNC('month', starts_at)
+        ORDER BY DATE_TRUNC('month', starts_at)
+    """, (personal_id,))
+    m = mrr[0] if mrr else {}
+    return {
+        "active_students": int(m.get("active_students") or 0),
+        "mrr":             float(m.get("mrr") or 0),
+        "avg_ticket":      float(m.get("avg_ticket") or 0),
+        "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0)},
+        "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
+        "mrr_history":     mrr_history,
+    }
+
+# ═══════════════════════════════════════════════════════════════
+#  ALUNOS
+# ═══════════════════════════════════════════════════════════════
+class StudentCreate(BaseModel):
+    personal_id:    str
+    name:           str
+    phone:          str
+    email:          Optional[str]   = None
+    goal:           Optional[str]   = "emagrecimento"
+    channel:        Optional[str]   = "instagram"
+    weight_initial: Optional[float] = None
+    height_cm:      Optional[int]   = None
+    bf_initial:     Optional[float] = None
+    notes:          Optional[str]   = None
+
+@app.get("/api/students/{personal_id}")
+def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, "SELECT * FROM v_active_students WHERE personal_id = %s ORDER BY days_to_expire ASC", (personal_id,))
+
+@app.post("/api/students")
+def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO students (personal_id, name, phone, email, goal, channel, weight_initial, height_cm, bf_initial, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name, phone, created_at
+    """, (data.personal_id, data.name, data.phone, data.email, data.goal, data.channel,
+          data.weight_initial, data.height_cm, data.bf_initial, data.notes))
+
+# ═══════════════════════════════════════════════════════════════
+#  LEADS
+# ═══════════════════════════════════════════════════════════════
+class LeadCreate(BaseModel):
+    personal_id: str
+    name:        str
+    phone:       str
+    email:       Optional[str] = None
+    channel:     Optional[str] = "instagram"
+    goal:        Optional[str] = "emagrecimento"
+    plan_id:     Optional[str] = None
+    notes:       Optional[str] = None
+
+class LeadUpdate(BaseModel):
+    status:     Optional[str] = None
+    notes:      Optional[str] = None
+    ai_summary: Optional[str] = None
+
+@app.get("/api/leads/{personal_id}")
+def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    rows = query(conn, """
+        SELECT l.*, p.name AS plan_name, p.price_brl FROM leads l
+        LEFT JOIN plans p ON p.id = l.plan_id
+        WHERE l.personal_id = %s ORDER BY l.updated_at DESC
+    """, (personal_id,))
+    pipeline = {"novo":[],"contato":[],"proposta":[],"fechado":[],"perdido":[]}
+    for row in rows:
+        s = row.get("status","novo")
+        if s in pipeline: pipeline[s].append(row)
+    return pipeline
+
+@app.post("/api/leads")
+def create_lead(data: LeadCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO leads (personal_id, name, phone, email, channel, goal, plan_id, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name, phone, status, created_at
+    """, (data.personal_id, data.name, data.phone, data.email, data.channel, data.goal, data.plan_id, data.notes))
+
+@app.patch("/api/leads/{lead_id}")
+def update_lead(lead_id: str, data: LeadUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
+    fields, values = [], []
+    if data.status     is not None: fields.append("status = %s");     values.append(data.status)
+    if data.notes      is not None: fields.append("notes = %s");      values.append(data.notes)
+    if data.ai_summary is not None: fields.append("ai_summary = %s"); values.append(data.ai_summary)
+    if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
+    values.append(lead_id)
+    return execute(conn, f"UPDATE leads SET {', '.join(fields)}, updated_at=NOW() WHERE id=%s RETURNING id, status", values)
+
+# ═══════════════════════════════════════════════════════════════
+#  PLANOS
+# ═══════════════════════════════════════════════════════════════
+@app.get("/api/plans/{personal_id}")
+def get_plans(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, "SELECT * FROM plans WHERE personal_id=%s AND is_active=true ORDER BY duration_months", (personal_id,))
+
+# ═══════════════════════════════════════════════════════════════
+#  CHECKINS
+# ═══════════════════════════════════════════════════════════════
+class CheckinCreate(BaseModel):
+    student_id:        str
+    personal_id:       str
+    type:              Optional[str]   = "semanal"
+    training_feedback: Optional[str]   = None
+    trainings_done:    Optional[int]   = None
+    had_pain:          Optional[bool]  = False
+    pain_description:  Optional[str]   = None
+    nutrition_notes:   Optional[str]   = None
+    mood_score:        Optional[int]   = None
+    energy_score:      Optional[int]   = None
+    weight_reported:   Optional[float] = None
+    general_notes:     Optional[str]   = None
+
+@app.get("/api/checkins/{student_id}")
+def get_checkins(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, "SELECT * FROM checkins WHERE student_id=%s ORDER BY created_at DESC LIMIT 20", (student_id,))
+
+@app.post("/api/checkins")
+def create_checkin(data: CheckinCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    result = execute(conn, """
+        INSERT INTO checkins (student_id, personal_id, type, training_feedback, trainings_done,
+           had_pain, pain_description, nutrition_notes, mood_score, energy_score,
+           weight_reported, general_notes, responded_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id, student_id, created_at
+    """, (data.student_id, data.personal_id, data.type, data.training_feedback,
+          data.trainings_done, data.had_pain, data.pain_description, data.nutrition_notes,
+          data.mood_score, data.energy_score, data.weight_reported, data.general_notes))
+    if data.weight_reported:
+        execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s", (data.weight_reported, data.student_id))
+    return result
+
+# ═══════════════════════════════════════════════════════════════
+#  FOTOS
+# ═══════════════════════════════════════════════════════════════
+class PhotoCreate(BaseModel):
+    student_id:    str
+    checkin_id:    Optional[str]  = None
+    cloudinary_id: str
+    url:           str
+    angle:         Optional[str]  = "frontal"
+    taken_at:      Optional[date] = None
+    notes:         Optional[str]  = None
+
+@app.get("/api/photos/{student_id}")
+def get_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at DESC", (student_id,))
+
+@app.post("/api/photos")
+def save_photo(data: PhotoCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO progress_photos (student_id, checkin_id, cloudinary_id, url, angle, taken_at, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id, url, taken_at
+    """, (data.student_id, data.checkin_id, data.cloudinary_id,
+          data.url, data.angle, data.taken_at or date.today(), data.notes))

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Performance Hub · Login</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="auth-page">
+
+  <div class="bg">
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+  </div>
+
+  <main class="auth-center">
+    <div class="card">
+
+      <!-- Logo -->
+      <div class="card-logo">
+        <div class="logo-mark">M</div>
+        <div class="logo-text">
+          <span class="logo-name">Performance Hub</span>
+          <span class="logo-sub">by Meridian Labs</span>
+        </div>
+      </div>
+
+      <h1 class="card-title">Bem-vindo <em>de volta</em></h1>
+      <p class="card-desc">Acesse sua conta para acompanhar seus alunos e métricas de negócio.</p>
+
+      <!-- Alerta de erro -->
+      <div class="alert alert-error" id="login-error" style="display:none"></div>
+
+      <div class="field">
+        <label class="field-label" for="email">E-mail</label>
+        <input class="field-input" id="email" type="email"
+          placeholder="seu@email.com" autocomplete="email" />
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="password">Senha</label>
+        <div class="field-wrap">
+          <input class="field-input" id="password" type="password"
+            placeholder="••••••••" autocomplete="current-password" />
+          <span class="field-eye" id="toggle-pass">👁</span>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="login-btn">Entrar</button>
+
+      <div class="card-footer">
+        <span class="card-footer-note">
+          Primeiro acesso?
+          <a href="/primeiro-acesso">Criar senha</a>
+        </span>
+        <span class="card-footer-note">
+          <a id="forgot-link" href="#">Esqueci a senha</a>
+        </span>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/clerk.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

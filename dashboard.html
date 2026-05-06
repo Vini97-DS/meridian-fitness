@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Hub — Personal Trainer · Meridian Labs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#081321;--navy2:#0d1e30;--navy3:#112540;
+  --gold:#C9A84C;--silver:#A8B2BD;--white:#F0F4F8;
+  --dim:#3a4a5a;--green:#4ade80;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#a78bfa;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--navy);color:var(--white);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(201,168,76,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.025) 1px,transparent 1px);
+  background-size:55px 55px;pointer-events:none;z-index:0}
+
+/* ── HEADER ── */
+.header{position:relative;z-index:10;padding:32px 40px 24px;border-bottom:1px solid rgba(201,168,76,0.12);
+  display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.brand{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.25em;color:var(--gold);text-transform:uppercase;margin-bottom:8px}
+.header h1{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;line-height:1.1}
+.header h1 em{color:var(--gold);font-style:italic}
+.header-sub{margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);letter-spacing:0.05em}
+.header-meta{display:flex;gap:14px;flex-wrap:wrap}
+.meta-pill{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;color:var(--silver);border:1px solid var(--dim);padding:5px 12px;text-transform:uppercase}
+.meta-pill span{color:var(--gold)}
+
+/* ── ALERT BANNER ── */
+.alert-bar{position:relative;z-index:9;background:rgba(248,113,113,0.08);border-bottom:1px solid rgba(248,113,113,0.25);
+  padding:11px 40px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.alert-item{display:flex;align-items:center;gap:10px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em}
+.alert-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;animation:pulse 1.8s infinite}
+.alert-dot.red{background:var(--red)}
+.alert-dot.amber{background:var(--amber)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.4)}}
+.alert-label{color:var(--silver)}
+.alert-val{color:var(--red);font-weight:600}
+.alert-val.warn{color:var(--amber)}
+
+/* ── KPI ROW ── */
+.kpi-row{position:relative;z-index:1;display:grid;grid-template-columns:repeat(6,1fr);gap:1px;
+  background:rgba(201,168,76,0.07);border-bottom:1px solid rgba(201,168,76,0.1)}
+.kpi-card{background:var(--navy2);padding:22px 24px;position:relative;overflow:hidden;transition:background 0.2s}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+.kpi-card:hover{background:var(--navy3)}
+.kpi-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;color:var(--silver);text-transform:uppercase;margin-bottom:10px}
+.kpi-value{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:300;color:var(--gold);line-height:1}
+.kpi-sub{margin-top:6px;font-family:'DM Mono',monospace;font-size:9px;color:var(--silver)}
+.kpi-badge{display:inline-block;margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;padding:2px 8px;border-radius:2px}
+.kpi-badge.pass{background:rgba(74,222,128,0.1);color:var(--green)}
+.kpi-badge.warn{background:rgba(251,191,36,0.1);color:var(--amber)}
+.kpi-badge.fail{background:rgba(248,113,113,0.1);color:var(--red)}
+.kpi-badge.info{background:rgba(96,165,250,0.1);color:var(--blue)}
+
+/* ── TABS ── */
+.nav-tabs{position:sticky;top:0;z-index:100;background:var(--navy2);
+  border-bottom:1px solid rgba(201,168,76,0.1);display:flex;padding:0 40px}
+.nav-tab{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  padding:13px 22px;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;
+  transition:all 0.2s;background:none;border-top:none;border-left:none;border-right:none}
+.nav-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.nav-tab:hover:not(.active){color:var(--silver)}
+
+/* ── SECTIONS ── */
+.section{display:none;position:relative;z-index:1;padding:32px 40px 60px}
+.section.active{display:block}
+
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+.g4{grid-template-columns:1fr 1fr 1fr 1fr}
+.col2{grid-column:span 2}
+.col3{grid-column:span 3}
+.col4{grid-column:span 4}
+
+/* ── PANELS ── */
+.panel{background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:24px 28px;transition:border-color 0.2s}
+.panel:hover{border-color:rgba(201,168,76,0.14)}
+.panel-header{display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(168,178,189,0.07)}
+.panel-title{font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--silver)}
+.panel-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px}
+.panel-badge{font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);border:1px solid rgba(201,168,76,0.3);padding:3px 10px;white-space:nowrap}
+.panel-badge.green{color:var(--green);border-color:rgba(74,222,128,0.3)}
+.panel-badge.red{color:var(--red);border-color:rgba(248,113,113,0.3)}
+.panel-badge.blue{color:var(--blue);border-color:rgba(96,165,250,0.3)}
+
+.chart-wrap{position:relative;width:100%}.chart-wrap canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+
+.insight-row{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+.insight{flex:1;min-width:120px;background:rgba(201,168,76,0.05);border-left:2px solid var(--gold);padding:10px 14px}
+.insight.green{border-left-color:var(--green);background:rgba(74,222,128,0.04)}
+.insight.red{border-left-color:var(--red);background:rgba(248,113,113,0.04)}
+.insight.blue{border-left-color:var(--blue);background:rgba(96,165,250,0.04)}
+.insight-val{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:300;color:var(--gold)}
+.insight.green .insight-val{color:var(--green)}
+.insight.red .insight-val{color:var(--red)}
+.insight.blue .insight-val{color:var(--blue)}
+.insight-desc{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:4px;letter-spacing:0.05em;line-height:1.5}
+
+/* ── DATA TABLE ── */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 12px;border-bottom:1px solid rgba(168,178,189,0.08)}
+.data-table td{font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 12px;border-bottom:1px solid rgba(168,178,189,0.04);transition:background 0.15s}
+.data-table tr:hover td{background:rgba(201,168,76,0.04)}
+.data-table td.num{color:var(--gold);text-align:right}
+.data-table td.green{color:var(--green)}
+.data-table td.red{color:var(--red)}
+.data-table td.amber{color:var(--amber)}
+.bar-inline{display:inline-block;height:3px;background:var(--gold);border-radius:2px;vertical-align:middle;margin-left:8px;opacity:0.45}
+
+/* ── CHURN RISK CARDS ── */
+.churn-list{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.churn-item{display:flex;align-items:center;gap:14px;padding:12px 16px;border:1px solid rgba(168,178,189,0.06);transition:all 0.2s;cursor:default}
+.churn-item:hover{border-color:rgba(248,113,113,0.2);background:rgba(248,113,113,0.03)}
+.churn-avatar{width:36px;height:36px;border-radius:50%;background:var(--navy3);display:flex;align-items:center;justify-content:center;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);border:1px solid rgba(201,168,76,0.2);flex-shrink:0}
+.churn-info{flex:1}
+.churn-name{font-size:11px;font-weight:600;letter-spacing:0.05em;color:var(--white)}
+.churn-detail{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:3px}
+.churn-risk{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;padding:3px 10px;border-radius:2px}
+.churn-risk.high{background:rgba(248,113,113,0.12);color:var(--red);border:1px solid rgba(248,113,113,0.2)}
+.churn-risk.med{background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)}
+
+/* ── RENEWAL COUNTDOWN ── */
+.renew-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px}
+.renew-card{padding:16px;border:1px solid rgba(168,178,189,0.07);text-align:center;transition:all 0.2s}
+.renew-card:hover{border-color:rgba(201,168,76,0.2)}
+.renew-days{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;line-height:1}
+.renew-days.urgent{color:var(--red)}
+.renew-days.soon{color:var(--amber)}
+.renew-days.ok{color:var(--green)}
+.renew-name{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:5px;letter-spacing:0.08em}
+.renew-plan{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:2px}
+
+/* ── PROFILE CARDS ── */
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px}
+.profile-card{padding:18px;border:1px solid rgba(168,178,189,0.07);text-align:center;transition:all 0.2s}
+.profile-card:hover{border-color:rgba(201,168,76,0.2);transform:translateY(-2px)}
+.profile-icon{font-size:2rem;margin-bottom:10px}
+.profile-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--silver);margin-bottom:6px}
+.profile-val{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:300;color:var(--gold)}
+.profile-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px;line-height:1.5}
+
+/* ── ML FORECAST BOX ── */
+.forecast-box{background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);padding:20px 24px;margin-bottom:20px}
+.forecast-title{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.forecast-badge{background:rgba(96,165,250,0.12);padding:2px 8px;font-size:8px}
+.forecast-row{display:flex;gap:24px;flex-wrap:wrap}
+.forecast-item{text-align:center}
+.forecast-item-val{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:300;color:var(--blue)}
+.forecast-item-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:4px}
+
+/* ── FUNIL ── */
+.funnel-wrap{margin-top:8px}
+.funnel-step{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.funnel-bar-bg{flex:1;height:32px;background:rgba(168,178,189,0.05);border:1px solid rgba(168,178,189,0.07);position:relative;overflow:hidden}
+.funnel-fill{height:100%;transition:width 0.8s ease;display:flex;align-items:center;padding-left:12px}
+.funnel-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;width:120px;color:var(--silver);text-align:right;flex-shrink:0}
+.funnel-num{font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);width:60px;flex-shrink:0;text-align:right}
+.funnel-pct{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);width:42px;flex-shrink:0;text-align:right}
+
+/* ══════ ABA 2: ACOMPANHAMENTO ══════ */
+
+/* ── STUDENT FILTER ── */
+.student-filter{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.filter-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver)}
+.student-select{background:var(--navy2);border:1px solid rgba(201,168,76,0.2);color:var(--white);
+  font-family:'DM Mono',monospace;font-size:11px;padding:8px 14px;outline:none;cursor:pointer;min-width:220px}
+.student-select option{background:var(--navy2)}
+.filter-btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+  padding:8px 18px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);color:var(--gold);cursor:pointer;transition:all 0.2s}
+.filter-btn:hover{background:rgba(201,168,76,0.15)}
+
+/* ── STUDENT PROFILE HEADER ── */
+.student-header{background:var(--navy2);border:1px solid rgba(201,168,76,0.12);padding:20px 28px;
+  display:flex;align-items:center;gap:24px;margin-bottom:20px;flex-wrap:wrap}
+.student-avatar-big{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--navy3),rgba(201,168,76,0.2));
+  display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:18px;color:var(--gold);
+  border:2px solid rgba(201,168,76,0.3);flex-shrink:0}
+.student-info{flex:1}
+.student-name{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300;color:var(--white)}
+.student-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);margin-top:4px;display:flex;gap:16px;flex-wrap:wrap}
+.student-meta span{color:var(--gold)}
+.student-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.s-badge{font-family:'DM Mono',monospace;font-size:9px;padding:3px 10px;border-radius:2px}
+.s-badge.active{background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)}
+.s-badge.plan{background:rgba(201,168,76,0.08);color:var(--gold);border:1px solid rgba(201,168,76,0.2)}
+.s-badge.goal{background:rgba(96,165,250,0.08);color:var(--blue);border:1px solid rgba(96,165,250,0.2)}
+.student-kpis{display:flex;gap:20px;flex-wrap:wrap}
+.s-kpi{text-align:center}
+.s-kpi-val{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--gold)}
+.s-kpi-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--silver);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px}
+
+/* ── PHOTO COMPARISON ── */
+.photo-compare{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:8px}
+.photo-card{border:1px solid rgba(168,178,189,0.08);overflow:hidden;transition:all 0.2s}
+.photo-card:hover{border-color:rgba(201,168,76,0.2)}
+.photo-placeholder{width:100%;height:260px;background:linear-gradient(160deg,var(--navy3) 0%,rgba(201,168,76,0.04) 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;position:relative}
+.photo-placeholder::before{content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(201,168,76,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.04) 1px,transparent 1px);
+  background-size:20px 20px}
+.photo-icon{font-size:2.5rem;opacity:0.4}
+.photo-date{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);letter-spacing:0.1em}
+.photo-footer{padding:10px 14px;background:var(--navy3);display:flex;justify-content:space-between;align-items:center}
+.photo-footer-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);letter-spacing:0.08em;text-transform:uppercase}
+.photo-footer-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--gold)}
+
+/* ── FORM RESPONSES ── */
+.response-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;max-height:380px;overflow-y:auto}
+.response-list::-webkit-scrollbar{width:4px}
+.response-list::-webkit-scrollbar-track{background:transparent}
+.response-list::-webkit-scrollbar-thumb{background:rgba(201,168,76,0.2);border-radius:2px}
+.response-item{border:1px solid rgba(168,178,189,0.07);padding:14px 16px;transition:all 0.2s;cursor:pointer}
+.response-item:hover{border-color:rgba(201,168,76,0.15);background:rgba(201,168,76,0.03)}
+.response-item.open{border-color:rgba(201,168,76,0.25);background:rgba(201,168,76,0.04)}
+.response-header{display:flex;align-items:center;gap:12px}
+.response-date{font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);flex-shrink:0;width:80px}
+.response-week{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);flex-shrink:0;width:70px}
+.response-stars{display:flex;gap:2px;flex-shrink:0}
+.star{font-size:11px;color:var(--dim)}
+.star.on{color:var(--amber)}
+.response-summary{font-size:11px;color:var(--silver);flex:1;font-family:'DM Mono',monospace;font-size:10px}
+.response-tag{font-family:'DM Mono',monospace;font-size:8px;padding:2px 7px;margin-left:6px;border-radius:2px}
+.response-tag.great{background:rgba(74,222,128,0.1);color:var(--green)}
+.response-tag.ok{background:rgba(251,191,36,0.08);color:var(--amber)}
+.response-tag.bad{background:rgba(248,113,113,0.1);color:var(--red)}
+.response-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid rgba(168,178,189,0.07)}
+.response-body.open{display:block}
+.response-field{margin-bottom:10px}
+.response-field-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.response-field-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);line-height:1.6}
+
+/* ── FORM BUILDER ── */
+.form-builder{margin-top:4px}
+.form-field{margin-bottom:14px}
+.form-field-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--silver);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.form-field-required{font-size:9px;color:var(--red)}
+.form-input{width:100%;background:var(--navy);border:1px solid rgba(168,178,189,0.12);color:var(--white);
+  font-family:'DM Mono',monospace;font-size:11px;padding:10px 14px;outline:none;transition:border-color 0.2s;resize:vertical}
+.form-input:focus{border-color:rgba(201,168,76,0.35)}
+.form-input::placeholder{color:var(--dim)}
+.form-scale{display:flex;gap:8px;margin-top:6px}
+.scale-btn{width:36px;height:36px;border:1px solid rgba(168,178,189,0.1);background:var(--navy);
+  color:var(--silver);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center}
+.scale-btn:hover,.scale-btn.active{background:rgba(201,168,76,0.1);border-color:rgba(201,168,76,0.4);color:var(--gold)}
+.form-photo-area{border:1px dashed rgba(168,178,189,0.15);padding:28px;text-align:center;background:rgba(168,178,189,0.02);transition:all 0.2s;cursor:pointer}
+.form-photo-area:hover{border-color:rgba(201,168,76,0.3);background:rgba(201,168,76,0.03)}
+.form-photo-icon{font-size:1.8rem;margin-bottom:8px;opacity:0.5}
+.form-photo-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--silver)}
+.form-actions{display:flex;gap:12px;margin-top:20px}
+.btn-primary{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  padding:10px 24px;background:rgba(201,168,76,0.1);border:1px solid var(--gold);color:var(--gold);cursor:pointer;transition:all 0.2s}
+.btn-primary:hover{background:rgba(201,168,76,0.2)}
+.btn-secondary{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  padding:10px 24px;background:transparent;border:1px solid rgba(168,178,189,0.2);color:var(--silver);cursor:pointer;transition:all 0.2s}
+.btn-secondary:hover{border-color:var(--silver)}
+.agent-note{background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);padding:12px 16px;
+  font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);line-height:1.6;margin-top:14px;display:flex;gap:10px;align-items:flex-start}
+.agent-note-icon{color:var(--blue);flex-shrink:0;font-size:13px}
+
+/* ── ENGAGEMENT SCORE ── */
+.engagement-bar{height:8px;background:rgba(168,178,189,0.08);border-radius:4px;overflow:hidden;margin-top:8px}
+.engagement-fill{height:100%;border-radius:4px;transition:width 1s ease}
+
+/* ── TIMELINE ── */
+.timeline{position:relative;padding-left:24px;margin-top:4px}
+.timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:1px;background:rgba(201,168,76,0.15)}
+.tl-item{position:relative;margin-bottom:16px}
+.tl-dot{position:absolute;left:-21px;top:4px;width:10px;height:10px;border-radius:50%;border:2px solid var(--gold);background:var(--navy2)}
+.tl-dot.green{border-color:var(--green)}
+.tl-dot.blue{border-color:var(--blue)}
+.tl-dot.amber{border-color:var(--amber)}
+.tl-date{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.08em}
+.tl-title{font-size:11px;font-weight:600;color:var(--white);margin-top:3px}
+.tl-desc{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:2px;line-height:1.5}
+
+/* ── FOOTER ── */
+.footer{position:relative;z-index:1;padding:20px 40px;border-top:1px solid rgba(201,168,76,0.08);
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.footer-brand{font-size:12px;font-weight:700;letter-spacing:0.2em;color:var(--gold)}
+.footer-note{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
+
+@media(max-width:1100px){
+  .g3,.g4{grid-template-columns:1fr 1fr}
+  .col3,.col4{grid-column:span 2}
+  .kpi-row{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:700px){
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .col2,.col3,.col4{grid-column:span 1}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .header,.section,.footer,.alert-bar{padding-left:16px;padding-right:16px}
+  .nav-tabs{padding:0 16px}
+  .photo-compare{grid-template-columns:1fr}
+  .renew-grid{grid-template-columns:1fr 1fr}
+}
+/* ── LOGO IMG ── */
+.logo-img{height:36px;width:auto;object-fit:contain;display:block;filter:brightness(0.9)}
+.header-logo-wrap{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+
+/* ── CHART-WRAP FIX ── */
+.chart-wrap{position:relative;width:100%;height:240px;min-height:0;overflow:hidden}
+
+/* ══ VENDAS TAB ══ */
+.plans-grid-v{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.plan-card-v{border:1px solid rgba(168,178,189,0.08);padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
+.plan-card-v::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
+.plan-card-v.p1::before{background:var(--red)}.plan-card-v.p3::before{background:var(--amber)}.plan-card-v.p6::before{background:var(--gold)}.plan-card-v.p12::before{background:var(--green)}
+.plan-card-v:hover,.plan-card-v.sel{border-color:rgba(201,168,76,0.35);background:rgba(201,168,76,0.05);transform:translateY(-2px)}
+.plan-dur{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--silver);margin-bottom:6px}
+.plan-price-v{font-family:"Cormorant Garamond",serif;font-size:1.8rem;font-weight:300;color:var(--gold);line-height:1}
+.plan-price-sub{font-family:"DM Mono",monospace;font-size:9px;color:var(--dim);margin-top:3px}
+.plan-renov{font-family:"DM Mono",monospace;font-size:8px;padding:2px 7px;margin-top:6px;display:inline-block;border-radius:2px}
+.v-field{margin-bottom:12px}
+.v-label{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);display:block;margin-bottom:6px}
+.v-input,.v-select{width:100%;background:rgba(7,17,29,0.6);border:1px solid rgba(168,178,189,0.12);color:var(--white);font-family:"DM Mono",monospace;font-size:11px;padding:10px 13px;outline:none;transition:border-color 0.2s}
+.v-input:focus,.v-select:focus{border-color:rgba(201,168,76,0.4)}
+.v-input::placeholder{color:var(--dim)}
+.v-select option{background:var(--navy2)}
+.link-box-v{display:flex;align-items:center;gap:10px;background:var(--navy);border:1px solid rgba(201,168,76,0.22);padding:12px 16px;margin-top:12px}
+.link-url-v{font-family:"DM Mono",monospace;font-size:10px;color:var(--blue);flex:1;word-break:break-all}
+.link-copy-v{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;padding:6px 14px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);color:var(--blue);cursor:pointer;flex-shrink:0;transition:all 0.2s;white-space:nowrap}
+.link-copy-v:hover{background:rgba(96,165,250,0.16)}
+.link-copy-v.copied{color:var(--green);border-color:rgba(74,222,128,0.3)}
+.vbtn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;padding:10px 20px;cursor:pointer;transition:all 0.2s;border-radius:2px}
+.vbtn-green{background:rgba(74,222,128,0.1);border:1px solid var(--green);color:var(--green)}
+.vbtn-green:hover{background:rgba(74,222,128,0.2)}
+.vbtn-blue{background:rgba(96,165,250,0.1);border:1px solid var(--blue);color:var(--blue)}
+.vbtn-blue:hover{background:rgba(96,165,250,0.2)}
+.vkpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:rgba(201,168,76,0.07);border:1px solid rgba(201,168,76,0.1);margin-bottom:24px}
+.v-kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.v-kcol{background:rgba(168,178,189,0.02);border:1px solid rgba(168,178,189,0.06);padding:10px}
+.v-kcol-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(168,178,189,0.06)}
+.v-kcol-title{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--silver)}
+.v-kcount{font-family:"DM Mono",monospace;font-size:9px;padding:1px 7px;border-radius:10px}
+.v-kcard{background:var(--navy2);border:1px solid rgba(168,178,189,0.07);padding:10px 12px;margin-bottom:7px;transition:all 0.2s;position:relative}
+.v-kcard:hover{border-color:rgba(201,168,76,0.2);transform:translateY(-1px)}
+.v-kcard-name{font-size:11px;font-weight:600;color:var(--white);margin-bottom:2px}
+.v-kcard-detail{font-family:"DM Mono",monospace;font-size:9px;color:var(--silver);line-height:1.4}
+.v-kcard-val{font-family:"DM Mono",monospace;font-size:10px;color:var(--gold);margin-top:4px}
+.v-kcard-days{position:absolute;top:8px;right:8px;font-family:"DM Mono",monospace;font-size:8px;color:var(--dim)}
+.roi-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.roi-card{padding:16px;border:1px solid rgba(168,178,189,0.07);text-align:center}
+.roi-card-label{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px}
+.roi-card-val{font-family:"Cormorant Garamond",serif;font-size:1.7rem;font-weight:300}
+.roi-card-sub{font-family:"DM Mono",monospace;font-size:9px;color:var(--dim);margin-top:4px;line-height:1.5}
+
+/* ══ LIGHT THEME ══ */
+[data-theme="light"] {
+  --navy:#E8ECF0;--navy2:#F4F6F8;--navy3:#FFFFFF;
+  --gold:#1C3A5C;--silver:#2C4A68;--white:#0D1B2A;
+  --dim:#6B8099;--green:#16A34A;--red:#DC2626;--amber:#D97706;--blue:#1D6FA4;--purple:#6D28D9;
+}
+[data-theme="light"] body{background:#E8ECF0}
+[data-theme="light"] body::before{background-image:linear-gradient(rgba(28,58,92,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(28,58,92,0.03) 1px,transparent 1px)}
+[data-theme="light"] .bg-glow{opacity:0.05}
+[data-theme="light"] .header{background:#F4F6F8;border-color:rgba(28,58,92,0.12)}
+[data-theme="light"] .alert-bar{background:rgba(220,38,38,0.05);border-color:rgba(220,38,38,0.15)}
+[data-theme="light"] .kpi-card{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+[data-theme="light"] .nav-tabs{background:#fff;border-color:rgba(28,58,92,0.1)}
+[data-theme="light"] .panel{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+[data-theme="light"] .v-kcard, [data-theme="light"] .v-kcol{background:#F4F6F8}
+[data-theme="light"] .churn-avatar, [data-theme="light"] .renew-card, [data-theme="light"] .profile-card{background:#F4F6F8}
+[data-theme="light"] .footer{background:#F4F6F8}
+[data-theme="light"] .forecast-box{background:rgba(28,58,92,0.04);border-color:rgba(28,58,92,0.12)}
+[data-theme="light"] .kpi-badge.pass{background:rgba(22,163,74,0.1);color:#15803d}
+[data-theme="light"] .kpi-badge.fail{background:rgba(220,38,38,0.08);color:#dc2626}
+[data-theme="light"] .kpi-badge.warn{background:rgba(217,119,6,0.08);color:#b45309}
+[data-theme="light"] .kpi-badge.info{background:rgba(29,111,164,0.08);color:#1d6fa4}
+[data-theme="light"] .logo-img{filter:brightness(0.25)}
+[data-theme="light"] .v-input, [data-theme="light"] .v-select{background:#fff;color:#0D1B2A;border-color:rgba(28,58,92,0.18)}
+[data-theme="light"] .student-header{background:#fff}
+[data-theme="light"] .photo-placeholder{background:linear-gradient(160deg,#E8ECF0,rgba(28,58,92,0.06))}
+[data-theme="light"] .form-input{background:#fff;color:#0D1B2A}
+[data-theme="light"] .scale-btn{background:#F4F6F8;color:#2C4A68}
+[data-theme="light"] .kanban-card, [data-theme="light"] .kanban-col{background:#F4F6F8}
+[data-theme="light"] .response-item{background:#F4F6F8}
+
+/* ── THEME TOGGLE ── */
+.theme-toggle{width:34px;height:34px;border-radius:50%;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0}
+.theme-toggle:hover{background:rgba(201,168,76,0.18)}
+[data-theme="light"] .theme-toggle{background:rgba(28,58,92,0.07);border-color:rgba(28,58,92,0.22);color:#1C3A5C}
+
+/* ══ CONTEXT MENU ══ */
+.ctx-overlay{position:fixed;inset:0;z-index:998;display:none}
+.ctx-overlay.open{display:block}
+.ctx-menu{position:fixed;z-index:999;width:320px;background:var(--navy2);border:1px solid rgba(201,168,76,0.2);box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:ctxIn 0.15s ease;display:none}
+[data-theme="light"] .ctx-menu{background:#fff;box-shadow:0 20px 40px rgba(0,0,0,0.15)}
+@keyframes ctxIn{from{opacity:0;transform:scale(0.95) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.ctx-header{padding:14px 16px;border-bottom:1px solid rgba(201,168,76,0.12);display:flex;align-items:center;justify-content:space-between}
+.ctx-lead-name{font-size:12px;font-weight:600;color:var(--white);letter-spacing:0.04em}
+.ctx-lead-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:2px}
+.ctx-close{width:22px;height:22px;border-radius:50%;background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--dim);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.ctx-close:hover{background:rgba(248,113,113,0.1);color:var(--red);border-color:rgba(248,113,113,0.3)}
+.ctx-info{padding:10px 16px;border-bottom:1px solid rgba(168,178,189,0.06);display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.ctx-info-label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin-bottom:1px}
+.ctx-info-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--silver)}
+.ctx-section-label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:var(--dim);padding:10px 16px 5px}
+.ctx-status-btns{display:flex;gap:5px;padding:0 16px 10px;flex-wrap:wrap}
+.ctx-sbtn{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;padding:5px 9px;border-radius:2px;cursor:pointer;transition:all 0.15s;background:transparent}
+.ctx-sbtn[data-s="novo"]{border:1px solid rgba(96,165,250,0.35);color:var(--blue)}
+.ctx-sbtn[data-s="contato"]{border:1px solid rgba(167,139,250,0.35);color:var(--purple)}
+.ctx-sbtn[data-s="proposta"]{border:1px solid rgba(251,191,36,0.35);color:var(--amber)}
+.ctx-sbtn[data-s="fechado"]{border:1px solid rgba(74,222,128,0.35);color:var(--green)}
+.ctx-sbtn[data-s="perdido"]{border:1px solid rgba(248,113,113,0.35);color:var(--red)}
+.ctx-sbtn.cur[data-s="novo"]{background:rgba(96,165,250,0.12)}
+.ctx-sbtn.cur[data-s="contato"]{background:rgba(167,139,250,0.12)}
+.ctx-sbtn.cur[data-s="proposta"]{background:rgba(251,191,36,0.12)}
+.ctx-sbtn.cur[data-s="fechado"]{background:rgba(74,222,128,0.12)}
+.ctx-sbtn.cur[data-s="perdido"]{background:rgba(248,113,113,0.12)}
+.ctx-notes-area{width:100%;background:rgba(7,17,29,0.5);border:1px solid rgba(168,178,189,0.12);color:var(--white);font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;resize:none;outline:none;transition:border-color 0.2s;line-height:1.5}
+[data-theme="light"] .ctx-notes-area{background:#F4F6F8;color:#0D1B2A}
+.ctx-notes-area:focus{border-color:rgba(201,168,76,0.4)}
+.ctx-notes-area::placeholder{color:var(--dim)}
+.ctx-ai-box{margin:0 16px 10px;background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);padding:10px 12px}
+.ctx-ai-label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--blue);margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.ctx-ai-text{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);line-height:1.6}
+.ctx-footer{padding:10px 16px;border-top:1px solid rgba(168,178,189,0.06);display:flex;gap:7px;justify-content:flex-end}
+.ctx-btn{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;padding:7px 14px;cursor:pointer;transition:all 0.2s}
+.ctx-btn-save{background:rgba(74,222,128,0.1);border:1px solid var(--green);color:var(--green)}
+.ctx-btn-save:hover{background:rgba(74,222,128,0.2)}
+.ctx-btn-cancel{background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--dim)}
+.ctx-btn-cancel:hover{border-color:rgba(168,178,189,0.35)}
+
+
+/* ── VENDAS LAYOUT FIXES ── */
+.v-kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:start}
+.v-kcol{max-height:480px;overflow-y:auto}
+.v-kcol::-webkit-scrollbar{width:3px}
+.v-kcol::-webkit-scrollbar-thumb{background:rgba(201,168,76,0.2);border-radius:2px}
+.v-kcard{cursor:pointer}
+
+/* ── CHART CANVAS TRANSPARENT ── */
+canvas{background:transparent!important}
+
+/* ── SECTION MIN HEIGHT ── */
+.section.active{min-height:calc(100vh - 200px)}
+
+/* ── LIGHT THEME CHART AREAS ── */
+[data-theme="light"] .chart-wrap{background:transparent}
+[data-theme="light"] canvas{background:transparent!important}
+
+
+/* ── DARK MODE EXPLICIT BACKGROUNDS ── */
+.panel,.kpi-card,.v-kcol,.v-kcard,.churn-item,.kanban-card,
+.renew-card,.profile-card,.response-item,.forecast-box,
+.student-header,.photo-card,.roi-card,.insight{
+  background-color: var(--navy2);
+}
+.insight.green{background:rgba(74,222,128,0.04)}
+.insight.red{background:rgba(248,113,113,0.04)}
+.insight.blue{background:rgba(96,165,250,0.04)}
+.insight{background:rgba(201,168,76,0.04)}
+.forecast-box{background:rgba(96,165,250,0.05)}
+.v-kcol{background:rgba(168,178,189,0.03)}
+canvas{background:transparent!important}
+
+/* ── VENDAS CHART SIZE FIX ── */
+#vMixChart, #salesChannelChart, #roiChart {
+  min-height: 200px !important;
+}
+.panel .chart-wrap {
+  height: 240px !important;
+  min-height: 240px !important;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<div class="header">
+  <div>
+    <div class="header-logo-wrap">
+      <img src="data:image/png;base64,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" alt="Meridian" class="logo-img" />
+      <div>
+        <div class="brand">Performance Hub</div>
+        <h1>Rafael Moura — <em>Personal Trainer</em></h1>
+      </div>
+    </div>
+    <div class="header-sub">10 anos de carreira · Online + Presencial · Dashboard de Gestão & Resultados</div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+    <div class="header-meta">
+      <div class="meta-pill">Alunos Ativos <span>410</span></div>
+      <div class="meta-pill">MRR <span>R$ 89.400</span></div>
+      <div class="meta-pill">Atualizado <span>Mai 2026</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="text-align:right">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);letter-spacing:0.05em" id="dash-user-name">Rafael Moura</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:1px">Personal Trainer</div>
+      </div>
+      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--navy3),rgba(201,168,76,0.15));border:1.5px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;color:var(--gold)" id="dash-user-avatar">RM</div>
+      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button onclick="doLogout()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;padding:6px 14px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer;transition:all 0.2s" onmouseover="this.style.background='rgba(248,113,113,0.08)'" onmouseout="this.style.background='transparent'">Sair</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ ALERT BAR ══════════════════ -->
+<div class="alert-bar">
+  <div class="alert-item">
+    <div class="alert-dot red"></div>
+    <span class="alert-label">Planos vencendo em 7 dias:</span>&nbsp;
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600">14 alunos — R$ 8.260 em risco</span>
+  </div>
+  <div class="alert-item">
+    <div class="alert-dot red"></div>
+    <span class="alert-label">Churn crítico:</span>&nbsp;
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600">9 alunos sem check-in há +21 dias</span>
+  </div>
+</div>
+
+<!-- ══════════════════ KPI ROW ══════════════════ -->
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">MRR Atual</div>
+    <div class="kpi-value">89.4K</div>
+    <div class="kpi-sub">Receita mensal recorrente</div>
+    <div class="kpi-badge pass">↑ +12.3% vs jan</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Alunos Ativos</div>
+    <div class="kpi-value">410</div>
+    <div class="kpi-sub">400 online · 10 presenciais</div>
+    <div class="kpi-badge pass">Máx. histórico</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Ticket Médio</div>
+    <div class="kpi-value">R$218</div>
+    <div class="kpi-sub">Online: R$197 · Presencial: R$580</div>
+    <div class="kpi-badge warn">↑ Meta: R$240</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Taxa de Renovação</div>
+    <div class="kpi-value">74%</div>
+    <div class="kpi-sub">Média últimos 6 meses</div>
+    <div class="kpi-badge warn">Meta: 82%</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Churn Rate</div>
+    <div class="kpi-value">8.2%</div>
+    <div class="kpi-sub">Média mensal · 33 alunos/mês</div>
+    <div class="kpi-badge fail">↑ Acima da meta 6%</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">LTV Médio</div>
+    <div class="kpi-value">R$1.540</div>
+    <div class="kpi-sub">Tempo médio: 7,1 meses</div>
+    <div class="kpi-badge info">LTV/CAC: 4.8x</div>
+  </div>
+</div>
+
+<!-- ══════════════════ NAV TABS ══════════════════ -->
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('bi',this)">BI & Negócio</button>
+  <button class="nav-tab" onclick="switchTab('vendas',this)">Vendas</button>
+  <button class="nav-tab" onclick="switchTab('acompanhamento',this)">Acompanhamento de Alunos</button>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- ════════════ TAB 1: BI & NEGÓCIO ════════════ -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="section active" id="tab-bi">
+
+  <!-- ML FORECAST BOX -->
+  <div class="forecast-box">
+    <div class="forecast-title">
+      <span>⚡</span> ML Forecast — Próximos 3 Meses
+      <span class="forecast-badge">MODELO PREDITIVO</span>
+      <span class="forecast-badge" style="background:rgba(74,222,128,0.1);color:var(--green);margin-left:4px">CONFIANÇA 87%</span>
+    </div>
+    <div class="forecast-row">
+      <div class="forecast-item">
+        <div class="forecast-item-val">R$96.2K</div>
+        <div class="forecast-item-label">MRR Jun/26</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val">R$103.8K</div>
+        <div class="forecast-item-label">MRR Jul/26</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val">R$109.1K</div>
+        <div class="forecast-item-label">MRR Ago/26</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val" style="color:var(--green)">437</div>
+        <div class="forecast-item-label">Alunos projetados Jun</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val" style="color:var(--green)">461</div>
+        <div class="forecast-item-label">Alunos projetados Jul</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val" style="color:var(--amber)">6.4%</div>
+        <div class="forecast-item-label">Churn projetado Jun</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val" style="color:var(--amber)">28</div>
+        <div class="forecast-item-label">Alunos churn alto risco</div>
+      </div>
+      <div class="forecast-item">
+        <div class="forecast-item-val">R$320.9K</div>
+        <div class="forecast-item-label">Receita trim. projetada</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 1: MRR + Alunos -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Evolução do MRR</div>
+          <div class="panel-sub">Janeiro 2025 → Maio 2026 · receita mensal recorrente</div>
+        </div>
+        <div class="panel-badge">FINANCEIRO</div>
+      </div>
+      <div class="chart-wrap" style="height:250px"><canvas id="mrrChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">+58%</div>
+          <div class="insight-desc">Crescimento do MRR<br>Jan 25 → Mai 26</div>
+        </div>
+        <div class="insight">
+          <div class="insight-val">R$56.4K</div>
+          <div class="insight-desc">MRR de base estável<br>clientes ativos há 6+ meses</div>
+        </div>
+        <div class="insight blue">
+          <div class="insight-val">R$33K</div>
+          <div class="insight-desc">MRR de expansão<br>upsell e novos planos</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Base de Alunos — Crescimento</div>
+          <div class="panel-sub">Novos · renovações · churn por mês</div>
+        </div>
+        <div class="panel-badge">ALUNOS</div>
+      </div>
+      <div class="chart-wrap" style="height:250px"><canvas id="studentsChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">+48/mês</div>
+          <div class="insight-desc">Média de novos alunos<br>últimos 6 meses</div>
+        </div>
+        <div class="insight red">
+          <div class="insight-val">-33/mês</div>
+          <div class="insight-desc">Churn médio mensal<br>8.2% da base</div>
+        </div>
+        <div class="insight">
+          <div class="insight-val">+15/mês</div>
+          <div class="insight-desc">Crescimento líquido<br>média dos últimos 6m</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2: Canal de Aquisição + Renovação por Plano -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Canal de Aquisição × LTV</div>
+          <div class="panel-sub">Origem dos alunos vs tempo médio de permanência</div>
+        </div>
+        <div class="panel-badge">AQUISIÇÃO</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="channelChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">Instagram</div>
+          <div class="insight-desc">Maior volume: 44% dos alunos<br>LTV médio: R$1.340</div>
+        </div>
+        <div class="insight">
+          <div class="insight-val">Indicação</div>
+          <div class="insight-desc">Maior LTV: R$2.180<br>Renovam 2.4× mais</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Taxa de Renovação por Plano</div>
+          <div class="panel-sub">Plano 1m · 3m · 6m · 12m — retenção real</div>
+        </div>
+        <div class="panel-badge">RETENÇÃO</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="renewalChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">Plano 12m</div>
+          <div class="insight-desc">Renovação: 91%<br>Menor custo operacional</div>
+        </div>
+        <div class="insight red">
+          <div class="insight-val">Plano 1m</div>
+          <div class="insight-desc">Renovação: 52%<br>Alta rotatividade · alto CAC</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 3: Sazonalidade + Receita por Canal -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Sazonalidade de Matrículas</div>
+          <div class="panel-sub">Picos e vales de novos alunos ao longo do ano</div>
+        </div>
+        <div class="panel-badge">SAZONALIDADE</div>
+      </div>
+      <div class="chart-wrap" style="height:230px"><canvas id="seasonChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">Jan / Mar</div>
+          <div class="insight-desc">Pico de matrículas<br>+68% vs média anual</div>
+        </div>
+        <div class="insight red">
+          <div class="insight-val">Dez / Jul</div>
+          <div class="insight-desc">Vale de matrículas<br>−38% vs média anual</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Meta vs Realizado — 2026</div>
+          <div class="panel-sub">MRR mensal · planejado × executado</div>
+        </div>
+        <div class="panel-badge">META</div>
+      </div>
+      <div class="chart-wrap" style="height:230px"><canvas id="metaChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight">
+          <div class="insight-val">+R$7.1K</div>
+          <div class="insight-desc">Superação acumulada<br>Jan–Mai 2026</div>
+        </div>
+        <div class="insight warn" style="border-left-color:var(--amber);background:rgba(251,191,36,0.04)">
+          <div class="insight-val" style="color:var(--amber)">Abr/26</div>
+          <div class="insight-desc">Único mês abaixo da meta<br>−R$1.200</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 4: Churn risk + Renovações próximas -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Potencial Churn — Alto Risco</div>
+          <div class="panel-sub">Alunos com sinais críticos de desengajamento</div>
+        </div>
+        <div class="panel-badge red">⚠ 9 CRÍTICOS</div>
+      </div>
+      <div class="churn-list">
+        <div class="churn-item">
+          <div class="churn-avatar">FM</div>
+          <div class="churn-info">
+            <div class="churn-name">Felipe Martins</div>
+            <div class="churn-detail">Sem check-in há 28 dias · Plano 3m vence em 4 dias · Nota última avaliação: 2/5</div>
+          </div>
+          <div class="churn-risk high">CRÍTICO</div>
+        </div>
+        <div class="churn-item">
+          <div class="churn-avatar">AC</div>
+          <div class="churn-info">
+            <div class="churn-name">Amanda Costa</div>
+            <div class="churn-detail">Sem check-in há 22 dias · Plano 1m renovado apenas 2× · Abriu 0 de 4 emails</div>
+          </div>
+          <div class="churn-risk high">CRÍTICO</div>
+        </div>
+        <div class="churn-item">
+          <div class="churn-avatar">RS</div>
+          <div class="churn-info">
+            <div class="churn-name">Rodrigo Santana</div>
+            <div class="churn-detail">Frequência caiu de 5x→1x/semana · Não respondeu último formulário · 14 dias</div>
+          </div>
+          <div class="churn-risk high">CRÍTICO</div>
+        </div>
+        <div class="churn-item">
+          <div class="churn-avatar">LF</div>
+          <div class="churn-info">
+            <div class="churn-name">Larissa Ferreira</div>
+            <div class="churn-detail">Plano vence em 12 dias · Frequência irregular · Enviou mensagem de dúvida sem resposta</div>
+          </div>
+          <div class="churn-risk med">MÉDIO</div>
+        </div>
+        <div class="churn-item">
+          <div class="churn-avatar">TN</div>
+          <div class="churn-info">
+            <div class="churn-name">Thiago Novaes</div>
+            <div class="churn-detail">Acesso à plataforma caiu 80% · Plano 6m vence em 18 dias · Último treino há 15 dias</div>
+          </div>
+          <div class="churn-risk med">MÉDIO</div>
+        </div>
+        <div class="churn-item">
+          <div class="churn-avatar">MS</div>
+          <div class="churn-info">
+            <div class="churn-name">Marina Souza</div>
+            <div class="churn-detail">Avaliação mais recente: 3/5 · Mencionou "dificuldades financeiras" · Plano 1m</div>
+          </div>
+          <div class="churn-risk med">MÉDIO</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Renovações — Próximos 30 Dias</div>
+          <div class="panel-sub">Alunos com plano vencendo · oportunidade de retenção proativa</div>
+        </div>
+        <div class="panel-badge warn">38 ALUNOS</div>
+      </div>
+      <div class="renew-grid">
+        <div class="renew-card">
+          <div class="renew-days urgent">4</div>
+          <div class="renew-name">Felipe Martins</div>
+          <div class="renew-plan">Plano 3m · R$197</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days urgent">6</div>
+          <div class="renew-name">Amanda Costa</div>
+          <div class="renew-plan">Plano 1m · R$147</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days urgent">7</div>
+          <div class="renew-name">Carlos Lima</div>
+          <div class="renew-plan">Plano 3m · R$197</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days soon">12</div>
+          <div class="renew-name">Larissa Ferreira</div>
+          <div class="renew-plan">Plano 6m · R$237</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days soon">14</div>
+          <div class="renew-name">Bruno Alves</div>
+          <div class="renew-plan">Plano 12m · R$267</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days soon">18</div>
+          <div class="renew-name">Thiago Novaes</div>
+          <div class="renew-plan">Plano 6m · R$237</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days ok">21</div>
+          <div class="renew-name">Juliana Rocha</div>
+          <div class="renew-plan">Plano 12m · R$267</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days ok">24</div>
+          <div class="renew-name">Diego Pires</div>
+          <div class="renew-plan">Plano 3m · R$197</div>
+        </div>
+        <div class="renew-card">
+          <div class="renew-days ok">29</div>
+          <div class="renew-name">+ 29 alunos</div>
+          <div class="renew-plan">Próximos 30 dias</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 5: Perfil dominante + Funil -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Perfil de Aluno Mais Forte</div>
+          <div class="panel-sub">Segmentação demográfica e comportamental da base</div>
+        </div>
+        <div class="panel-badge">SEGMENTAÇÃO</div>
+      </div>
+      <div class="profile-grid">
+        <div class="profile-card">
+          <div class="profile-icon">👩</div>
+          <div class="profile-label">Gênero dominante</div>
+          <div class="profile-val">63% F</div>
+          <div class="profile-sub">Mulheres · maior LTV médio<br>R$1.820 vs R$1.280</div>
+        </div>
+        <div class="profile-card">
+          <div class="profile-icon">📅</div>
+          <div class="profile-label">Faixa etária top</div>
+          <div class="profile-val">28–38a</div>
+          <div class="profile-sub">55% dos alunos<br>Maior taxa renovação 79%</div>
+        </div>
+        <div class="profile-card">
+          <div class="profile-icon">🎯</div>
+          <div class="profile-label">Objetivo principal</div>
+          <div class="profile-val">Emagrecer</div>
+          <div class="profile-sub">47% da base<br>Maior engajamento médio</div>
+        </div>
+        <div class="profile-card">
+          <div class="profile-icon">📱</div>
+          <div class="profile-label">Dispositivo</div>
+          <div class="profile-val">92% Mobile</div>
+          <div class="profile-sub">iOS 61% · Android 31%<br>Desktop: 8%</div>
+        </div>
+        <div class="profile-card">
+          <div class="profile-icon">⏰</div>
+          <div class="profile-label">Pico de acesso</div>
+          <div class="profile-val">6h–8h</div>
+          <div class="profile-sub">Treino matutino<br>67% dos check-ins</div>
+        </div>
+        <div class="profile-card">
+          <div class="profile-icon">💰</div>
+          <div class="profile-label">Plano preferido</div>
+          <div class="profile-val">Plano 3m</div>
+          <div class="profile-sub">38% dos alunos<br>Melhor equilíbrio CAC/LTV</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Funil de Conversão</div>
+          <div class="panel-sub">Visitante → Lead → Trial → Aluno → Renovação</div>
+        </div>
+        <div class="panel-badge">FUNIL</div>
+      </div>
+      <div class="funnel-wrap">
+        <div class="funnel-step">
+          <div class="funnel-label">Alcance / mês</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:100%;background:linear-gradient(90deg,rgba(96,165,250,0.3),rgba(96,165,250,0.1))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--blue)">100%</span>
+            </div>
+          </div>
+          <div class="funnel-num" style="color:var(--blue)">24.800</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Visitas ao perfil</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:78%;background:linear-gradient(90deg,rgba(201,168,76,0.3),rgba(201,168,76,0.1))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold)">78%</span>
+            </div>
+          </div>
+          <div class="funnel-num">19.344</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Leads gerados</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:14%;background:linear-gradient(90deg,rgba(251,191,36,0.35),rgba(251,191,36,0.1))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--amber)">14%</span>
+            </div>
+          </div>
+          <div class="funnel-num" style="color:var(--amber)">2.714</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Contato / DM</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:8%;background:linear-gradient(90deg,rgba(201,168,76,0.4),rgba(201,168,76,0.1))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold)">8%</span>
+            </div>
+          </div>
+          <div class="funnel-num">1.984</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Proposta enviada</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:4%;background:linear-gradient(90deg,rgba(74,222,128,0.35),rgba(74,222,128,0.1))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green)">4%</span>
+            </div>
+          </div>
+          <div class="funnel-num" style="color:var(--green)">992</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Convertido aluno</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:1.9%;background:linear-gradient(90deg,rgba(74,222,128,0.5),rgba(74,222,128,0.15))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green)">1.9%</span>
+            </div>
+          </div>
+          <div class="funnel-num" style="color:var(--green)">471</div>
+        </div>
+        <div class="funnel-step">
+          <div class="funnel-label">Renovação</div>
+          <div class="funnel-bar-bg">
+            <div class="funnel-fill" style="width:1.4%;background:linear-gradient(90deg,rgba(74,222,128,0.6),rgba(74,222,128,0.2))">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green)">1.4%</span>
+            </div>
+          </div>
+          <div class="funnel-num" style="color:var(--green)">348</div>
+        </div>
+      </div>
+      <div class="insight-row" style="margin-top:12px">
+        <div class="insight">
+          <div class="insight-val">R$320</div>
+          <div class="insight-desc">CAC médio atual<br>vs LTV R$1.540 → 4.8×</div>
+        </div>
+        <div class="insight green">
+          <div class="insight-val">DM→Proposta</div>
+          <div class="insight-desc">Maior oportunidade de ganho<br>50% proposta → fechamento</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 6: Revenue per Student + Redes Sociais -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Receita por Aluno — Distribuição</div>
+          <div class="panel-sub">Revenue per student · plano 1m / 3m / 6m / 12m</div>
+        </div>
+        <div class="panel-badge">RPS</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="rpsChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight green">
+          <div class="insight-val">Plano 12m</div>
+          <div class="insight-desc">Maior RPS: R$267/mês<br>91% de renovação</div>
+        </div>
+        <div class="insight blue">
+          <div class="insight-val">+R$49</div>
+          <div class="insight-desc">Diferença ticket médio<br>12m vs 1m por mês</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Performance por Rede Social</div>
+          <div class="panel-sub">Volume de alunos originados × LTV médio por canal</div>
+        </div>
+        <div class="panel-badge">SOCIAL</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="socialChart"></canvas></div>
+      <div class="insight-row">
+        <div class="insight">
+          <div class="insight-val">Instagram</div>
+          <div class="insight-desc">180 alunos ativos<br>Principal canal de aquisição</div>
+        </div>
+        <div class="insight green">
+          <div class="insight-val">Indicação</div>
+          <div class="insight-desc">LTV 58% maior<br>Menor custo de aquisição</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 7: Tabela top alunos / planos -->
+  <div class="grid" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Top 10 Alunos por LTV Acumulado</div>
+          <div class="panel-sub">Clientes de maior valor · tempo de casa · plano atual</div>
+        </div>
+        <div class="panel-badge">TOP CLIENTES</div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Nome</th><th>Plano</th><th>Tempo c/ PT</th><th>Canal</th>
+            <th style="text-align:right">LTV Acum.</th><th style="text-align:right">Ticket</th><th style="text-align:right">Renovações</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Beatriz Tavares</td><td>12 meses</td><td>38 meses</td><td>Indicação</td><td class="num">R$10.146</td><td class="num">R$267</td><td class="num">3×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">2</td><td>Eduardo Campos</td><td>12 meses</td><td>34 meses</td><td>Instagram</td><td class="num">R$9.078</td><td class="num">R$267</td><td class="num">2×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">3</td><td>Fernanda Leal</td><td>6 meses</td><td>29 meses</td><td>YouTube</td><td class="num">R$6.873</td><td class="num">R$237</td><td class="num">4×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">4</td><td>Guilherme Braga</td><td>6 meses</td><td>27 meses</td><td>Indicação</td><td class="num">R$6.399</td><td class="num">R$237</td><td class="num">3×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">5</td><td>Isabela Nunes</td><td>3 meses</td><td>24 meses</td><td>Instagram</td><td class="num">R$4.728</td><td class="num">R$197</td><td class="num">7×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">6</td><td>Juliana Rocha</td><td>12 meses</td><td>22 meses</td><td>TikTok</td><td class="num">R$4.674</td><td class="num">R$267</td><td class="num">1×</td><td><span class="kpi-badge warn">RENOVANDO</span></td></tr>
+          <tr><td class="num">7</td><td>Lucas Mendes</td><td>6 meses</td><td>20 meses</td><td>Indicação</td><td class="num">R$4.740</td><td class="num">R$237</td><td class="num">2×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">8</td><td>Natália Oliveira</td><td>3 meses</td><td>18 meses</td><td>Instagram</td><td class="num">R$3.546</td><td class="num">R$197</td><td class="num">5×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">9</td><td>Pedro Viana</td><td>6 meses</td><td>16 meses</td><td>YouTube</td><td class="num">R$3.792</td><td class="num">R$237</td><td class="num">1×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+          <tr><td class="num">10</td><td>Renata Castro</td><td>12 meses</td><td>14 meses</td><td>Indicação</td><td class="num">R$3.738</td><td class="num">R$267</td><td class="num">1×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- ROW 8: ROI -->
+  <div class="grid" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">ROI — Retorno sobre Investimento</div>
+          <div class="panel-sub">Investimento × receita gerada × margem por canal</div>
+        </div>
+        <div class="panel-badge" style="color:var(--blue);border-color:rgba(96,165,250,0.3)">ROI TRACKER</div>
+      </div>
+      <div class="roi-cards">
+        <div class="roi-card">
+          <div class="roi-card-label">ROI Global</div>
+          <div class="roi-card-val" style="color:var(--green)">+482%</div>
+          <div class="roi-card-sub">R$89.4K receita vs R$15.4K custo<br>Jan–Mai 2026</div>
+        </div>
+        <div class="roi-card">
+          <div class="roi-card-label">ROI Instagram</div>
+          <div class="roi-card-val" style="color:var(--gold)">+318%</div>
+          <div class="roi-card-sub">R$3.200/mês investido<br>180 alunos · R$13.5K MRR</div>
+        </div>
+        <div class="roi-card">
+          <div class="roi-card-label">ROI Indicação</div>
+          <div class="roi-card-val" style="color:var(--green)">+1.240%</div>
+          <div class="roi-card-sub">Custo ≈ R$0<br>92 alunos · LTV R$2.180</div>
+        </div>
+        <div class="roi-card">
+          <div class="roi-card-label">ROI YouTube</div>
+          <div class="roi-card-val" style="color:var(--blue)">+410%</div>
+          <div class="roi-card-sub">R$1.800/mês produção<br>68 alunos · LTV R$1.680</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:220px"><canvas id="roiChart"></canvas></div>
+      <div class="insight-row" style="margin-top:12px">
+        <div class="insight green">
+          <div class="insight-val">Indicação</div>
+          <div class="insight-desc">Melhor ROI · custo zero<br>LTV máximo R$2.180</div>
+        </div>
+        <div class="insight">
+          <div class="insight-val">R$74K</div>
+          <div class="insight-desc">Margem bruta estimada/mês<br>~83% de margem operacional</div>
+        </div>
+        <div class="insight blue">
+          <div class="insight-val">4.8×</div>
+          <div class="insight-desc">LTV / CAC médio geral<br>Benchmark saudável: 3×+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- fim tab-bi -->
+
+
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════ TAB: VENDAS ══════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="section" id="tab-vendas">
+
+  <!-- KPIs vendas -->
+  <div class="vkpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Vendas no Mês</div>
+      <div class="kpi-value">48</div>
+      <div class="kpi-sub">Novas assinaturas · Mai/26</div>
+      <div class="kpi-badge pass">↑ +14% vs Abr</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Receita de Vendas</div>
+      <div class="kpi-value">R$9.456</div>
+      <div class="kpi-sub">Novos contratos fechados</div>
+      <div class="kpi-badge pass">↑ +18% vs Abr</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Taxa de Fechamento</div>
+      <div class="kpi-value">50%</div>
+      <div class="kpi-sub">Proposta → fechado</div>
+      <div class="kpi-badge warn">Meta: 60%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Leads no Pipeline</div>
+      <div class="kpi-value">31</div>
+      <div class="kpi-sub">Em diferentes etapas</div>
+      <div class="kpi-badge info">R$6.107 potencial</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tempo Médio</div>
+      <div class="kpi-value">4.2d</div>
+      <div class="kpi-sub">1º contato → pagamento</div>
+      <div class="kpi-badge pass">↓ Melhorou</div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <!-- Lead form + gerador de link -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Novo Lead & Link de Pagamento</div>
+          <div class="panel-sub">Cadastre e gere o link do plano na hora</div>
+        </div>
+        <div class="panel-badge" style="color:var(--green);border-color:rgba(74,222,128,0.3)">NOVA VENDA</div>
+      </div>
+
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);margin-bottom:10px">Selecionar plano</div>
+      <div class="plans-grid-v" id="v-plan-selector">
+        <div class="plan-card-v p1 sel" data-dur="1m" data-price="147" onclick="vSelectPlan(this)">
+          <div class="plan-dur">1 Mês</div>
+          <div class="plan-price-v">R$147</div>
+          <div class="plan-price-sub">/mês</div>
+          <div class="plan-renov" style="background:rgba(248,113,113,0.1);color:var(--red)">Renov. 52%</div>
+        </div>
+        <div class="plan-card-v p3" data-dur="3m" data-price="197" onclick="vSelectPlan(this)">
+          <div class="plan-dur">3 Meses</div>
+          <div class="plan-price-v">R$197</div>
+          <div class="plan-price-sub">/mês · R$591</div>
+          <div class="plan-renov" style="background:rgba(251,191,36,0.1);color:var(--amber)">Renov. 68%</div>
+        </div>
+        <div class="plan-card-v p6" data-dur="6m" data-price="237" onclick="vSelectPlan(this)">
+          <div class="plan-dur">6 Meses</div>
+          <div class="plan-price-v">R$237</div>
+          <div class="plan-price-sub">/mês · R$1.422</div>
+          <div class="plan-renov" style="background:rgba(201,168,76,0.1);color:var(--gold)">Renov. 82%</div>
+        </div>
+        <div class="plan-card-v p12" data-dur="12m" data-price="267" onclick="vSelectPlan(this)">
+          <div class="plan-dur">12 Meses</div>
+          <div class="plan-price-v">R$267</div>
+          <div class="plan-price-sub">/mês · R$3.204</div>
+          <div class="plan-renov" style="background:rgba(74,222,128,0.1);color:var(--green)">Renov. 91% ★</div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:16px">
+        <div class="v-field">
+          <label class="v-label">Nome completo *</label>
+          <input class="v-input" id="v-lead-name" type="text" placeholder="Ex: João Silva" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">WhatsApp *</label>
+          <input class="v-input" id="v-lead-phone" type="tel" placeholder="(11) 99999-9999" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">E-mail</label>
+          <input class="v-input" id="v-lead-email" type="email" placeholder="joao@email.com" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Canal de origem</label>
+          <select class="v-select" id="v-lead-channel">
+            <option>Instagram</option><option>Indicação</option>
+            <option>YouTube</option><option>TikTok</option>
+            <option>Google</option><option>Outro</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="vbtn vbtn-green" id="v-save-btn" onclick="vSaveLead()">+ Cadastrar Lead</button>
+        <button class="vbtn vbtn-blue" onclick="vGerarLink()">🔗 Gerar Link de Pagamento</button>
+      </div>
+
+      <div id="v-link-result" style="display:none">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);margin-top:16px;margin-bottom:6px">Link gerado — copie e envie pelo WhatsApp</div>
+        <div class="link-box-v">
+          <span class="link-url-v" id="v-generated-link"></span>
+          <button class="link-copy-v" id="v-copy-btn" onclick="vCopyLink()">Copiar</button>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:8px;line-height:1.6">
+          ⚡ Link expira em 48h · Pix, cartão ou boleto · Stripe / Hotmart / Kiwify
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Kanban -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Pipeline de Leads</div>
+          <div class="panel-sub">Funil de vendas ativo — 31 leads</div>
+        </div>
+        <div class="panel-badge">PIPELINE</div>
+      </div>
+      <div class="v-kanban" id="v-kanban-board"></div>
+
+    </div>
+
+    <!-- Histórico de vendas + Mix de planos -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Histórico de Vendas — Mai/26</div>
+          <div class="panel-sub">Últimas transações registradas</div>
+        </div>
+        <div class="panel-badge">HISTÓRICO</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Data</th>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Aluno</th>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Plano</th>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Canal</th>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:right;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Valor</th>
+            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Status</th>
+          </tr>
+        </thead>
+        <tbody id="v-sales-body">
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Mix de Planos Vendidos</div>
+          <div class="panel-sub">Distribuição das vendas este mês</div>
+        </div>
+        <div class="panel-badge">MIX</div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="vMixChart"></canvas></div>
+      <div class="insight-row" style="margin-top:14px">
+        <div class="insight green">
+          <div class="insight-val">Plano 12m</div>
+          <div class="insight-desc">Maior ticket · R$3.204<br>14 vendas este mês</div>
+        </div>
+        <div class="insight blue">
+          <div class="insight-val">R$197</div>
+          <div class="insight-desc">Ticket médio Mai/26</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+<!-- fim tab-vendas -->
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- ════════════ TAB 2: ACOMPANHAMENTO ════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="section" id="tab-acompanhamento">
+
+  <!-- ALERTAS DA ABA -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+    <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);padding:14px 18px;display:flex;align-items:center;gap:12px">
+      <div class="alert-dot amber" style="width:8px;height:8px;flex-shrink:0;animation:pulse 1.8s infinite"></div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber);margin-bottom:3px">Planos vencendo em 30 dias</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)">38 alunos · <strong style="color:var(--amber)">R$ 22.800</strong> em renovação</div>
+      </div>
+    </div>
+    <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);padding:14px 18px;display:flex;align-items:center;gap:12px">
+      <div class="alert-dot" style="background:var(--blue);width:8px;height:8px;flex-shrink:0;animation:pulse 1.8s infinite"></div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Formulários pendentes</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)">23 alunos <strong style="color:var(--blue)">aguardando resposta</strong> desta semana</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STUDENT FILTER -->
+  <div class="student-filter">
+    <span class="filter-label">Selecionar Aluno:</span>
+    <select class="student-select" id="studentSelect" onchange="updateStudent()">
+      <option value="beatriz">Beatriz Tavares — Plano 12m · 38 meses</option>
+      <option value="eduardo">Eduardo Campos — Plano 12m · 34 meses</option>
+      <option value="fernanda">Fernanda Leal — Plano 6m · 29 meses</option>
+      <option value="guilherme">Guilherme Braga — Plano 6m · 27 meses</option>
+      <option value="isabela">Isabela Nunes — Plano 3m · 24 meses</option>
+      <option value="felipe">Felipe Martins — Plano 3m · ⚠ CHURN RISCO</option>
+      <option value="amanda">Amanda Costa — Plano 1m · ⚠ CHURN RISCO</option>
+    </select>
+    <button class="filter-btn">Filtrar</button>
+    <button class="filter-btn" style="border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.05)">Ver Apenas Churn Risk</button>
+  </div>
+
+  <!-- STUDENT HEADER -->
+  <div class="student-header" id="studentHeader">
+    <div class="student-avatar-big" id="studentAvatar">BT</div>
+    <div class="student-info">
+      <div class="student-name" id="studentName">Beatriz Tavares</div>
+      <div class="student-meta">
+        <span>Aluna há <span id="studentTime">38 meses</span></span>
+        <span>Plano <span id="studentPlan">12 meses — R$267/mês</span></span>
+        <span>Canal <span id="studentChannel">Indicação</span></span>
+        <span>LTV acumulado <span id="studentLTV">R$10.146</span></span>
+      </div>
+      <div class="student-badges" id="studentBadges">
+        <span class="s-badge active">✓ ATIVO</span>
+        <span class="s-badge plan">Plano 12m</span>
+        <span class="s-badge goal">Meta: Emagrecimento</span>
+        <span class="s-badge" style="background:rgba(167,139,250,0.1);color:var(--purple);border:1px solid rgba(167,139,250,0.2)">Top 1% LTV</span>
+      </div>
+    </div>
+    <div class="student-kpis">
+      <div class="s-kpi">
+        <div class="s-kpi-val" id="sk1">94%</div>
+        <div class="s-kpi-label">Freq. Treino</div>
+      </div>
+      <div class="s-kpi">
+        <div class="s-kpi-val" id="sk2">8.9</div>
+        <div class="s-kpi-label">Engaj. Score</div>
+      </div>
+      <div class="s-kpi">
+        <div class="s-kpi-val" id="sk3">4.7/5</div>
+        <div class="s-kpi-label">Satisfação</div>
+      </div>
+      <div class="s-kpi">
+        <div class="s-kpi-val" id="sk4">3 indic.</div>
+        <div class="s-kpi-label">Indicações</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRID PRINCIPAL -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <!-- COMPARATIVO DE FOTOS -->
+    <div class="panel col2">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Evolução Corporal — Comparativo Fotográfico</div>
+          <div class="panel-sub">Registro de progresso · antes → durante → atual</div>
+        </div>
+        <div class="panel-badge green">PROGRESSO VISUAL</div>
+      </div>
+      <div class="photo-compare">
+        <div class="photo-card">
+          <div class="photo-placeholder">
+            <div class="photo-icon">📷</div>
+            <div class="photo-date">JUN 2023 — INÍCIO</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Foto frontal · 74,2 kg · BF 28%</div>
+          </div>
+          <div class="photo-footer">
+            <span class="photo-footer-label">Peso Inicial</span>
+            <span class="photo-footer-val">74.2 kg</span>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder">
+            <div class="photo-icon">📷</div>
+            <div class="photo-date">DEZ 2023 — 6 MESES</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Foto frontal · 68,5 kg · BF 23%</div>
+          </div>
+          <div class="photo-footer">
+            <span class="photo-footer-label">6 Meses</span>
+            <span class="photo-footer-val">68.5 kg</span>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder" style="border:1px solid rgba(74,222,128,0.2)">
+            <div class="photo-icon">📷</div>
+            <div class="photo-date">MAI 2026 — ATUAL</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green);text-align:center;z-index:1;padding:0 20px">Foto frontal · 62,1 kg · BF 18%</div>
+          </div>
+          <div class="photo-footer" style="background:rgba(74,222,128,0.05)">
+            <span class="photo-footer-label">Atual</span>
+            <span class="photo-footer-val" style="color:var(--green)">62.1 kg</span>
+          </div>
+        </div>
+      </div>
+      <!-- Barra de progresso corporal -->
+      <div style="margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Peso Total Perdido</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green)">− 12.1 kg</div>
+          <div class="engagement-bar"><div class="engagement-fill" style="width:83%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.4))"></div></div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Redução BF</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green)">− 10 pp</div>
+          <div class="engagement-bar"><div class="engagement-fill" style="width:71%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.4))"></div></div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Meta Atingida</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--gold)">76%</div>
+          <div class="engagement-bar"><div class="engagement-fill" style="width:76%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div></div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Engajamento Score</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--blue)">8.9/10</div>
+          <div class="engagement-bar"><div class="engagement-fill" style="width:89%;background:linear-gradient(90deg,var(--blue),rgba(96,165,250,0.4))"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <!-- GRÁFICOS DE EVOLUÇÃO -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Evolução de Peso & Composição</div>
+          <div class="panel-sub">Peso (kg) · % gordura corporal · mês a mês</div>
+        </div>
+        <div class="panel-badge green">BIOMÉD.</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="weightChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Frequência de Treino</div>
+          <div class="panel-sub">Check-ins semanais · meta vs realizado</div>
+        </div>
+        <div class="panel-badge">FREQUÊNCIA</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="freqChart"></canvas></div>
+    </div>
+
+  </div>
+
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <!-- FORMULÁRIOS / RESPOSTAS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Respostas do Formulário de Evolução</div>
+          <div class="panel-sub">Check-ins semanais · clique para expandir</div>
+        </div>
+        <div class="panel-badge blue">12 RESPOSTAS</div>
+      </div>
+      <div class="response-list">
+
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">28/04/26</span>
+            <span class="response-week">Semana 38</span>
+            <div class="response-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div>
+            <span class="response-summary">Treinos ótimos, energia alta<span class="response-tag great">ÓTIMO</span></span>
+          </div>
+          <div class="response-body">
+            <div class="response-field"><div class="response-field-label">Como foi a semana de treinos?</div><div class="response-field-val">Semana incrível! Completei todos os 5 treinos, me senti com muita energia especialmente nas sessões de quinta e sexta. A progressão de carga no supino está ótima.</div></div>
+            <div class="response-field"><div class="response-field-label">Houve dores ou desconfortos?</div><div class="response-field-val">Nenhuma dor. Leve fadiga muscular pós-leg day, mas dentro do normal e sumiu em 24h.</div></div>
+            <div class="response-field"><div class="response-field-label">Como está a alimentação?</div><div class="response-field-val">Seguindo o plano na maioria dos dias. Tive um jantar fora na sexta mas compensei no sábado. Hidratação ótima.</div></div>
+            <div class="response-field"><div class="response-field-label">Humor / Disposição Geral (1–5)</div><div class="response-field-val">5/5 — Muito bem disposta e motivada!</div></div>
+          </div>
+        </div>
+
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">21/04/26</span>
+            <span class="response-week">Semana 37</span>
+            <div class="response-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span></div>
+            <span class="response-summary">Boa semana, perdi 1 treino<span class="response-tag great">BOM</span></span>
+          </div>
+          <div class="response-body">
+            <div class="response-field"><div class="response-field-label">Como foi a semana de treinos?</div><div class="response-field-val">Fiz 4 de 5 treinos. Tive uma reunião que atrasou meu horário na quarta-feira. Mas os outros foram muito bons.</div></div>
+            <div class="response-field"><div class="response-field-label">Houve dores ou desconfortos?</div><div class="response-field-val">Levei um tranco no joelho na academia, nada sério. Passou no dia seguinte.</div></div>
+            <div class="response-field"><div class="response-field-label">Humor / Disposição Geral (1–5)</div><div class="response-field-val">4/5</div></div>
+          </div>
+        </div>
+
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">14/04/26</span>
+            <span class="response-week">Semana 36</span>
+            <div class="response-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span><span class="star">★</span></div>
+            <span class="response-summary">Semana difícil, trabalho pesado<span class="response-tag ok">REGULAR</span></span>
+          </div>
+          <div class="response-body">
+            <div class="response-field"><div class="response-field-label">Como foi a semana de treinos?</div><div class="response-field-val">Fiz só 3 treinos. Semana de entrega no trabalho, cheguei em casa tarde. Difícil manter a rotina assim.</div></div>
+            <div class="response-field"><div class="response-field-label">Houve dores ou desconfortos?</div><div class="response-field-val">Dor nas costas por ficar muito tempo sentada. Nada musculatura dos treinos.</div></div>
+            <div class="response-field"><div class="response-field-label">Humor / Disposição Geral (1–5)</div><div class="response-field-val">3/5 — Estressada mas tentando.</div></div>
+          </div>
+        </div>
+
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">07/04/26</span>
+            <span class="response-week">Semana 35</span>
+            <div class="response-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div>
+            <span class="response-summary">Semana de PR! Novos recordes<span class="response-tag great">ÓTIMO</span></span>
+          </div>
+          <div class="response-body">
+            <div class="response-field"><div class="response-field-label">Como foi a semana de treinos?</div><div class="response-field-val">5 treinos completos! Bati PR no agachamento: 52kg. Também melhorei o tempo na esteira. Me sinto no melhor shape da minha vida!</div></div>
+            <div class="response-field"><div class="response-field-label">Humor / Disposição Geral (1–5)</div><div class="response-field-val">5/5 — A melhor semana do ano!</div></div>
+          </div>
+        </div>
+
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">31/03/26</span>
+            <span class="response-week">Semana 34</span>
+            <div class="response-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span></div>
+            <span class="response-summary">Viagem no feriado, 3 treinos<span class="response-tag ok">BOM</span></span>
+          </div>
+          <div class="response-body">
+            <div class="response-field"><div class="response-field-label">Como foi a semana de treinos?</div><div class="response-field-val">Viajei no feriado de páscoa, fiz os treinos que pude adaptar. 3 sessões mas de boa intensidade.</div></div>
+            <div class="response-field"><div class="response-field-label">Humor / Disposição Geral (1–5)</div><div class="response-field-val">4/5 — Descansada e renovada após a viagem.</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TIMELINE + ENGAJAMENTO -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Linha do Tempo de Progresso</div>
+          <div class="panel-sub">Marcos da jornada do aluno</div>
+        </div>
+        <div class="panel-badge">JORNADA</div>
+      </div>
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="tl-dot green"></div>
+          <div class="tl-date">Abr 2026</div>
+          <div class="tl-title">🏆 PR Histórico: Agachamento 52kg</div>
+          <div class="tl-desc">Novo recorde pessoal. Evolução de 34kg no início para 52kg.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot green"></div>
+          <div class="tl-date">Mar 2026</div>
+          <div class="tl-title">📸 Avaliação Física Q1 — Meta 76% atingida</div>
+          <div class="tl-desc">Peso: 62.1kg · BF: 18% · Passou para protocolo fase 3.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot blue"></div>
+          <div class="tl-date">Jan 2026</div>
+          <div class="tl-title">🔄 Renovação — 3ª vez · Upgrade Plano 12m</div>
+          <div class="tl-desc">Fez upgrade do plano 6m para 12m por conta própria. Alta fidelidade.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-date">Set 2025</div>
+          <div class="tl-title">👥 Indicou 3 amigas — todas convertidas</div>
+          <div class="tl-desc">Beatriz indicou Natália, Camila e Fernanda. Todas ainda ativas.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot amber"></div>
+          <div class="tl-date">Jun 2025</div>
+          <div class="tl-title">⚠ Período difícil — frequência caiu</div>
+          <div class="tl-desc">Estresse no trabalho. Intervenção proativa via mensagem recuperou engajamento.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-date">Dez 2024</div>
+          <div class="tl-title">📊 Marco: −10kg e BF 23%</div>
+          <div class="tl-desc">Primeiro grande resultado visível. Engajamento disparou após este marco.</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot green"></div>
+          <div class="tl-date">Jun 2023</div>
+          <div class="tl-title">🚀 Início da jornada — 74.2kg · BF 28%</div>
+          <div class="tl-desc">Entrou via indicação. Objetivo: emagrecer e ganhar massa magra.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FORMULÁRIO DE ENVIO -->
+  <div class="grid g2" style="margin-bottom:20px">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Formulário de Evolução Semanal</div>
+          <div class="panel-sub">Template enviado pelo agente de IA automaticamente toda segunda-feira</div>
+        </div>
+        <div class="panel-badge blue">AGENTE IA</div>
+      </div>
+      <div class="form-builder">
+
+        <div class="form-field">
+          <div class="form-field-label">Como foi a semana de treinos? <span class="form-field-required">*</span></div>
+          <textarea class="form-input" rows="3" placeholder="Descreva como foram seus treinos essa semana..."></textarea>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Quantos treinos você completou? <span class="form-field-required">*</span></div>
+          <div class="form-scale">
+            <button class="scale-btn">0</button>
+            <button class="scale-btn">1</button>
+            <button class="scale-btn">2</button>
+            <button class="scale-btn">3</button>
+            <button class="scale-btn active">4</button>
+            <button class="scale-btn">5</button>
+            <button class="scale-btn">6</button>
+            <button class="scale-btn">7</button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Houve alguma dor ou desconforto?</div>
+          <textarea class="form-input" rows="2" placeholder="Descreva qualquer dor, lesão ou desconforto..."></textarea>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Como está a alimentação?</div>
+          <textarea class="form-input" rows="2" placeholder="Como foi sua alimentação essa semana?"></textarea>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Humor & Disposição Geral <span class="form-field-required">*</span></div>
+          <div class="form-scale">
+            <button class="scale-btn">1<br><span style="font-size:8px">😞</span></button>
+            <button class="scale-btn">2<br><span style="font-size:8px">😐</span></button>
+            <button class="scale-btn active">3<br><span style="font-size:8px">🙂</span></button>
+            <button class="scale-btn">4<br><span style="font-size:8px">😊</span></button>
+            <button class="scale-btn">5<br><span style="font-size:8px">🔥</span></button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Fotos de Evolução (opcional)</div>
+          <div class="form-photo-area" onclick="this.style.borderColor='rgba(201,168,76,0.5)'">
+            <div class="form-photo-icon">📷</div>
+            <div class="form-photo-label">Clique ou arraste fotos aqui<br><span style="color:var(--dim);font-size:9px">Frontal · Lateral · Costas · JPG/PNG até 10MB</span></div>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Peso atual (kg)</div>
+          <input type="number" class="form-input" placeholder="Ex: 63.4" style="height:42px">
+        </div>
+
+        <div class="form-field">
+          <div class="form-field-label">Algum feedback ou dúvida para o Rafael?</div>
+          <textarea class="form-input" rows="2" placeholder="Dúvidas, sugestões, pedidos de ajuste no treino..."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary">Enviar Resposta</button>
+          <button class="btn-secondary">Salvar Rascunho</button>
+        </div>
+
+        <div class="agent-note">
+          <span class="agent-note-icon">🤖</span>
+          <span>Este formulário é <strong style="color:var(--blue)">enviado automaticamente pelo Agente de IA</strong> toda segunda-feira às 8h para todos os alunos ativos. Respostas são processadas e os dados são integrados automaticamente às métricas de engajamento e churn. Alunos que não respondem em 48h recebem um lembrete. Após 3 semanas sem resposta, o aluno entra no radar de churn de alto risco.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Métricas de Engajamento Detalhadas</div>
+          <div class="panel-sub">Score composto · frequência · responsividade · satisfação</div>
+        </div>
+        <div class="panel-badge green">SCORE 8.9/10</div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Frequência de Treino</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">94% · 4.7/5 treinos/semana</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:94%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.3))"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Responsividade ao Formulário</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">92% · responde em &lt;6h</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:92%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.3))"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Satisfação Média (formulário)</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--gold)">4.7/5 — últimas 12 respostas</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:94%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.3))"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Acesso à Plataforma</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--blue)">6.2× / semana</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:88%;background:linear-gradient(90deg,var(--blue),rgba(96,165,250,0.3))"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Envio de Fotos</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--purple)">83% dos check-ins com foto</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:83%;background:linear-gradient(90deg,var(--purple),rgba(167,139,250,0.3))"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">Probabilidade de Renovação</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">96% — modelo ML</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:96%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.3))"></div></div>
+      </div>
+
+      <!-- Chart de humor histórico -->
+      <div class="chart-wrap" style="height:160px;margin-top:16px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">Histórico de Humor/Disposição</div>
+        <canvas id="moodChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+<!-- fim tab-acompanhamento -->
+
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<div class="footer">
+  <div class="footer-brand">MERIDIAN</div>
+  <div class="footer-note">Performance Hub v1.0 · Rafael Moura Personal Trainer · Dados simulados para fins de apresentação · Mai 2026</div>
+  <div class="footer-note" style="color:rgba(201,168,76,0.4)">Meridian Strategy & Performance · meridianstrategy.com</div>
+</div>
+
+
+<script>
+// ── TAB SWITCH ──────────────────────────────────────────────────
+let acompChartsDone = false;
+function switchTab(tab, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if(btn) btn.classList.add('active');
+  else if(event && event.target) event.target.classList.add('active');
+  // Lazy-init acompanhamento charts on first visit
+  if (tab === 'acompanhamento') {
+    if (!acompChartsDone) {
+      acompChartsDone = true;
+      setTimeout(initAcompCharts, 80);
+    }
+    // Re-populate student select if empty
+    const sel = document.getElementById('studentSelect');
+    if (sel && sel.options.length <= 1) setTimeout(populateStudentSelect, 100);
+  }
+  // Resize all charts when switching tabs (fixes 0-height issue)
+  setTimeout(() => {
+    try { Object.values(Chart.instances || {}).forEach(ch => { if(ch) ch.resize(); }); } catch {}
+  }, 100);
+}
+
+// ── FORM SCALE BUTTONS ──────────────────────────────────────────
+document.querySelectorAll('.form-scale').forEach(scale => {
+  scale.querySelectorAll('.scale-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scale.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+});
+
+// ── RESPONSE TOGGLE ─────────────────────────────────────────────
+function toggleResponse(el) {
+  el.classList.toggle('open');
+  const body = el.querySelector('.response-body');
+  body.classList.toggle('open');
+}
+
+// ── STUDENT SELECT ──────────────────────────────────────────────
+const students = {
+  beatriz: { avatar:'BT', name:'Beatriz Tavares', time:'38 meses', plan:'12 meses — R$267/mês', channel:'Indicação', ltv:'R$10.146', sk1:'94%', sk2:'8.9', sk3:'4.7/5', sk4:'3 indic.' },
+  eduardo: { avatar:'EC', name:'Eduardo Campos', time:'34 meses', plan:'12 meses — R$267/mês', channel:'Instagram', ltv:'R$9.078', sk1:'88%', sk2:'8.1', sk3:'4.4/5', sk4:'1 indic.' },
+  fernanda: { avatar:'FL', name:'Fernanda Leal', time:'29 meses', plan:'6 meses — R$237/mês', channel:'YouTube', ltv:'R$6.873', sk1:'79%', sk2:'7.6', sk3:'4.2/5', sk4:'0 indic.' },
+  guilherme: { avatar:'GB', name:'Guilherme Braga', time:'27 meses', plan:'6 meses — R$237/mês', channel:'Indicação', ltv:'R$6.399', sk1:'85%', sk2:'7.9', sk3:'4.5/5', sk4:'2 indic.' },
+  isabela: { avatar:'IN', name:'Isabela Nunes', time:'24 meses', plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$4.728', sk1:'72%', sk2:'6.8', sk3:'3.9/5', sk4:'0 indic.' },
+  felipe: { avatar:'FM', name:'Felipe Martins ⚠', time:'7 meses', plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$1.379', sk1:'18%', sk2:'1.9', sk3:'2.1/5', sk4:'0 indic.' },
+  amanda: { avatar:'AC', name:'Amanda Costa ⚠', time:'3 meses', plan:'1 mês — R$147/mês', channel:'Instagram', ltv:'R$441', sk1:'22%', sk2:'2.1', sk3:'2.4/5', sk4:'0 indic.' },
+};
+function updateStudent() {
+  const s = students[document.getElementById('studentSelect').value];
+  document.getElementById('studentAvatar').textContent = s.avatar;
+  document.getElementById('studentName').textContent = s.name;
+  document.getElementById('studentTime').textContent = s.time;
+  document.getElementById('studentPlan').textContent = s.plan;
+  document.getElementById('studentChannel').textContent = s.channel;
+  document.getElementById('studentLTV').textContent = s.ltv;
+  document.getElementById('sk1').textContent = s.sk1;
+  document.getElementById('sk2').textContent = s.sk2;
+  document.getElementById('sk3').textContent = s.sk3;
+  document.getElementById('sk4').textContent = s.sk4;
+}
+
+// ── CHART DEFAULTS ──────────────────────────────────────────────
+const GOLD='#C9A84C', SILV='#A8B2BD', GREEN='#4ade80', RED='#f87171', AMBER='#fbbf24', BLUE='#60a5fa', PURPLE='#a78bfa';
+const grid = { color:'rgba(168,178,189,0.06)', drawBorder:false };
+const tt = {
+  backgroundColor:'rgba(8,19,33,0.95)',
+  borderColor:'rgba(201,168,76,0.2)', borderWidth:1,
+  titleColor:SILV, bodyColor:GOLD, padding:10,
+  titleFont:{family:'DM Mono, monospace', size:9},
+  bodyFont:{family:'DM Mono, monospace', size:11},
+};
+
+// ── GLOBAL CHART DEFAULTS: transparent bg, no white canvas ──
+Chart.defaults.backgroundColor = 'transparent';
+Chart.defaults.borderColor = 'rgba(168,178,189,0.06)';
+Chart.defaults.color = SILV;
+Chart.defaults.font.family = 'DM Mono, monospace';
+Chart.defaults.plugins.legend.labels.color = SILV;
+Chart.defaults.scale.grid.color = 'rgba(168,178,189,0.06)';
+Chart.defaults.scale.ticks.color = SILV;
+// Force all canvases to be transparent
+if (Chart.overrides) {
+  ['line','bar','doughnut','radar','pie'].forEach(t => {
+    if (Chart.overrides[t]) Chart.overrides[t].plugins = Chart.overrides[t].plugins || {};
+  });
+}
+
+// ── MRR CHART ──────────────────────────────────────────────────
+const mrrMonths = ['Jan25','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez','Jan26','Fev','Mar','Abr','Mai'];
+const mrrData =   [56600, 58200, 61400, 63800, 67200, 69400, 71800, 73200, 75400, 78800, 81200, 83600, 85000, 86400, 87200, 86000, 89400];
+new Chart(document.getElementById('mrrChart'), {
+  type:'line',
+  data:{ labels:mrrMonths, datasets:[{
+    label:'MRR (R$)', data:mrrData,
+    borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.08)', fill:true, tension:0.4,
+    borderWidth:2.5, pointRadius:3, pointBackgroundColor:GOLD
+  }]},
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{...tt, callbacks:{label:ctx=>`R$ ${ctx.parsed.y.toLocaleString()}`}} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+             y:{grid, ticks:{color:SILV, callback:v=>'R$'+(v/1000).toFixed(0)+'K'}} }
+  }
+});
+
+// ── STUDENTS CHART ──────────────────────────────────────────────
+const stMonths = ['Jan25','Mar','Mai','Jul','Set','Nov','Jan26','Mar','Mai'];
+new Chart(document.getElementById('studentsChart'), {
+  type:'bar',
+  data:{ labels:stMonths, datasets:[
+    { label:'Novos Alunos', data:[38,44,48,52,47,43,51,49,48], backgroundColor:'rgba(74,222,128,0.4)', borderColor:GREEN, borderWidth:1.5, borderRadius:3, stack:'s' },
+    { label:'Churn', data:[-24,-28,-30,-33,-31,-29,-34,-32,-33], backgroundColor:'rgba(248,113,113,0.35)', borderColor:RED, borderWidth:1.5, borderRadius:3, stack:'s' },
+  ]},
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+             y:{grid, stacked:true, ticks:{color:SILV}} }
+  }
+});
+
+// ── CHANNEL CHART ──────────────────────────────────────────────
+new Chart(document.getElementById('channelChart'), {
+  type:'bar',
+  data:{
+    labels:['Instagram','Indicação','YouTube','TikTok','Google','Outros'],
+    datasets:[
+      { label:'Alunos Ativos', data:[180,92,68,44,18,8], backgroundColor:GOLD+'66', borderColor:GOLD, borderWidth:1.5, borderRadius:3, yAxisID:'y' },
+      { label:'LTV Médio (R$)', data:[1340,2180,1680,1120,980,820], backgroundColor:BLUE+'44', borderColor:BLUE, borderWidth:1.5, borderRadius:3, yAxisID:'y2' },
+    ]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{
+      x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+      y:{grid, ticks:{color:GOLD, font:{size:9}}, title:{display:true, text:'Alunos', color:GOLD, font:{size:9}}},
+      y2:{position:'right', grid:{display:false}, ticks:{color:BLUE, font:{size:9}, callback:v=>'R$'+v}, title:{display:true, text:'LTV Médio', color:BLUE, font:{size:9}}}
+    }
+  }
+});
+
+// ── RENEWAL CHART ──────────────────────────────────────────────
+new Chart(document.getElementById('renewalChart'), {
+  type:'bar',
+  data:{
+    labels:['Plano 1m','Plano 3m','Plano 6m','Plano 12m'],
+    datasets:[
+      { label:'Taxa Renovação %', data:[52,68,82,91], backgroundColor:[RED+'55',AMBER+'55',GOLD+'55',GREEN+'55'], borderColor:[RED,AMBER,GOLD,GREEN], borderWidth:1.5, borderRadius:4 }
+    ]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{...tt, callbacks:{label:ctx=>`${ctx.parsed.y}% renovação`}} },
+    scales:{
+      x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+      y:{grid, ticks:{color:SILV, callback:v=>v+'%'}, suggestedMin:40, suggestedMax:100}
+    }
+  }
+});
+
+// ── SAZONALIDADE ──────────────────────────────────────────────
+new Chart(document.getElementById('seasonChart'), {
+  type:'line',
+  data:{
+    labels:['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
+    datasets:[{
+      label:'Novos Alunos', data:[72,58,68,52,47,31,28,44,56,48,38,24],
+      borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.08)', fill:true, tension:0.4,
+      borderWidth:2.5, pointRadius:4, pointBackgroundColor:GOLD
+    }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{...tt} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+             y:{grid, ticks:{color:SILV}} }
+  }
+});
+
+// ── META vs REALIZADO ──────────────────────────────────────────
+new Chart(document.getElementById('metaChart'), {
+  type:'bar',
+  data:{
+    labels:['Jan26','Fev','Mar','Abr','Mai'],
+    datasets:[
+      { label:'Meta', data:[82000,84000,86000,88000,90000], backgroundColor:'rgba(168,178,189,0.1)', borderColor:SILV+'88', borderWidth:1.5, borderRadius:3 },
+      { label:'Realizado', data:[85000,86400,87200,86000,89400], backgroundColor:GOLD+'55', borderColor:GOLD, borderWidth:1.5, borderRadius:3 },
+    ]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt, callbacks:{label:ctx=>`R$ ${ctx.parsed.y.toLocaleString()}`}} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+             y:{grid, ticks:{color:SILV, callback:v=>'R$'+(v/1000).toFixed(0)+'K'}, suggestedMin:78000} }
+  }
+});
+
+// ── RPS CHART ──────────────────────────────────────────────────
+new Chart(document.getElementById('rpsChart'), {
+  type:'doughnut',
+  data:{
+    labels:['Plano 1m · R$147','Plano 3m · R$197','Plano 6m · R$237','Plano 12m · R$267'],
+    datasets:[{ data:[72, 156, 122, 60], backgroundColor:[RED+'55',AMBER+'55',GOLD+'66',GREEN+'55'], borderColor:'#081321', borderWidth:3 }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+    plugins:{ legend:{position:'right', labels:{color:SILV, usePointStyle:true, font:{size:9}, padding:12}},
+              tooltip:{...tt} }
+  }
+});
+
+// ── SOCIAL CHART ──────────────────────────────────────────────
+new Chart(document.getElementById('socialChart'), {
+  type:'radar',
+  data:{
+    labels:['Volume Alunos','LTV Médio','Taxa Renov.','Engajamento','CAC Eficiência'],
+    datasets:[
+      { label:'Instagram', data:[90,62,65,75,70], borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.08)', pointBackgroundColor:GOLD, borderWidth:2 },
+      { label:'Indicação', data:[45,100,91,88,100], borderColor:GREEN, backgroundColor:'rgba(74,222,128,0.06)', pointBackgroundColor:GREEN, borderWidth:2 },
+      { label:'YouTube', data:[34,78,80,82,65], borderColor:BLUE, backgroundColor:'rgba(96,165,250,0.06)', pointBackgroundColor:BLUE, borderWidth:2 },
+    ]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{ r:{grid:{color:'rgba(168,178,189,0.08)'}, ticks:{display:false}, pointLabels:{color:SILV, font:{size:9}}, angleLines:{color:'rgba(168,178,189,0.06)'}} }
+  }
+});
+
+
+function initAcompCharts() {
+// ── WEIGHT CHART ──────────────────────────────────────────────
+const wMonths = ['Jun23','Set','Dez','Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'];
+new Chart(document.getElementById('weightChart'), {
+  type:'line',
+  data:{ labels:wMonths, datasets:[
+    { label:'Peso (kg)', data:[74.2,71.8,68.5,66.2,64.8,63.7,63.0,62.8,62.4,62.2,62.0,62.1,62.1], borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.06)', fill:true, tension:0.4, borderWidth:2.5, pointRadius:4, pointBackgroundColor:GOLD, yAxisID:'y' },
+    { label:'BF %', data:[28,25.5,23,21.2,20.1,19.4,18.8,18.5,18.3,18.1,18.0,18.0,18.0], borderColor:GREEN, backgroundColor:'rgba(74,222,128,0.04)', fill:true, tension:0.4, borderWidth:1.5, pointRadius:3, pointBackgroundColor:GREEN, borderDash:[4,3], yAxisID:'y2' },
+  ]},
+  options:{ responsive:true, maintainAspectRatio:false,
+    interaction:{mode:'index', intersect:false},
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{
+      x:{grid:{display:false}, ticks:{color:SILV, font:{size:8}, maxRotation:45}},
+      y:{grid, ticks:{color:GOLD, font:{size:9}, callback:v=>v+'kg'}, suggestedMin:58},
+      y2:{position:'right', grid:{display:false}, ticks:{color:GREEN, font:{size:9}, callback:v=>v+'%'}, suggestedMin:14}
+    }
+  }
+});
+
+// ── FREQ CHART ──────────────────────────────────────────────
+const fWeeks = Array.from({length:20}, (_,i)=>`Sem ${i+1}`);
+const fReal  = [5,4,5,5,3,5,4,5,5,4,5,5,3,5,5,4,5,5,5,4];
+const fMeta  = Array(20).fill(5);
+new Chart(document.getElementById('freqChart'), {
+  type:'bar',
+  data:{ labels:fWeeks, datasets:[
+    { label:'Treinos realizados', data:fReal, backgroundColor:fReal.map(v=>v===5?GREEN+'66':v>=4?GOLD+'66':AMBER+'55'), borderColor:fReal.map(v=>v===5?GREEN:v>=4?GOLD:AMBER), borderWidth:1.5, borderRadius:3 },
+    { label:'Meta', data:fMeta, type:'line', borderColor:SILV+'44', borderDash:[4,3], pointRadius:0, borderWidth:1.5 }
+  ]},
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:8}, maxTicksLimit:10}},
+             y:{grid, ticks:{color:SILV}, suggestedMin:0, suggestedMax:6} }
+  }
+});
+
+// ── MOOD CHART ──────────────────────────────────────────────
+new Chart(document.getElementById('moodChart'), {
+  type:'line',
+  data:{ labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'],
+    datasets:[{ label:'Disposição', data:[4,4,5,3,4,5], borderColor:PURPLE, backgroundColor:'rgba(167,139,250,0.1)', fill:true, tension:0.4, borderWidth:2, pointRadius:5, pointBackgroundColor:PURPLE }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{...tt} },
+    scales:{ x:{grid:{display:false}, ticks:{color:SILV, font:{size:9}}},
+             y:{grid, ticks:{color:SILV}, suggestedMin:1, suggestedMax:5} }
+  }
+});
+
+}
+
+// ── ROI CHART ──────────────────────────────────────────────────
+new Chart(document.getElementById('roiChart'), {
+  type:'bar',
+  data:{
+    labels:['Jan/26','Fev','Mar','Abr','Mai'],
+    datasets:[
+      { label:'Investimento (R$)', data:[14200,14800,15100,15600,15400], backgroundColor:RED+'44', borderColor:RED, borderWidth:1.5, borderRadius:3, yAxisID:'y' },
+      { label:'Receita (R$)',      data:[85000,86400,87200,86000,89400], backgroundColor:GREEN+'44', borderColor:GREEN, borderWidth:1.5, borderRadius:3, yAxisID:'y' },
+      { label:'ROI %',             data:[499,484,477,451,482], type:'line', borderColor:GOLD, backgroundColor:'transparent', borderWidth:2.5, pointRadius:4, pointBackgroundColor:GOLD, yAxisID:'y2' },
+    ]
+  },
+  options:{ responsive:true, maintainAspectRatio:false,
+    interaction:{mode:'index', intersect:false},
+    plugins:{ legend:{labels:{color:SILV, usePointStyle:true, font:{size:9}}}, tooltip:{...tt} },
+    scales:{
+      x:{ grid:{display:false}, ticks:{color:SILV, font:{size:9}} },
+      y:{ grid, ticks:{color:SILV, font:{size:9}, callback:v=>'R$'+(v/1000).toFixed(0)+'K'} },
+      y2:{ position:'right', grid:{display:false}, ticks:{color:GOLD, font:{size:9}, callback:v=>v+'%'}, suggestedMin:400 }
+    }
+  }
+});
+
+// ── VENDAS MIX CHART ──────────────────────────────────────────
+new Chart(document.getElementById('vMixChart'), {
+  type:'doughnut',
+  data:{
+    labels:['Plano 1m · R$147','Plano 3m · R$197','Plano 6m · R$237','Plano 12m · R$267'],
+    datasets:[{ data:[6,16,12,14], backgroundColor:[RED+'55',AMBER+'55',GOLD+'66',GREEN+'55'], borderColor:'#081321', borderWidth:3, hoverOffset:6 }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false, cutout:'56%',
+    plugins:{ legend:{position:'right', labels:{color:SILV, usePointStyle:true, font:{size:9}, padding:10}}, tooltip:{...tt} }
+  }
+});
+
+// ── VENDAS SALES TABLE ────────────────────────────────────────
+const SALES_DATA = [
+  { date:'03/05', name:'Roberta Coelho',   plan:'6m',  channel:'Indicação', value:'R$1.422', status:'pago'      },
+  { date:'02/05', name:'Carlos Henrique',  plan:'12m', channel:'YouTube',   value:'R$3.204', status:'pago'      },
+  { date:'02/05', name:'Alessandra Kim',   plan:'3m',  channel:'Instagram', value:'R$591',   status:'pago'      },
+  { date:'01/05', name:'Bruno Castilho',   plan:'6m',  channel:'Indicação', value:'R$1.422', status:'pendente'  },
+  { date:'30/04', name:'Priscila Neves',   plan:'1m',  channel:'TikTok',    value:'R$147',   status:'pago'      },
+  { date:'29/04', name:'Marcos Vieira',    plan:'12m', channel:'Instagram', value:'R$3.204', status:'pago'      },
+  { date:'28/04', name:'Simone Alves',     plan:'6m',  channel:'Indicação', value:'R$1.422', status:'pago'      },
+  { date:'27/04', name:'Renato Costa',     plan:'3m',  channel:'Google',    value:'R$591',   status:'cancelado' },
+  { date:'26/04', name:'Tatiana Moura',    plan:'12m', channel:'Instagram', value:'R$3.204', status:'pago'      },
+  { date:'25/04', name:'Henrique Lins',    plan:'6m',  channel:'YouTube',   value:'R$1.422', status:'pago'      },
+];
+const statusCfg = {
+  pago:      'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)',
+  pendente:  'background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)',
+  cancelado: 'background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2)',
+};
+const tbody = document.getElementById('v-sales-body');
+if (tbody) {
+  tbody.innerHTML = SALES_DATA.map(s=>`
+    <tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.date}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.name}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.plan}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.channel}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);text-align:right;padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.value}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)"><span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;border-radius:2px;${statusCfg[s.status]}">${s.status.toUpperCase()}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ── VENDAS: PLAN SELECTOR ────────────────────────────────────
+let vSelectedPlan = { dur:'1m', price:'147' };
+function vSelectPlan(el) {
+  document.querySelectorAll('.plan-card-v').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  vSelectedPlan = { dur: el.dataset.dur, price: el.dataset.price };
+  document.getElementById('v-link-result').style.display = 'none';
+}
+function vSaveLead() {
+  const name = document.getElementById('v-lead-name')?.value.trim();
+  if (!name) { document.getElementById('v-lead-name').focus(); return; }
+  const btn = document.getElementById('v-save-btn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Lead cadastrado!';
+  btn.disabled = true;
+  setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 2200);
+}
+function vGerarLink() {
+  const name = (document.getElementById('v-lead-name')?.value.trim() || 'prospect');
+  const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  const ref  = Math.random().toString(36).substr(2,8).toUpperCase();
+  const url  = `https://pay.rafaelmoura.com.br/plano-${vSelectedPlan.dur}?ref=${ref}&lead=${slug}`;
+  document.getElementById('v-generated-link').textContent = url;
+  document.getElementById('v-link-result').style.display = 'block';
+  document.getElementById('v-copy-btn').textContent = 'Copiar';
+  document.getElementById('v-copy-btn').classList.remove('copied');
+}
+function vCopyLink() {
+  const url = document.getElementById('v-generated-link')?.textContent;
+  navigator.clipboard.writeText(url).catch(()=>{});
+  const btn = document.getElementById('v-copy-btn');
+  btn.textContent = '✓ Copiado!';
+  btn.classList.add('copied');
+  setTimeout(()=>{ btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+}
+
+
+// ── LOGOUT ──────────────────────────────────────────────────────
+function doLogout() {
+  localStorage.removeItem('mf_token');
+  localStorage.removeItem('mf_user');
+  window.location.href = '/';
+}
+
+// ── SESSION CHECK ────────────────────────────────────────────────
+(function() {
+  const token   = localStorage.getItem('mf_token');
+  const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  // Sem sessão válida → volta pro login
+  if (!token || !session) { window.location.href = '/'; return; }
+  if (session.name) {
+    const name = session.name;
+    const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const nameEl = document.getElementById('dash-user-name');
+    const avatarEl = document.getElementById('dash-user-avatar');
+    if (nameEl) nameEl.textContent = name;
+    if (avatarEl) avatarEl.textContent = initials;
+  }
+})();
+
+
+// ════════════════════════════════════════════════
+// THEME TOGGLE
+// ════════════════════════════════════════════════
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('ph_theme', t);
+  const btn = document.getElementById('theme-btn');
+  if(btn) btn.textContent = t==='dark' ? '🌙' : '☀️';
+  // sync chart colors
+  setTimeout(syncChartColors, 50);
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(cur==='dark' ? 'light' : 'dark');
+}
+function syncChartColors(){
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const textCol = isLight ? '#2C4A68' : '#A8B2BD';
+  const gridCol = isLight ? 'rgba(28,58,92,0.08)' : 'rgba(168,178,189,0.06)';
+  Chart.defaults.color = textCol;
+  try {
+    Object.values(Chart.instances||{}).forEach(ch => {
+      if (!ch) return;
+      Object.values(ch.options.scales||{}).forEach(sc => {
+        if (sc.grid)  sc.grid.color  = gridCol;
+        if (sc.ticks) sc.ticks.color = textCol;
+      });
+      const leg = ch.options.plugins?.legend?.labels;
+      if (leg) leg.color = textCol;
+      ch.update('none');
+    });
+  } catch(e) {}
+}
+// Init theme from localStorage or system preference
+(function(){
+  const saved = localStorage.getItem('ph_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
+})();
+
+// ════════════════════════════════════════════════
+// KANBAN — dynamic render + context menu
+// ════════════════════════════════════════════════
+const KDATA = {
+  novo:[
+    {id:'k1',name:'Camila Torres',  sub:'Instagram · Emagrecimento', val:'',                  days:'Hoje',phone:'(11) 98765-4321',email:'camila@email.com',canal:'Instagram',dp:0},
+    {id:'k2',name:'Pedro Araújo',   sub:'Indicação · Hipertrofia',   val:'',                  days:'Hoje',phone:'(11) 91234-5678',email:'pedro@email.com', canal:'Indicação',dp:0},
+    {id:'k3',name:'Letícia Maia',   sub:'TikTok · Saúde geral',      val:'',                  days:'1d',  phone:'(21) 99887-6543',email:'leticia@email.com',canal:'TikTok',  dp:1},
+    {id:'k4',name:'+ 5 outros',     sub:'Aguardando 1º contato',     val:'',                  days:'',    phone:'',email:'',canal:'',dp:0,ghost:true},
+  ],
+  contato:[
+    {id:'k5',name:'Ana Beatriz S.', sub:'YouTube · Condicionamento', val:'Plano 3m · R$591',  days:'2d',  phone:'(11) 94567-8901',email:'ana@email.com',  canal:'YouTube',  dp:2},
+    {id:'k6',name:'Diego Lima',     sub:'Instagram · Emagrecimento', val:'Plano 6m · R$1.422',days:'3d',  phone:'(11) 93456-7890',email:'diego@email.com', canal:'Instagram',dp:3},
+    {id:'k7',name:'+ 7 outros',     sub:'Em conversa ativa',         val:'',                  days:'',    phone:'',email:'',canal:'',dp:0,ghost:true},
+  ],
+  proposta:[
+    {id:'k8',name:'Mariana Fonseca',sub:'Indicação · Hipertrofia',   val:'Plano 12m · R$3.204',days:'1d', phone:'(11) 92345-6789',email:'mari@email.com', canal:'Indicação',dp:1,hot:true},
+    {id:'k9',name:'Vinícius Prado', sub:'Instagram · Emagrecimento', val:'Plano 6m · R$1.422', days:'2d', phone:'(21) 98901-2345',email:'vini@email.com',  canal:'Instagram',dp:2,hot:true},
+    {id:'k10',name:'+ 5 outros',    sub:'Link enviado, aguardando',   val:'',                   days:'',   phone:'',email:'',canal:'',dp:0,ghost:true},
+  ],
+  fechado:[
+    {id:'k11',name:'Roberta Coelho', sub:'Indicação · Emagrecimento',val:'Plano 6m ✓',  days:'Hoje',phone:'(11) 97890-1234',email:'rob@email.com',canal:'Indicação',dp:0,ok:true},
+    {id:'k12',name:'Carlos Henrique',sub:'YouTube · Condicionamento', val:'Plano 12m ✓', days:'1d',  phone:'(31) 96789-0123',email:'ch@email.com', canal:'YouTube',  dp:1,ok:true},
+    {id:'k13',name:'+ 3 outros',     sub:'Esta semana',               val:'',            days:'',    phone:'',email:'',canal:'',dp:0,ghost:true},
+  ],
+  perdido:[
+    {id:'k14',name:'Fernanda C.',  sub:'Preço acima do budget',val:'Plano 6m · perdido',days:'3d',phone:'(11) 95678-9012',email:'fe@email.com',canal:'Google',   dp:3,lost:true},
+    {id:'k15',name:'Tiago Ramos',  sub:'Sem resposta após 5d', val:'Plano 1m · perdido',days:'5d',phone:'(11) 94567-8901',email:'tr@email.com',canal:'Instagram',dp:5,lost:true},
+  ],
+};
+
+const KCOLS = [
+  {key:'novo',    label:'Novo',    color:'#60a5fa'},
+  {key:'contato', label:'Contato', color:'#a78bfa'},
+  {key:'proposta',label:'Proposta',color:'#fbbf24'},
+  {key:'fechado', label:'Fechado', color:'#4ade80'},
+  {key:'perdido', label:'Perdido', color:'#f87171'},
+];
+
+// track status per card
+const kStatus = {};
+Object.entries(KDATA).forEach(([s,cards])=>cards.forEach(c=>{ if(!c.ghost) kStatus[c.id]=s; }));
+const kNotes = {};
+
+function renderKanban(){
+  const board = document.getElementById('v-kanban-board');
+  if(!board) return;
+  // group by current status
+  const grouped = {novo:[],contato:[],proposta:[],fechado:[],perdido:[]};
+  Object.values(KDATA).flat().forEach(c=>{
+    if(c.ghost) return;
+    grouped[kStatus[c.id]||'novo'].push(c);
+  });
+  board.innerHTML = KCOLS.map(col=>{
+    const cards = grouped[col.key]||[];
+    return `<div class="v-kcol">
+      <div class="v-kcol-head">
+        <span class="v-kcol-title">${col.label}</span>
+        <span class="v-kcount" style="background:${col.color}22;color:${col.color}">${cards.length}</span>
+      </div>
+      ${cards.map(c=>`
+        <div class="v-kcard" style="${c.hot?'border-color:rgba(251,191,36,0.25)':''} ${c.ok?'border-color:rgba(74,222,128,0.2)':''} ${c.lost?'opacity:0.6;border-color:rgba(248,113,113,0.18)':''};cursor:pointer"
+             onclick="openCtxMenu(event,'${c.id}','${col.key}')">
+          <div class="v-kcard-name">${c.name}</div>
+          <div class="v-kcard-detail">${c.sub}</div>
+          ${c.val?`<div class="v-kcard-val" style="${c.ok?'color:var(--green)':c.lost?'color:var(--red)':''}">${c.val}</div>`:''}
+          ${c.days?`<div class="v-kcard-days">${c.days}</div>`:''}
+        </div>
+      `).join('')}
+    </div>`;
+  }).join('');
+}
+
+// context menu
+let ctxId = null;
+function openCtxMenu(e, cardId, curStatus){
+  e.stopPropagation();
+  ctxId = cardId;
+  const c = Object.values(KDATA).flat().find(x=>x.id===cardId);
+  if(!c) return;
+  const menu = document.getElementById('ctx-menu');
+  const overlay = document.getElementById('ctx-overlay');
+
+  document.getElementById('ctx-lead-name').textContent = c.name;
+  document.getElementById('ctx-lead-sub').textContent  = c.sub;
+  document.getElementById('ctx-info-grid').innerHTML = [
+    {l:'Plano', v:c.val||'—'}, {l:'Canal', v:c.canal||'—'},
+    {l:'WhatsApp', v:c.phone||'—'}, {l:'E-mail', v:c.email||'—'},
+    {l:'No pipeline', v:c.dp===0?'Hoje':c.dp+'d'}, {l:'Status', v:curStatus},
+  ].map(i=>`<div><div class="ctx-info-label">${i.l}</div><div class="ctx-info-val">${i.v}</div></div>`).join('');
+
+  document.querySelectorAll('.ctx-sbtn').forEach(btn=>{
+    btn.classList.toggle('cur', btn.dataset.s===curStatus);
+  });
+  document.getElementById('ctx-notes-input').value = kNotes[cardId]||'';
+
+  menu.style.display = 'block';
+  overlay.classList.add('open');
+  // position
+  const mw=320, mh=460;
+  const x = Math.min(e.clientX+8, window.innerWidth-mw-8);
+  const y = Math.min(e.clientY+8, window.innerHeight-mh-8);
+  menu.style.left = Math.max(8,x)+'px';
+  menu.style.top  = Math.max(8,y)+'px';
+}
+function closeCtxMenu(){
+  document.getElementById('ctx-menu').style.display='none';
+  document.getElementById('ctx-overlay').classList.remove('open');
+  ctxId=null;
+}
+function ctxMove(newStatus){
+  if(!ctxId) return;
+  kStatus[ctxId]=newStatus;
+  document.querySelectorAll('.ctx-sbtn').forEach(b=>b.classList.toggle('cur',b.dataset.s===newStatus));
+  renderKanban();
+}
+function ctxSave(){
+  if(ctxId) kNotes[ctxId]=document.getElementById('ctx-notes-input').value;
+  closeCtxMenu();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{ renderKanban(); });
+
+
+
+</script>
+
+<!-- ══ CONTEXT MENU ══ -->
+<div class="ctx-overlay" id="ctx-overlay" onclick="closeCtxMenu()"></div>
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-header">
+    <div>
+      <div class="ctx-lead-name" id="ctx-lead-name">—</div>
+      <div class="ctx-lead-sub" id="ctx-lead-sub">—</div>
+    </div>
+    <button class="ctx-close" onclick="closeCtxMenu()">✕</button>
+  </div>
+  <div class="ctx-info" id="ctx-info-grid"></div>
+  <div class="ctx-section-label">Mover para</div>
+  <div class="ctx-status-btns">
+    <button class="ctx-sbtn" data-s="novo"     onclick="ctxMove('novo')">Novo</button>
+    <button class="ctx-sbtn" data-s="contato"  onclick="ctxMove('contato')">Contato</button>
+    <button class="ctx-sbtn" data-s="proposta" onclick="ctxMove('proposta')">Proposta</button>
+    <button class="ctx-sbtn" data-s="fechado"  onclick="ctxMove('fechado')">Fechado ✓</button>
+    <button class="ctx-sbtn" data-s="perdido"  onclick="ctxMove('perdido')">Perdido ✗</button>
+  </div>
+  <div class="ctx-section-label">Notas</div>
+  <div style="padding:0 16px 10px">
+    <textarea class="ctx-notes-area" id="ctx-notes-input" rows="3" placeholder="Observações sobre este lead..."></textarea>
+  </div>
+  <div class="ctx-ai-box">
+    <div class="ctx-ai-label">🤖 AI Summary</div>
+    <div class="ctx-ai-text">Disponível quando o agente WhatsApp estiver conectado. O agente analisa o histórico de conversas e gera um resumo automático aqui.</div>
+  </div>
+  <div class="ctx-footer">
+    <button class="ctx-btn ctx-btn-cancel" onclick="closeCtxMenu()">Cancelar</button>
+    <button class="ctx-btn ctx-btn-save"   onclick="ctxSave()">Salvar</button>
+  </div>
+</div>
+
+  <script src="js/auth.js"></script>
+
+</body>
+</html>
