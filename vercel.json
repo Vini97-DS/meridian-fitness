@@ -3,9 +3,10 @@
     { "src": "api.py", "use": "@vercel/python" }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api.py" },
-    { "src": "/dashboard", "dest": "api.py" },
-    { "src": "/primeiro-acesso", "dest": "api.py" },
-    { "src": "/(.*)", "dest": "api.py" }
+    { "src": "/css/(.*)",    "dest": "/css/$1" },
+    { "src": "/js/(.*)",     "dest": "/js/$1" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/api/(.*)",    "dest": "api.py" },
+    { "src": "/(.*)",        "dest": "api.py" }
   ]
 }

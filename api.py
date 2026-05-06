@@ -7,8 +7,7 @@ Rodar: uvicorn api:app --reload --port 8000
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
@@ -31,23 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/css",    StaticFiles(directory="css"),    name="css")
-app.mount("/js",     StaticFiles(directory="js"),     name="js")
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
-
-@app.get("/Ativo 8.png")
-def serve_logo():
-    return FileResponse("Ativo 8.png")
+# Static files servidos pelo Vercel diretamente
 
 JWT_SECRET    = os.getenv("JWT_SECRET", "meridian-dev-secret-mude-em-producao")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES   = 60 * 24 * 7
 
 def get_db():
-    conn = psycopg2.connect(
-        os.getenv("DATABASE_URL"),
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL nao configurada")
+    conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         yield conn
     finally:
@@ -112,8 +105,12 @@ def check_password(password: str, hashed: str) -> bool:
 # ── Cria tabela users no startup ─────────────────────────────────
 @app.on_event("startup")
 def create_users_table():
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        print("DATABASE_URL nao configurada — pulando criacao de tabela")
+        return
     try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        conn = psycopg2.connect(db_url)
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -129,7 +126,7 @@ def create_users_table():
         conn.close()
         print("Tabela users OK")
     except Exception as e:
-        print(f"Erro startup: {e}")
+        print(f"Erro startup (nao critico): {e}")
 
 # ═══════════════════════════════════════════════════════════════
 #  AUTH
