@@ -1292,7 +1292,7 @@ canvas{background:transparent!important}
     </div>
 
     <!-- Histórico de vendas + Mix de planos -->
-  <div class="grid g2" style="margin-bottom:20px">
+  <div class="grid" style="margin-bottom:20px;grid-template-columns:3fr 2fr">
 
     <div class="panel">
       <div class="panel-header">
@@ -1326,7 +1326,7 @@ canvas{background:transparent!important}
         </div>
         <div class="panel-badge">MIX</div>
       </div>
-      <div class="chart-wrap" style="height:200px"><canvas id="vMixChart"></canvas></div>
+      <div class="chart-wrap" style="height:260px"><canvas id="vMixChart"></canvas></div>
       <div class="insight-row" style="margin-top:14px">
         <div class="insight green">
           <div class="insight-val">Plano 12m</div>
@@ -2135,7 +2135,14 @@ new Chart(document.getElementById('vMixChart'), {
     datasets:[{ data:[6,16,12,14], backgroundColor:[RED+'55',AMBER+'55',GOLD+'66',GREEN+'55'], borderColor:'#081321', borderWidth:3, hoverOffset:6 }]
   },
   options:{ responsive:true, maintainAspectRatio:false, cutout:'56%',
-    plugins:{ legend:{position:'right', labels:{color:SILV, usePointStyle:true, font:{size:9}, padding:10}}, tooltip:{...tt} }
+    layout:{ padding:{ top:8, bottom:8 } },
+    plugins:{
+      legend:{
+        position:'bottom',
+        labels:{ color:SILV, usePointStyle:true, font:{size:9}, padding:14, boxWidth:8 }
+      },
+      tooltip:{...tt}
+    }
   }
 });
 
