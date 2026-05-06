@@ -1,15 +1,37 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api.py", "use": "@vercel/python" }
+    {
+      "src": "api.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "dashboard.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "primeiro-acesso.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "css/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "js/**",
+      "use": "@vercel/static"
+    }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "api.py" },
     { "src": "/css/(.*)", "dest": "/css/$1" },
     { "src": "/js/(.*)",  "dest": "/js/$1"  },
-    { "src": "/assets/(.*)", "dest": "/assets/$1" },
-    { "src": "/dashboard",       "dest": "api.py" },
-    { "src": "/primeiro-acesso", "dest": "api.py" },
-    { "src": "/",                "dest": "api.py" }
+    { "src": "/dashboard",       "dest": "/dashboard.html" },
+    { "src": "/primeiro-acesso", "dest": "/primeiro-acesso.html" },
+    { "src": "/",                "dest": "/index.html" }
   ]
 }
