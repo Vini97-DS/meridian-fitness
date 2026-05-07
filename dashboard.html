@@ -1326,7 +1326,7 @@ canvas{background:transparent!important}
         </div>
         <div class="panel-badge">MIX</div>
       </div>
-      <div class="chart-wrap" style="height:260px"><canvas id="vMixChart"></canvas></div>
+      <div class="chart-wrap" style="height:300px"><canvas id="vMixChart"></canvas></div>
       <div class="insight-row" style="margin-top:14px">
         <div class="insight green">
           <div class="insight-val">Plano 12m</div>
@@ -2403,7 +2403,29 @@ function ctxSave(){
   closeCtxMenu();
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{ renderKanban(); });
+document.addEventListener('DOMContentLoaded', () => {
+  renderKanban();
+
+  // Sessão — atualiza nome do usuário no header
+  try {
+    const user = JSON.parse(localStorage.getItem('mf_user') || 'null');
+    if (user && user.name) {
+      const n = user.name;
+      const av = n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+      const nameEl   = document.getElementById('header-pt-name');
+      const userEl   = document.getElementById('dash-user-name');
+      const avatarEl = document.getElementById('dash-user-avatar');
+      if (nameEl)   nameEl.innerHTML = n + ' — <em>Personal Trainer</em>';
+      if (userEl)   userEl.textContent = n;
+      if (avatarEl) avatarEl.textContent = av;
+    }
+  } catch(e) {}
+
+  // Inicializa aba acompanhamento imediatamente
+  setTimeout(() => {
+    try { updateStudent(); } catch(e) { console.warn('updateStudent:', e); }
+  }, 300);
+});
 
 
 
