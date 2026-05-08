@@ -10,11 +10,13 @@ function switchTab(tab, btn) {
   if (tab === 'acompanhamento') {
     if (!acompChartsDone) {
       acompChartsDone = true;
-      setTimeout(initAcompCharts, 80);
+      setTimeout(() => { initAcompCharts(); updateStudent(); }, 80);
+    } else {
+      setTimeout(() => {
+        updateStudent();
+        try { Object.values(Chart.instances||{}).forEach(ch=>ch&&ch.resize()); } catch {}
+      }, 80);
     }
-    // Re-populate student select if empty
-    const sel = document.getElementById('studentSelect');
-    if (sel && sel.options.length <= 1) setTimeout(populateStudentSelect, 100);
   }
   // Resize all charts when switching tabs (fixes 0-height issue)
   setTimeout(() => {
@@ -597,4 +599,4 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     try { updateStudent(); } catch(e) { console.warn('updateStudent:', e); }
   }, 300);
-});// cache bust Fri May  8 08:45:11 -03 2026
+});
