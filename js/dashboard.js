@@ -597,4 +597,4 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     try { updateStudent(); } catch(e) { console.warn('updateStudent:', e); }
   }, 300);
-});
+});// cache bust Fri May  8 08:45:11 -03 2026
