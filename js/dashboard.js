@@ -793,11 +793,85 @@ function vSelectPlan(el) {
   document.getElementById('v-link-result').style.display='none';
 }
 function vSaveLead() {
-  const name=document.getElementById('v-lead-name')?.value.trim();
-  if(!name){document.getElementById('v-lead-name')?.focus();return;}
-  const btn=document.getElementById('v-save-btn'); const orig=btn.textContent;
-  btn.textContent='✓ Lead cadastrado!'; btn.disabled=true;
-  setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},2200);
+  // Coleta campos
+  const name    = document.getElementById('v-lead-name')?.value.trim()    || '';
+  const phone   = document.getElementById('v-lead-phone')?.value.trim()   || '';
+  const email   = document.getElementById('v-lead-email')?.value.trim()   || '';
+  const channel = document.getElementById('v-lead-channel')?.value        || 'Instagram';
+
+  // Plano selecionado
+  const selPlan = document.querySelector('.plan-card-v.sel');
+  const planName = selPlan ? selPlan.querySelector('.plan-dur')?.textContent || vSelectedPlan.dur : vSelectedPlan.dur;
+  const planPrice = selPlan ? selPlan.querySelector('.plan-price')?.textContent || 'R$' + vSelectedPlan.price : 'R$' + vSelectedPlan.price;
+
+  // Validação básica
+  if (!name) {
+    document.getElementById('v-lead-name')?.focus();
+    document.getElementById('v-lead-name')?.classList.add('error');
+    setTimeout(() => document.getElementById('v-lead-name')?.classList.remove('error'), 2000);
+    return;
+  }
+  if (!phone) {
+    document.getElementById('v-lead-phone')?.focus();
+    return;
+  }
+
+  // Gera ID único para o novo lead
+  const newId = 'k' + Date.now();
+
+  // Cria o lead no objeto KDATA
+  const newLead = {
+    id:    newId,
+    name:  name,
+    sub:   channel + ' · ' + (selPlan ? planName : 'Plano a definir'),
+    val:   '',
+    days:  'Agora',
+    phone: phone,
+    email: email,
+    canal: channel,
+    dp:    0,
+  };
+
+  // Adiciona na coluna "novo" do KDATA e kStatus
+  KDATA.novo.unshift(newLead);
+  kStatus[newId] = 'novo';
+
+  // Atualiza o kanban
+  renderKanban();
+
+  // Atualiza KPI de vendas (Novos Leads)
+  const leadsKpi = document.getElementById('v-kpi-leads');
+  if (leadsKpi) {
+    const cur = parseInt(leadsKpi.textContent) || 0;
+    leadsKpi.textContent = cur + 1;
+  }
+
+  // Feedback visual no botão
+  const btn = document.getElementById('v-save-btn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Lead adicionado ao Kanban!';
+  btn.disabled = true;
+  btn.style.background = 'rgba(74,222,128,0.15)';
+  btn.style.borderColor = 'var(--green)';
+  btn.style.color = 'var(--green)';
+
+  // Limpa o formulário
+  setTimeout(() => {
+    document.getElementById('v-lead-name').value  = '';
+    document.getElementById('v-lead-phone').value = '';
+    document.getElementById('v-lead-email').value = '';
+    document.getElementById('v-lead-channel').value = 'Instagram';
+    btn.textContent = orig;
+    btn.disabled = false;
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }, 2500);
+
+  // Scroll suave para o kanban
+  setTimeout(() => {
+    document.getElementById('v-kanban-board')?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }, 300);
 }
 function vGerarLink() {
   const name=document.getElementById('v-lead-name')?.value.trim()||'prospect';
