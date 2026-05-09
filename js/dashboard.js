@@ -570,6 +570,10 @@ function updateStudent() {
 
   // Respostas
   const respEl = document.getElementById('student-responses');
+  const respBadge = document.getElementById('responses-badge');
+  if (respBadge && s.responses) {
+    respBadge.textContent = s.responses.length + ' RESPOSTAS';
+  }
   if (respEl && s.responses) {
     respEl.innerHTML = s.responses.map(r => `
       <div class="response-item" onclick="toggleResponse(this)">
