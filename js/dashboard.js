@@ -608,38 +608,31 @@ function updateStudent() {
       </div>`).join('');
   }
 
-  // Engagement panel
+  // Engagement panel — rebuild completamente
   const engPanel = document.getElementById('engagement-panel');
   if (engPanel && s.engagement) {
     const eng = s.engagement;
-    const scoreColors = { green:'var(--green)', gold:'var(--gold)', fail:'var(--red)' };
-    const scoreCol = scoreColors[eng.scoreColor] || 'var(--green)';
-    // Update badge
     const badge = document.getElementById('engagement-score-badge');
-    if (badge) { badge.textContent = 'SCORE ' + eng.score; badge.className = 'panel-badge ' + (eng.scoreColor === 'fail' ? 'fail' : 'green'); }
-    // Update bars
-    const barsContainer = engPanel.querySelector('[id="engagement-bars"]') || engPanel.querySelectorAll('[style*="margin-bottom:20px"]')[0]?.parentElement;
-    // Simpler: find and replace all bar rows inside the panel
-    const allBarDivs = engPanel.querySelectorAll('div[style*="margin-bottom:20px"]');
-    eng.bars.forEach((bar, i) => {
-      const barDiv = allBarDivs[i];
-      if (!barDiv) return;
-      const labelEl = barDiv.querySelector('span:first-child');
-      const valEl   = barDiv.querySelector('span:last-child');
-      const fillEl  = barDiv.querySelector('.engagement-fill');
-      if (labelEl) labelEl.textContent = bar.label;
-      if (valEl)   { valEl.textContent = bar.val; valEl.style.color = bar.color; }
-      if (fillEl)  { fillEl.style.width = bar.pct + '%'; fillEl.style.background = 'linear-gradient(90deg,' + bar.color + ',' + bar.color + '44)'; }
-    });
-    // Update mood chart
-    if (acompChartsDone && eng.mood) {
-      const moodData = eng.mood;
-      if (charts['moodChart']) {
-        charts['moodChart'].data.labels   = moodData.labels;
-        charts['moodChart'].data.datasets[0].data = moodData.data;
-        charts['moodChart'].update();
-      }
+    if (badge) {
+      badge.textContent = 'SCORE ' + eng.score;
+      badge.className = 'panel-badge ' + (eng.scoreColor === 'fail' ? 'fail' : 'green');
     }
+    // Rebuild bars container inteiro
+    const barsHtml = eng.bars.map(bar => `
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">${bar.label}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:${bar.color}">${bar.val}</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:${bar.pct}%;background:linear-gradient(90deg,${bar.color},${bar.color}44)"></div></div>
+      </div>`).join('');
+    // Substitui o conteúdo após o panel-header
+    const panelHeader = engPanel.querySelector('.panel-header');
+    // Remove todos os filhos exceto o panel-header
+    Array.from(engPanel.children).forEach(child => {
+      if (!child.classList.contains('panel-header')) child.remove();
+    });
+    engPanel.insertAdjacentHTML('beforeend', barsHtml);
   }
 
   // Atualiza gráficos com dados do aluno
