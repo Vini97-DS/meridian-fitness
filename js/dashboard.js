@@ -278,6 +278,16 @@ const students = {
     avatar:'BT', name:'Beatriz Tavares', time:'38 meses',
     plan:'12 meses — R$267/mês', channel:'Indicação', ltv:'R$10.146',
     sk1:'94%', sk2:'8.9', sk3:'4.7/5', sk4:'3 indic.',
+
+    stats: { pesoLabel:'− 12.1 kg', pesoBar:83, bfLabel:'− 10 pp', bfBar:71, metaLabel:'76%', metaBar:76, engLabel:'8.9/10', engBar:89, engColor:'var(--green)' },
+    engagement: { score:'8.9/10', scoreColor:'green', bars:[
+      { label:'Frequência de Treino',           val:'94% · 4.7/5 treinos/semana',     pct:94, color:'var(--green)' },
+      { label:'Responsividade ao Formulário',   val:'92% · responde em <6h',          pct:92, color:'var(--green)' },
+      { label:'Satisfação Média (formulário)',  val:'4.7/5 — últimas 12 respostas',   pct:94, color:'var(--gold)'  },
+      { label:'Acesso à Plataforma',           val:'4.2× · visita diária',            pct:84, color:'var(--green)' },
+      { label:'Fotos de Evolução',             val:'87% das semanas com envio',       pct:87, color:'var(--green)' },
+      { label:'Probabilidade de Renovação',    val:'96% · histórico de 3 renovações', pct:96, color:'var(--green)' },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[4,4,5,3,4,5] } },
     weight: { labels:['Jun23','Set','Dez','Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
       kg:[74.2,71.8,68.5,66.2,64.8,63.7,63,62.8,62.4,62.2,62,62.1,62.1],
       bf:[28,25.5,23,21.2,20.1,19.4,18.8,18.5,18.3,18.1,18,18,18] },
@@ -310,6 +320,16 @@ const students = {
     avatar:'EC', name:'Eduardo Campos', time:'34 meses',
     plan:'12 meses — R$267/mês', channel:'Instagram', ltv:'R$9.078',
     sk1:'88%', sk2:'8.1', sk3:'4.4/5', sk4:'1 indic.',
+
+    stats: { pesoLabel:'− 20 kg', pesoBar:91, bfLabel:'− 12.8 pp', bfBar:83, metaLabel:'91%', metaBar:91, engLabel:'8.1/10', engBar:81, engColor:'var(--green)' },
+    engagement: { score:'8.1/10', scoreColor:'green', bars:[
+      { label:'Frequência de Treino',           val:'88% · 4.4/5 treinos/semana',     pct:88, color:'var(--green)' },
+      { label:'Responsividade ao Formulário',   val:'85% · responde em <12h',         pct:85, color:'var(--green)' },
+      { label:'Satisfação Média (formulário)',  val:'4.4/5 — últimas 12 respostas',   pct:88, color:'var(--gold)'  },
+      { label:'Acesso à Plataforma',           val:'3.8× · visita quase diária',      pct:76, color:'var(--gold)'  },
+      { label:'Fotos de Evolução',             val:'80% das semanas com envio',       pct:80, color:'var(--gold)'  },
+      { label:'Probabilidade de Renovação',    val:'88% · 2 renovações',              pct:88, color:'var(--green)' },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[5,4,4,5,5,4] } },
     weight: { labels:['Ago23','Nov','Fev24','Mai','Ago','Nov','Fev25','Mai','Ago','Nov','Fev26','Mai26'],
       kg:[88,85.2,81.8,78.4,75.6,73.2,71.8,70.4,69.2,68.8,68.2,68],
       bf:[31,28.5,26.2,24.1,22.4,21,20.2,19.6,19.1,18.8,18.4,18.2] },
@@ -337,6 +357,16 @@ const students = {
     avatar:'FL', name:'Fernanda Leal', time:'29 meses',
     plan:'6 meses — R$237/mês', channel:'YouTube', ltv:'R$6.873',
     sk1:'79%', sk2:'7.6', sk3:'4.2/5', sk4:'0 indic.',
+
+    stats: { pesoLabel:'− 11.2 kg', pesoBar:76, bfLabel:'− 8.2 pp', bfBar:63, metaLabel:'68%', metaBar:68, engLabel:'7.6/10', engBar:76, engColor:'var(--gold)' },
+    engagement: { score:'7.6/10', scoreColor:'green', bars:[
+      { label:'Frequência de Treino',           val:'79% · 3.9/5 treinos/semana',     pct:79, color:'var(--gold)'  },
+      { label:'Responsividade ao Formulário',   val:'78% · responde em <24h',         pct:78, color:'var(--gold)'  },
+      { label:'Satisfação Média (formulário)',  val:'4.2/5 — últimas 12 respostas',   pct:84, color:'var(--gold)'  },
+      { label:'Acesso à Plataforma',           val:'3.1× · visita regular',           pct:62, color:'var(--gold)'  },
+      { label:'Fotos de Evolução',             val:'71% das semanas com envio',       pct:71, color:'var(--gold)'  },
+      { label:'Probabilidade de Renovação',    val:'82% · 4 renovações',              pct:82, color:'var(--green)' },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[4,3,4,4,5,4] } },
     weight: { labels:['Jan24','Abr','Jul','Out','Jan25','Abr','Jul','Out','Jan26','Mai26'],
       kg:[72,69.8,67.2,65.4,63.8,62.6,61.8,61.4,61,60.8],
       bf:[26,24.2,22.4,21,19.8,19.1,18.6,18.3,18,17.8] },
@@ -361,6 +391,16 @@ const students = {
     avatar:'GB', name:'Guilherme Braga', time:'27 meses',
     plan:'6 meses — R$237/mês', channel:'Indicação', ltv:'R$6.399',
     sk1:'85%', sk2:'7.9', sk3:'4.5/5', sk4:'2 indic.',
+
+    stats: { pesoLabel:'+ 12 kg', pesoBar:80, bfLabel:'− 4.2 pp', bfBar:58, metaLabel:'85%', metaBar:85, engLabel:'7.9/10', engBar:79, engColor:'var(--green)' },
+    engagement: { score:'7.9/10', scoreColor:'green', bars:[
+      { label:'Frequência de Treino',           val:'85% · 4.3/5 treinos/semana',     pct:85, color:'var(--green)' },
+      { label:'Responsividade ao Formulário',   val:'80% · responde em <18h',         pct:80, color:'var(--gold)'  },
+      { label:'Satisfação Média (formulário)',  val:'4.5/5 — últimas 12 respostas',   pct:90, color:'var(--gold)'  },
+      { label:'Acesso à Plataforma',           val:'3.4× · visita regular',           pct:68, color:'var(--gold)'  },
+      { label:'Fotos de Evolução',             val:'76% das semanas com envio',       pct:76, color:'var(--gold)'  },
+      { label:'Probabilidade de Renovação',    val:'79% · 3 renovações',              pct:79, color:'var(--gold)'  },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[5,5,4,5,5,5] } },
     weight: { labels:['Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
       kg:[75,77.2,79.4,81.6,83.2,84.8,85.6,86.2,86.8,87],
       bf:[18,17.2,16.4,15.8,15.2,14.8,14.5,14.2,14,13.8] },
@@ -385,6 +425,16 @@ const students = {
     avatar:'IN', name:'Isabela Nunes', time:'24 meses',
     plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$4.728',
     sk1:'72%', sk2:'6.8', sk3:'3.9/5', sk4:'0 indic.',
+
+    stats: { pesoLabel:'− 7.4 kg', pesoBar:62, bfLabel:'− 7 pp', bfBar:54, metaLabel:'62%', metaBar:62, engLabel:'6.8/10', engBar:68, engColor:'var(--gold)' },
+    engagement: { score:'6.8/10', scoreColor:'green', bars:[
+      { label:'Frequência de Treino',           val:'72% · 3.6/5 treinos/semana',     pct:72, color:'var(--gold)'  },
+      { label:'Responsividade ao Formulário',   val:'68% · responde em <48h',         pct:68, color:'var(--gold)'  },
+      { label:'Satisfação Média (formulário)',  val:'3.9/5 — últimas 12 respostas',   pct:78, color:'var(--gold)'  },
+      { label:'Acesso à Plataforma',           val:'2.8× · irregular',                pct:56, color:'var(--amber)' },
+      { label:'Fotos de Evolução',             val:'60% das semanas com envio',       pct:60, color:'var(--amber)' },
+      { label:'Probabilidade de Renovação',    val:'71% · 7 renovações (3m)',         pct:71, color:'var(--gold)'  },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[3,4,3,4,3,4] } },
     weight: { labels:['Jun24','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
       kg:[68,66.2,64.8,63.4,62.2,61.6,61.2,60.8,60.6],
       bf:[27,25.4,24,22.8,21.6,21,20.6,20.2,20] },
@@ -409,6 +459,16 @@ const students = {
     avatar:'FM', name:'Felipe Martins ⚠', time:'7 meses',
     plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$1.379',
     sk1:'18%', sk2:'1.9', sk3:'2.1/5', sk4:'0 indic.',
+
+    stats: { pesoLabel:'+ 0.2 kg', pesoBar:4, bfLabel:'0 pp', bfBar:2, metaLabel:'8%', metaBar:8, engLabel:'1.9/10', engBar:19, engColor:'var(--red)' },
+    engagement: { score:'1.9/10', scoreColor:'fail', bars:[
+      { label:'Frequência de Treino',           val:'18% · 0.9/5 treinos/semana',     pct:18, color:'var(--red)'   },
+      { label:'Responsividade ao Formulário',   val:'22% · demora >72h',              pct:22, color:'var(--red)'   },
+      { label:'Satisfação Média (formulário)',  val:'2.1/5 — últimas 6 respostas',    pct:42, color:'var(--amber)' },
+      { label:'Acesso à Plataforma',           val:'0.4× · raramente acessa',         pct:8,  color:'var(--red)'   },
+      { label:'Fotos de Evolução',             val:'12% das semanas com envio',       pct:12, color:'var(--red)'   },
+      { label:'Probabilidade de Renovação',    val:'14% · RISCO CRÍTICO',             pct:14, color:'var(--red)'   },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[2,2,1,2,3,2] } },
     weight: { labels:['Out25','Nov','Dez','Jan26','Fev','Mar','Abr','Mai26'],
       kg:[92,91.2,90.8,90.4,90.6,91,91.4,91.8],
       bf:[34,33.6,33.4,33.2,33.4,33.6,33.8,34] },
@@ -433,6 +493,16 @@ const students = {
     avatar:'AC', name:'Amanda Costa ⚠', time:'3 meses',
     plan:'1 mês — R$147/mês', channel:'Instagram', ltv:'R$441',
     sk1:'22%', sk2:'2.1', sk3:'2.4/5', sk4:'0 indic.',
+
+    stats: { pesoLabel:'− 0.8 kg', pesoBar:6, bfLabel:'− 0.4 pp', bfBar:3, metaLabel:'5%', metaBar:5, engLabel:'2.1/10', engBar:21, engColor:'var(--red)' },
+    engagement: { score:'2.1/10', scoreColor:'fail', bars:[
+      { label:'Frequência de Treino',           val:'22% · 1.1/5 treinos/semana',     pct:22, color:'var(--red)'   },
+      { label:'Responsividade ao Formulário',   val:'30% · demora >48h',              pct:30, color:'var(--red)'   },
+      { label:'Satisfação Média (formulário)',  val:'2.4/5 — últimas 4 respostas',    pct:48, color:'var(--amber)' },
+      { label:'Acesso à Plataforma',           val:'0.6× · raramente acessa',         pct:12, color:'var(--red)'   },
+      { label:'Fotos de Evolução',             val:'10% das semanas com envio',       pct:10, color:'var(--red)'   },
+      { label:'Probabilidade de Renovação',    val:'18% · RISCO CRÍTICO',             pct:18, color:'var(--red)'   },
+    ], mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[2,3,2,2,1,2] } },
     weight: { labels:['Mar26','Abr','Mai26'],
       kg:[78,77.6,77.2],
       bf:[30,29.8,29.6] },
@@ -518,6 +588,58 @@ function updateStudent() {
             </div>`).join('')}
         </div>
       </div>`).join('');
+  }
+
+  // Stats grid (peso perdido, BF, meta, engajamento)
+  const statsEl = document.getElementById('student-stats');
+  if (statsEl && s.stats) {
+    const st = s.stats;
+    const statColor = (pct) => pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red)';
+    statsEl.innerHTML = [
+      { label:'Peso Total Perdido', val:st.pesoLabel, pct:st.pesoBar, color:statColor(st.pesoBar), grad:'var(--green)' },
+      { label:'Redução BF',         val:st.bfLabel,   pct:st.bfBar,   color:statColor(st.bfBar),   grad:'var(--green)' },
+      { label:'Meta Atingida',      val:st.metaLabel, pct:st.metaBar, color:statColor(st.metaBar), grad:'var(--gold)'  },
+      { label:'Engajamento Score',  val:st.engLabel,  pct:st.engBar,  color:st.engColor,            grad:st.engColor   },
+    ].map(item => `
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">${item.label}</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:${item.color}">${item.val}</div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:${item.pct}%;background:linear-gradient(90deg,${item.grad},${item.grad}66)"></div></div>
+      </div>`).join('');
+  }
+
+  // Engagement panel
+  const engPanel = document.getElementById('engagement-panel');
+  if (engPanel && s.engagement) {
+    const eng = s.engagement;
+    const scoreColors = { green:'var(--green)', gold:'var(--gold)', fail:'var(--red)' };
+    const scoreCol = scoreColors[eng.scoreColor] || 'var(--green)';
+    // Update badge
+    const badge = document.getElementById('engagement-score-badge');
+    if (badge) { badge.textContent = 'SCORE ' + eng.score; badge.className = 'panel-badge ' + (eng.scoreColor === 'fail' ? 'fail' : 'green'); }
+    // Update bars
+    const barsContainer = engPanel.querySelector('[id="engagement-bars"]') || engPanel.querySelectorAll('[style*="margin-bottom:20px"]')[0]?.parentElement;
+    // Simpler: find and replace all bar rows inside the panel
+    const allBarDivs = engPanel.querySelectorAll('div[style*="margin-bottom:20px"]');
+    eng.bars.forEach((bar, i) => {
+      const barDiv = allBarDivs[i];
+      if (!barDiv) return;
+      const labelEl = barDiv.querySelector('span:first-child');
+      const valEl   = barDiv.querySelector('span:last-child');
+      const fillEl  = barDiv.querySelector('.engagement-fill');
+      if (labelEl) labelEl.textContent = bar.label;
+      if (valEl)   { valEl.textContent = bar.val; valEl.style.color = bar.color; }
+      if (fillEl)  { fillEl.style.width = bar.pct + '%'; fillEl.style.background = 'linear-gradient(90deg,' + bar.color + ',' + bar.color + '44)'; }
+    });
+    // Update mood chart
+    if (acompChartsDone && eng.mood) {
+      const moodData = eng.mood;
+      if (charts['moodChart']) {
+        charts['moodChart'].data.labels   = moodData.labels;
+        charts['moodChart'].data.datasets[0].data = moodData.data;
+        charts['moodChart'].update();
+      }
+    }
   }
 
   // Atualiza gráficos com dados do aluno
