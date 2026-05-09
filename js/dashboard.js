@@ -223,14 +223,21 @@ function initVendasCharts() {
 
 // ── ACOMP CHARTS ─────────────────────────────────────────
 function initAcompCharts() {
+  // Pega dados do aluno selecionado
+  const sel = document.getElementById('studentSelect');
+  const s   = sel ? students[sel.value] : students['beatriz'];
+  const wd  = s?.weight || students['beatriz'].weight;
+  const fd  = s?.freq   || students['beatriz'].freq;
+  const md  = s?.mood   || students['beatriz'].mood;
+
   mkChart('weightChart', {
     type:'line',
     data:{
-      labels:['Jun23','Set','Dez','Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
+      labels: wd.labels,
       datasets:[
-        {label:'Peso (kg)',data:[74.2,71.8,68.5,66.2,64.8,63.7,63,62.8,62.4,62.2,62,62.1,62.1],
+        {label:'Peso (kg)',data:wd.kg,
           borderColor:GOLD,backgroundColor:'rgba(201,168,76,0.06)',fill:true,tension:0.4,borderWidth:2.5,pointRadius:4,pointBackgroundColor:GOLD,yAxisID:'y'},
-        {label:'BF %',data:[28,25.5,23,21.2,20.1,19.4,18.8,18.5,18.3,18.1,18,18,18],
+        {label:'BF %',data:wd.bf,
           borderColor:GREEN,backgroundColor:'rgba(74,222,128,0.04)',fill:true,tension:0.4,borderWidth:1.5,pointRadius:3,pointBackgroundColor:GREEN,borderDash:[4,3],yAxisID:'y2'},
       ]
     },
@@ -240,14 +247,13 @@ function initAcompCharts() {
         y:{grid,ticks:{color:GOLD,font:{size:9},callback:v=>v+'kg'},suggestedMin:58},
         y2:{position:'right',grid:{display:false},ticks:{color:GREEN,font:{size:9},callback:v=>v+'%'},suggestedMin:14}}}
   });
-  const fReal = [5,4,5,5,3,5,4,5,5,4,5,5,3,5,5,4,5,5,5,4];
   mkChart('freqChart', {
     type:'bar',
     data:{
-      labels:fReal.map((_,i)=>`Sem ${i+1}`),
+      labels:fd.map((_,i)=>`Sem ${i+1}`),
       datasets:[
-        {label:'Treinos',data:fReal,backgroundColor:fReal.map(v=>v===5?GREEN+'66':v>=4?GOLD+'66':AMBER+'55'),borderColor:fReal.map(v=>v===5?GREEN:v>=4?GOLD:AMBER),borderWidth:1.5,borderRadius:3},
-        {label:'Meta',data:Array(fReal.length).fill(5),type:'line',borderColor:SILV+'44',borderDash:[4,3],pointRadius:0,borderWidth:1.5}
+        {label:'Treinos',data:fd,backgroundColor:fd.map(v=>v===5?GREEN+'66':v>=4?GOLD+'66':AMBER+'55'),borderColor:fd.map(v=>v===5?GREEN:v>=4?GOLD:AMBER),borderWidth:1.5,borderRadius:3},
+        {label:'Meta',data:Array(fd.length).fill(5),type:'line',borderColor:SILV+'44',borderDash:[4,3],pointRadius:0,borderWidth:1.5}
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,
@@ -257,8 +263,8 @@ function initAcompCharts() {
   mkChart('moodChart', {
     type:'line',
     data:{
-      labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'],
-      datasets:[{label:'Disposição',data:[4,4,5,3,4,5],borderColor:PURPLE,backgroundColor:'rgba(167,139,250,0.1)',fill:true,tension:0.4,borderWidth:2,pointRadius:5,pointBackgroundColor:PURPLE}]
+      labels:md.labels,
+      datasets:[{label:'Disposição',data:md.data,borderColor:PURPLE,backgroundColor:'rgba(167,139,250,0.1)',fill:true,tension:0.4,borderWidth:2,pointRadius:5,pointBackgroundColor:PURPLE}]
     },
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{...tt}},
@@ -268,13 +274,184 @@ function initAcompCharts() {
 
 // ── STUDENT DATA ─────────────────────────────────────────
 const students = {
-  beatriz:  {avatar:'BT',name:'Beatriz Tavares',     time:'38 meses',plan:'12 meses — R$267/mês',channel:'Indicação',ltv:'R$10.146',sk1:'94%', sk2:'8.9',sk3:'4.7/5',sk4:'3 indic.'},
-  eduardo:  {avatar:'EC',name:'Eduardo Campos',       time:'34 meses',plan:'12 meses — R$267/mês',channel:'Instagram',ltv:'R$9.078', sk1:'88%', sk2:'8.1',sk3:'4.4/5',sk4:'1 indic.'},
-  fernanda: {avatar:'FL',name:'Fernanda Leal',        time:'29 meses',plan:'6 meses — R$237/mês', channel:'YouTube',  ltv:'R$6.873', sk1:'79%', sk2:'7.6',sk3:'4.2/5',sk4:'0 indic.'},
-  guilherme:{avatar:'GB',name:'Guilherme Braga',      time:'27 meses',plan:'6 meses — R$237/mês', channel:'Indicação',ltv:'R$6.399', sk1:'85%', sk2:'7.9',sk3:'4.5/5',sk4:'2 indic.'},
-  isabela:  {avatar:'IN',name:'Isabela Nunes',        time:'24 meses',plan:'3 meses — R$197/mês', channel:'Instagram',ltv:'R$4.728', sk1:'72%', sk2:'6.8',sk3:'3.9/5',sk4:'0 indic.'},
-  felipe:   {avatar:'FM',name:'Felipe Martins ⚠',     time:'7 meses', plan:'3 meses — R$197/mês', channel:'Instagram',ltv:'R$1.379', sk1:'18%', sk2:'1.9',sk3:'2.1/5',sk4:'0 indic.'},
-  amanda:   {avatar:'AC',name:'Amanda Costa ⚠',       time:'3 meses', plan:'1 mês — R$147/mês',  channel:'Instagram',ltv:'R$441',   sk1:'22%', sk2:'2.1',sk3:'2.4/5',sk4:'0 indic.'},
+  beatriz: {
+    avatar:'BT', name:'Beatriz Tavares', time:'38 meses',
+    plan:'12 meses — R$267/mês', channel:'Indicação', ltv:'R$10.146',
+    sk1:'94%', sk2:'8.9', sk3:'4.7/5', sk4:'3 indic.',
+    weight: { labels:['Jun23','Set','Dez','Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
+      kg:[74.2,71.8,68.5,66.2,64.8,63.7,63,62.8,62.4,62.2,62,62.1,62.1],
+      bf:[28,25.5,23,21.2,20.1,19.4,18.8,18.5,18.3,18.1,18,18,18] },
+    freq: [5,4,5,5,3,5,4,5,5,4,5,5,3,5,5,4,5,5,5,4],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[4,4,5,3,4,5] },
+    photos: [
+      { date:'JUN 2023 — INÍCIO',  desc:'Foto frontal · 74,2 kg · BF 28%', label:'Peso Inicial', val:'74.2 kg' },
+      { date:'DEZ 2023 — 6 MESES', desc:'Foto frontal · 68,5 kg · BF 23%', label:'6 Meses',      val:'68.5 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 62,1 kg · BF 18%', label:'Atual',         val:'62.1 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'green', date:'Abr 2026', title:'🏆 PR Histórico: Agachamento 52kg', desc:'Novo recorde pessoal. Evolução de 34kg no início para 52kg.' },
+      { dot:'',      date:'Mar 2026', title:'📸 Avaliação Física Q1 — Meta 76% atingida', desc:'Peso: 62.1kg · BF: 18% · Passou para protocolo fase 3.' },
+      { dot:'blue',  date:'Jan 2026', title:'🔄 Renovação — 3ª vez · Upgrade Plano 12m', desc:'Fez upgrade do plano 6m para 12m por conta própria. Alta fidelidade.' },
+      { dot:'',      date:'Set 2025', title:'👥 Indicou 3 amigas — todas convertidas', desc:'Beatriz indicou Natália, Camila e Fernanda. Todas ainda ativas.' },
+      { dot:'amber', date:'Jun 2025', title:'⚠ Período difícil — frequência caiu', desc:'Estresse no trabalho. Intervenção proativa via mensagem recuperou engajamento.' },
+      { dot:'',      date:'Dez 2024', title:'🎯 Marco: -10kg e BF 23%', desc:'Primeiro grande resultado visível. Engajamento disparou após este marco.' },
+      { dot:'green', date:'Jun 2023', title:'🚀 Início da jornada — 74.2kg · BF 28%', desc:'Entrou via indicação. Objetivo: emagrecer e ganhar massa magra.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊😊😊😊', tag:'Ótima semana', summary:'Bateu meta de 5 treinos, sem dores, disposição ótima.',
+        fields: [{l:'Treinos realizados',v:'5 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'8/10'},{l:'Peso reportado',v:'62.1 kg'}] },
+      { week:'Semana 37', date:'21/04/26', mood:'😊😊😊😊', tag:'Boa semana', summary:'4 treinos, leve fadiga na quinta, sem lesões.',
+        fields: [{l:'Treinos realizados',v:'4 de 5'},{l:'Sentiu dor?',v:'Leve fadiga'},{l:'Qualidade do sono',v:'7/10'},{l:'Peso reportado',v:'62.2 kg'}] },
+      { week:'Semana 36', date:'14/04/26', mood:'😊😊😊', tag:'Semana ok', summary:'3 treinos, viagem de trabalho atrapalhou.',
+        fields: [{l:'Treinos realizados',v:'3 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'6/10'},{l:'Peso reportado',v:'62.4 kg'}] },
+    ],
+  },
+  eduardo: {
+    avatar:'EC', name:'Eduardo Campos', time:'34 meses',
+    plan:'12 meses — R$267/mês', channel:'Instagram', ltv:'R$9.078',
+    sk1:'88%', sk2:'8.1', sk3:'4.4/5', sk4:'1 indic.',
+    weight: { labels:['Ago23','Nov','Fev24','Mai','Ago','Nov','Fev25','Mai','Ago','Nov','Fev26','Mai26'],
+      kg:[88,85.2,81.8,78.4,75.6,73.2,71.8,70.4,69.2,68.8,68.2,68],
+      bf:[31,28.5,26.2,24.1,22.4,21,20.2,19.6,19.1,18.8,18.4,18.2] },
+    freq: [5,5,4,5,5,3,5,5,4,5,5,4,5,5,5,3,4,5,5,5],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[5,4,4,5,5,4] },
+    photos: [
+      { date:'AGO 2023 — INÍCIO',  desc:'Foto frontal · 88 kg · BF 31%',  label:'Peso Inicial', val:'88 kg' },
+      { date:'FEV 2024 — 6 MESES', desc:'Foto frontal · 81,8 kg · BF 26%', label:'6 Meses',     val:'81.8 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 68 kg · BF 18,2%', label:'Atual',        val:'68 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'green', date:'Abr 2026', title:'🏆 -20kg atingidos', desc:'Meta principal alcançada. Agora foco em hipertrofia.' },
+      { dot:'blue',  date:'Jan 2026', title:'🔄 Renovação — 2ª vez', desc:'Renovou por mais 12 meses sem hesitar.' },
+      { dot:'',      date:'Set 2025', title:'📸 Avaliação Semestral', desc:'BF 19% · Peso 69kg · Excelente progresso.' },
+      { dot:'green', date:'Ago 2023', title:'🚀 Início — 88kg · BF 31%', desc:'Entrou pelo Instagram. Objetivo: emagrecer.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊😊😊😊', tag:'Ótima semana', summary:'5 treinos, foco total, sem intercorrências.',
+        fields: [{l:'Treinos realizados',v:'5 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'9/10'},{l:'Peso reportado',v:'68 kg'}] },
+      { week:'Semana 37', date:'21/04/26', mood:'😊😊😊😊', tag:'Boa semana', summary:'4 treinos, ótima disposição.',
+        fields: [{l:'Treinos realizados',v:'4 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'8/10'},{l:'Peso reportado',v:'68.1 kg'}] },
+    ],
+  },
+  fernanda: {
+    avatar:'FL', name:'Fernanda Leal', time:'29 meses',
+    plan:'6 meses — R$237/mês', channel:'YouTube', ltv:'R$6.873',
+    sk1:'79%', sk2:'7.6', sk3:'4.2/5', sk4:'0 indic.',
+    weight: { labels:['Jan24','Abr','Jul','Out','Jan25','Abr','Jul','Out','Jan26','Mai26'],
+      kg:[72,69.8,67.2,65.4,63.8,62.6,61.8,61.4,61,60.8],
+      bf:[26,24.2,22.4,21,19.8,19.1,18.6,18.3,18,17.8] },
+    freq: [4,5,4,4,3,5,4,5,4,4,5,4,4,3,5,4,4,5,4,4],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[4,3,4,4,5,4] },
+    photos: [
+      { date:'JAN 2024 — INÍCIO',  desc:'Foto frontal · 72 kg · BF 26%',  label:'Peso Inicial', val:'72 kg' },
+      { date:'JUL 2024 — 6 MESES', desc:'Foto frontal · 67,2 kg · BF 22%', label:'6 Meses',     val:'67.2 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 60,8 kg · BF 17,8%', label:'Atual',      val:'60.8 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'green', date:'Mar 2026', title:'🎯 Meta -10kg atingida', desc:'Resultado consistente ao longo de 29 meses.' },
+      { dot:'blue',  date:'Jan 2026', title:'🔄 Renovação — 4ª vez', desc:'Alta fidelidade, renova regularmente.' },
+      { dot:'',      date:'Jan 2024', title:'🚀 Início — 72kg · BF 26%', desc:'Entrou pelo YouTube. Objetivo: emagrecimento saudável.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊😊😊', tag:'Boa semana', summary:'4 treinos, levemente cansada mas consistente.',
+        fields: [{l:'Treinos realizados',v:'4 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'7/10'},{l:'Peso reportado',v:'60.8 kg'}] },
+    ],
+  },
+  guilherme: {
+    avatar:'GB', name:'Guilherme Braga', time:'27 meses',
+    plan:'6 meses — R$237/mês', channel:'Indicação', ltv:'R$6.399',
+    sk1:'85%', sk2:'7.9', sk3:'4.5/5', sk4:'2 indic.',
+    weight: { labels:['Mar24','Jun','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
+      kg:[75,77.2,79.4,81.6,83.2,84.8,85.6,86.2,86.8,87],
+      bf:[18,17.2,16.4,15.8,15.2,14.8,14.5,14.2,14,13.8] },
+    freq: [4,5,5,4,5,5,4,5,5,4,5,5,4,5,5,5,4,5,5,4],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[5,5,4,5,5,5] },
+    photos: [
+      { date:'MAR 2024 — INÍCIO',  desc:'Foto frontal · 75 kg · BF 18%',  label:'Peso Inicial', val:'75 kg' },
+      { date:'SET 2024 — 6 MESES', desc:'Foto frontal · 79,4 kg · BF 16%', label:'6 Meses',     val:'79.4 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 87 kg · BF 13,8%', label:'Atual',        val:'87 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'green', date:'Abr 2026', title:'💪 +12kg massa magra', desc:'Objetivo de hipertrofia bem encaminhado.' },
+      { dot:'blue',  date:'Jan 2026', title:'🔄 Renovação — 3ª vez', desc:'Indicou 2 amigos que viraram alunos.' },
+      { dot:'green', date:'Mar 2024', title:'🚀 Início — 75kg · BF 18%', desc:'Entrou por indicação. Objetivo: hipertrofia.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊😊😊😊', tag:'Semana excelente', summary:'5 treinos, cargas aumentadas, ótima recuperação.',
+        fields: [{l:'Treinos realizados',v:'5 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'9/10'},{l:'Peso reportado',v:'87 kg'}] },
+    ],
+  },
+  isabela: {
+    avatar:'IN', name:'Isabela Nunes', time:'24 meses',
+    plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$4.728',
+    sk1:'72%', sk2:'6.8', sk3:'3.9/5', sk4:'0 indic.',
+    weight: { labels:['Jun24','Set','Dez','Mar25','Jun','Set','Dez','Mar26','Mai26'],
+      kg:[68,66.2,64.8,63.4,62.2,61.6,61.2,60.8,60.6],
+      bf:[27,25.4,24,22.8,21.6,21,20.6,20.2,20] },
+    freq: [4,3,4,4,3,4,3,4,4,3,4,4,3,3,4,4,3,4,4,3],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[3,4,3,4,3,4] },
+    photos: [
+      { date:'JUN 2024 — INÍCIO',  desc:'Foto frontal · 68 kg · BF 27%',  label:'Peso Inicial', val:'68 kg' },
+      { date:'DEZ 2024 — 6 MESES', desc:'Foto frontal · 64,8 kg · BF 24%', label:'6 Meses',     val:'64.8 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 60,6 kg · BF 20%', label:'Atual',        val:'60.6 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'',      date:'Mar 2026', title:'📸 Avaliação — BF 20%', desc:'Progresso consistente, frequência irregular mas manteve resultado.' },
+      { dot:'blue',  date:'Dez 2025', title:'🔄 Renovação — 7ª vez (3m)', desc:'Prefere planos trimestrais por flexibilidade.' },
+      { dot:'green', date:'Jun 2024', title:'🚀 Início — 68kg · BF 27%', desc:'Entrou pelo Instagram. Objetivo: saúde geral.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊😊', tag:'Semana regular', summary:'4 treinos, rotina corrida mas manteve o compromisso.',
+        fields: [{l:'Treinos realizados',v:'4 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'6/10'},{l:'Peso reportado',v:'60.6 kg'}] },
+    ],
+  },
+  felipe: {
+    avatar:'FM', name:'Felipe Martins ⚠', time:'7 meses',
+    plan:'3 meses — R$197/mês', channel:'Instagram', ltv:'R$1.379',
+    sk1:'18%', sk2:'1.9', sk3:'2.1/5', sk4:'0 indic.',
+    weight: { labels:['Out25','Nov','Dez','Jan26','Fev','Mar','Abr','Mai26'],
+      kg:[92,91.2,90.8,90.4,90.6,91,91.4,91.8],
+      bf:[34,33.6,33.4,33.2,33.4,33.6,33.8,34] },
+    freq: [2,1,3,2,1,1,2,1,1,2,1,1,0,1,2,1,1,0,1,1],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[2,2,1,2,3,2] },
+    photos: [
+      { date:'OUT 2025 — INÍCIO',  desc:'Foto frontal · 92 kg · BF 34%',  label:'Peso Inicial', val:'92 kg' },
+      { date:'FEV 2026 — 4 MESES', desc:'Foto frontal · 90,6 kg · BF 33%', label:'4 Meses',     val:'90.6 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 91,8 kg · BF 34%', label:'Atual',        val:'91.8 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'amber', date:'Abr 2026', title:'⚠ Frequência caiu para 1x/semana', desc:'Necessita intervenção urgente. Risco alto de churn.' },
+      { dot:'',      date:'Jan 2026', title:'🔄 Renovação — 1ª vez (3m)', desc:'Renovou mas frequência já estava caindo.' },
+      { dot:'green', date:'Out 2025', title:'🚀 Início — 92kg · BF 34%', desc:'Entrou pelo Instagram. Objetivo: emagrecimento.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊', tag:'Semana fraca', summary:'1 treino realizado. Relata falta de tempo e motivação.',
+        fields: [{l:'Treinos realizados',v:'1 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'5/10'},{l:'Peso reportado',v:'91.8 kg'}] },
+    ],
+  },
+  amanda: {
+    avatar:'AC', name:'Amanda Costa ⚠', time:'3 meses',
+    plan:'1 mês — R$147/mês', channel:'Instagram', ltv:'R$441',
+    sk1:'22%', sk2:'2.1', sk3:'2.4/5', sk4:'0 indic.',
+    weight: { labels:['Mar26','Abr','Mai26'],
+      kg:[78,77.6,77.2],
+      bf:[30,29.8,29.6] },
+    freq: [3,2,1,2,2,1,3,2,1,2,1,2,1,2,3,1,2,1,2,2],
+    mood: { labels:['Sem33','Sem34','Sem35','Sem36','Sem37','Sem38'], data:[2,3,2,2,1,2] },
+    photos: [
+      { date:'MAR 2026 — INÍCIO',  desc:'Foto frontal · 78 kg · BF 30%',  label:'Peso Inicial', val:'78 kg' },
+      { date:'ABR 2026 — 1 MÊS',   desc:'Foto frontal · 77,6 kg · BF 29,8%', label:'1 Mês',    val:'77.6 kg' },
+      { date:'MAI 2026 — ATUAL',   desc:'Foto frontal · 77,2 kg · BF 29,6%', label:'Atual',     val:'77.2 kg', highlight:true },
+    ],
+    timeline: [
+      { dot:'amber', date:'Mai 2026', title:'⚠ Frequência muito baixa', desc:'2 treinos/semana apenas. Engajamento crítico.' },
+      { dot:'green', date:'Mar 2026', title:'🚀 Início — 78kg · BF 30%', desc:'Entrou pelo Instagram. Objetivo: emagrecimento.' },
+    ],
+    responses: [
+      { week:'Semana 38', date:'28/04/26', mood:'😊😊', tag:'Semana difícil', summary:'2 treinos, relatou desmotivação.',
+        fields: [{l:'Treinos realizados',v:'2 de 5'},{l:'Sentiu dor?',v:'Não'},{l:'Qualidade do sono',v:'5/10'},{l:'Peso reportado',v:'77.2 kg'}] },
+    ],
+  },
 };
 
 function updateStudent() {
@@ -282,7 +459,8 @@ function updateStudent() {
   if (!sel) return;
   const s = students[sel.value];
   if (!s) return;
-  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+
+  const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('studentAvatar',  s.avatar);
   set('studentName',    s.name);
   set('studentTime',    s.time);
@@ -290,6 +468,59 @@ function updateStudent() {
   set('studentChannel', s.channel);
   set('studentLTV',     s.ltv);
   set('sk1', s.sk1); set('sk2', s.sk2); set('sk3', s.sk3); set('sk4', s.sk4);
+
+  // Fotos
+  const photoEl = document.getElementById('photo-compare');
+  if (photoEl && s.photos) {
+    photoEl.innerHTML = s.photos.map(p => `
+      <div class="photo-card">
+        <div class="photo-placeholder" style="${p.highlight?'border:1px solid rgba(74,222,128,0.2)':''}">
+          <div class="photo-icon">📷</div>
+          <div class="photo-date">${p.date}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">${p.desc}</div>
+        </div>
+        <div class="photo-footer">
+          <span class="photo-footer-label">${p.label}</span>
+          <span class="photo-footer-val">${p.val}</span>
+        </div>
+      </div>`).join('');
+  }
+
+  // Timeline
+  const tlEl = document.getElementById('student-timeline');
+  if (tlEl && s.timeline) {
+    tlEl.innerHTML = s.timeline.map(t => `
+      <div class="tl-item">
+        <div class="tl-dot ${t.dot}"></div>
+        <div class="tl-date">${t.date}</div>
+        <div class="tl-title">${t.title}</div>
+        <div class="tl-desc">${t.desc}</div>
+      </div>`).join('');
+  }
+
+  // Respostas
+  const respEl = document.getElementById('student-responses');
+  if (respEl && s.responses) {
+    respEl.innerHTML = s.responses.map(r => `
+      <div class="response-item" onclick="toggleResponse(this)">
+        <div class="response-header">
+          <span class="response-date">${r.date}</span>
+          <span class="response-week">${r.week}</span>
+          <span class="response-tag">${r.tag}</span>
+          <div class="response-stars">${r.mood}</div>
+        </div>
+        <div class="response-body">
+          <div class="response-summary">${r.summary}</div>
+          ${r.fields.map(f=>`
+            <div class="response-field">
+              <span class="response-field-label">${f.l}</span>
+              <span class="response-field-val">${f.v}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  // Atualiza gráficos com dados do aluno
   if (acompChartsDone) setTimeout(initAcompCharts, 50);
 }
 
