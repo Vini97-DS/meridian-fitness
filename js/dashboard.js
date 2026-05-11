@@ -1330,4 +1330,4 @@ async function updateLeadInAPI(leadId, status, notes) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
+document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });// Mon May 11 20:47:15 -03 2026
