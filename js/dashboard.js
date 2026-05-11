@@ -832,12 +832,25 @@ function vSaveLead() {
     dp:    0,
   };
 
-  // Adiciona na coluna "novo" do KDATA e kStatus
+  // Adiciona na coluna "novo" do KDATA e kStatus (otimista)
   KDATA.novo.unshift(newLead);
   kStatus[newId] = 'novo';
-
-  // Atualiza o kanban
   renderKanban();
+
+  // Salva no Neon em background
+  saveLeadToAPI({
+    name: name, phone: phone, email: email,
+    channel: channel.toLowerCase(),
+    goal: 'emagrecimento',
+  }).then(saved => {
+    if (saved?.id) {
+      // Atualiza o ID local com o ID real do banco
+      const idx = KDATA.novo.findIndex(c => c.id === newId);
+      if (idx >= 0) KDATA.novo[idx].id = saved.id;
+      kStatus[saved.id] = 'novo';
+      delete kStatus[newId];
+    }
+  }).catch(() => {}); // Falha silenciosa — lead já está no kanban localmente
 
   // Atualiza KPI de vendas (Novos Leads)
   const leadsKpi = document.getElementById('v-kpi-leads');
@@ -919,13 +932,34 @@ function renderSalesTable() {
 }
 
 // ── INIT ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // Auth check
+// ── API CALL HELPER ──────────────────────────────────────────
+async function api(path, options = {}) {
+  const token = localStorage.getItem('mf_token');
+  const res = await fetch('/api' + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (res.status === 401) { window.location.href = '/'; return null; }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ' + res.status);
+  }
+  return res.json();
+}
+
+// ── LOAD DASHBOARD FROM NEON ─────────────────────────────────
+async function loadDashboard() {
   const token   = localStorage.getItem('mf_token');
   const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
   if (!token || !session) { window.location.href = '/'; return; }
 
-  // User info
+  const personalId = session.id;
+
+  // User info in header
   const name     = session.name || 'Personal';
   const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const h1 = document.getElementById('dash-user-h1');
@@ -935,12 +969,365 @@ document.addEventListener('DOMContentLoaded', () => {
   if (nameEl)   nameEl.textContent   = name;
   if (avatarEl) avatarEl.textContent = initials;
 
-  // Render all
+  // ── Charts BI (inicializa com mock enquanto carrega) ──
   initBICharts();
   initVendasCharts();
-  renderChurnList();
-  renderTopTable();
-  renderKanban();
+
+  // ── Load em paralelo ──────────────────────────────────
+  const [metrics, studentsData, leadsData, plansData] = await Promise.all([
+    api('/metrics/' + personalId).catch(() => null),
+    api('/students/' + personalId).catch(() => null),
+    api('/leads/' + personalId).catch(() => null),
+    api('/plans/' + personalId).catch(() => null),
+  ]);
+
+  // ── Atualiza KPIs do header ───────────────────────────
+  if (metrics) {
+    updateKPICards(metrics);
+    updateAlertBar(metrics);
+    if (metrics.mrr_history?.length) updateMRRChart(metrics);
+  }
+
+  // ── Atualiza select e lista de alunos ─────────────────
+  if (studentsData?.length) {
+    loadStudentsFromAPI(studentsData);
+  } else {
+    // sem alunos no banco ainda — mantém mock
+    renderChurnList();
+    renderTopTable();
+    updateStudent();
+  }
+
+  // ── Atualiza kanban com leads reais ───────────────────
+  if (leadsData) {
+    loadLeadsFromAPI(leadsData);
+  } else {
+    renderKanban();
+  }
+
+  // ── Planos nos cards de venda ─────────────────────────
+  if (plansData?.length) {
+    loadPlansFromAPI(plansData);
+  }
+
   renderSalesTable();
+  updateFormStudentName();
+}
+
+// ── UPDATE KPI CARDS ─────────────────────────────────────────
+function updateKPICards(m) {
+  const fmt = (n) => {
+    if (n >= 1000) return 'R$' + (n/1000).toFixed(1) + 'K';
+    return 'R$' + Math.round(n).toLocaleString('pt-BR');
+  };
+  // MRR
+  const mrrEl = document.querySelector('.kpi-card:nth-child(1) .kpi-value');
+  if (mrrEl) mrrEl.textContent = fmt(m.mrr || 0);
+  // Alunos ativos
+  const alunosEl = document.querySelector('.kpi-card:nth-child(2) .kpi-value');
+  if (alunosEl) alunosEl.textContent = m.active_students || 0;
+  // Ticket médio
+  const ticketEl = document.querySelector('.kpi-card:nth-child(3) .kpi-value');
+  if (ticketEl) ticketEl.textContent = fmt(m.avg_ticket || 0);
+  // Meta pills no header
+  const pills = document.querySelectorAll('.meta-pill span');
+  if (pills[0]) pills[0].textContent = m.active_students || 0;
+  if (pills[1]) pills[1].textContent = fmt(m.mrr || 0);
+}
+
+// ── UPDATE ALERT BAR ─────────────────────────────────────────
+function updateAlertBar(m) {
+  const e7 = m.expiring_7d?.count || 0;
+  const e7v = m.expiring_7d?.value || 0;
+  const e30 = m.expiring_30d?.count || 0;
+  // Update alert items
+  const alerts = document.querySelectorAll('.alert-item');
+  if (alerts[0]) {
+    const span = alerts[0].querySelector('strong') || alerts[0].querySelector('.alert-val');
+    if (span) span.textContent = e7 + ' alunos — R$ ' + Math.round(e7v).toLocaleString('pt-BR') + ' em risco';
+  }
+}
+
+// ── UPDATE MRR CHART ─────────────────────────────────────────
+function updateMRRChart(m) {
+  if (!charts['mrrChart'] || !m.mrr_history?.length) return;
+  charts['mrrChart'].data.labels   = m.mrr_history.map(r => r.month);
+  charts['mrrChart'].data.datasets[0].data = m.mrr_history.map(r => parseFloat(r.mrr) || 0);
+  charts['mrrChart'].update();
+}
+
+// ── LOAD STUDENTS FROM API ───────────────────────────────────
+function loadStudentsFromAPI(data) {
+  // Rebuild students object from API data
+  Object.keys(students).forEach(k => delete students[k]);
+
+  const sel = document.getElementById('studentSelect');
+  if (sel) sel.innerHTML = '';
+
+  data.forEach(s => {
+    const key = s.id; // UUID from DB
+    const weightLost = s.weight_initial && s.weight_current
+      ? (s.weight_current - s.weight_initial).toFixed(1)
+      : '—';
+    const weightLostLabel = parseFloat(weightLost) < 0
+      ? weightLost + ' kg'
+      : '+' + weightLost + ' kg';
+
+    students[key] = {
+      avatar:   s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(),
+      name:     s.name,
+      time:     calcTime(s.student_since),
+      plan:     (s.plan_name || 'Plano') + ' — R$' + Math.round(s.price_paid || 0) + '/mês',
+      channel:  capitalize(s.channel || 'instagram'),
+      ltv:      'R$' + Math.round(s.ltv_total || 0).toLocaleString('pt-BR'),
+      sk1:      '—', sk2:'—', sk3:'—', sk4:'—',
+      // Dados reais de peso
+      weight:   buildWeightData(s),
+      freq:     [5,4,5,5,4,5,4,5,5,4,5,5,4,5,5,4,5,5,5,4], // será substituído pelos checkins
+      mood:     { labels:['Sem1','Sem2','Sem3','Sem4','Sem5','Sem6'], data:[4,4,4,4,4,4] },
+      photos:   buildPhotos(s),
+      timeline: [],
+      responses: [],
+      stats: buildStats(s),
+      engagement: buildEngagement(s),
+      // Flag de churn
+      churnRisk: (s.days_to_expire !== null && s.days_to_expire <= 7),
+    };
+
+    // Populate select
+    if (sel) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      const churn = s.days_to_expire <= 7 ? ' · ⚠ CHURN RISCO' : '';
+      opt.textContent = s.name + ' — ' + (s.plan_name || 'Plano') + churn;
+      sel.appendChild(opt);
+    }
+  });
+
+  // Load checkins for first student
+  if (data.length > 0) {
+    loadStudentCheckins(data[0].id);
+  }
+
+  renderChurnListFromAPI(data);
+  renderTopTableFromAPI(data);
   updateStudent();
-});
+}
+
+function calcTime(since) {
+  if (!since) return '—';
+  const months = Math.floor((new Date() - new Date(since)) / (1000*60*60*24*30));
+  return months + ' meses';
+}
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function buildWeightData(s) {
+  const kg = [s.weight_initial, s.weight_current].filter(Boolean);
+  if (kg.length < 2) return students['beatriz']?.weight || { labels:['Início','Atual'], kg:[70,68], bf:[25,22] };
+  return {
+    labels: ['Início', 'Atual'],
+    kg: [parseFloat(s.weight_initial), parseFloat(s.weight_current)],
+    bf: [parseFloat(s.bf_initial) || 25, parseFloat(s.bf_current) || 22],
+  };
+}
+
+function buildPhotos(s) {
+  return [
+    { date:'INÍCIO', desc:'Peso inicial · ' + (s.weight_initial || '—') + ' kg', label:'Peso Inicial', val:(s.weight_initial || '—') + ' kg' },
+    { date:'ATUAL',  desc:'Peso atual · '   + (s.weight_current  || '—') + ' kg', label:'Atual',        val:(s.weight_current  || '—') + ' kg', highlight:true },
+  ];
+}
+
+function buildStats(s) {
+  const lost = s.weight_initial && s.weight_current
+    ? (s.weight_current - s.weight_initial).toFixed(1)
+    : 0;
+  const lostPct = s.weight_initial ? Math.abs(lost / s.weight_initial * 100) : 0;
+  return {
+    pesoLabel: (lost < 0 ? '− ' : '+ ') + Math.abs(lost) + ' kg',
+    pesoBar:   Math.min(100, Math.round(lostPct * 3)),
+    bfLabel:   s.bf_initial && s.bf_current ? '− ' + (s.bf_initial - s.bf_current).toFixed(1) + ' pp' : '—',
+    bfBar:     50,
+    metaLabel: '—', metaBar: 50,
+    engLabel:  '—', engBar:  50, engColor:'var(--gold)',
+  };
+}
+
+function buildEngagement(s) {
+  return {
+    score: '—', scoreColor: 'green',
+    bars: [
+      { label:'Frequência de Treino',          val:'Carregando...', pct:0, color:'var(--dim)' },
+      { label:'Responsividade ao Formulário',  val:'Carregando...', pct:0, color:'var(--dim)' },
+      { label:'Probabilidade de Renovação',    val: s.days_to_expire <= 30 ? 'Vence em ' + s.days_to_expire + 'd' : 'Ativo', pct: s.days_to_expire <= 30 ? 40 : 80, color: s.days_to_expire <= 7 ? 'var(--red)' : 'var(--green)' },
+    ],
+    mood: { labels:['Sem1','Sem2','Sem3','Sem4','Sem5','Sem6'], data:[3,3,4,3,4,4] },
+  };
+}
+
+// ── LOAD CHECKINS FOR STUDENT ────────────────────────────────
+async function loadStudentCheckins(studentId) {
+  const data = await api('/checkins/' + studentId).catch(() => null);
+  if (!data?.length) return;
+  const s = students[studentId];
+  if (!s) return;
+
+  // Map checkins to responses format
+  s.responses = data.map(c => {
+    const date = new Date(c.responded_at || c.created_at);
+    const dateStr = date.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit'});
+    const mood = c.mood_score || 3;
+    const moodEmoji = ['😞','😐','🙂','😊','🔥'][mood-1] || '😊';
+    const moodStr = Array(mood).fill(moodEmoji).join('');
+    const treinos = c.trainings_done || 0;
+    const tag = treinos >= 5 ? 'Ótima semana' : treinos >= 4 ? 'Boa semana' : treinos >= 3 ? 'Semana ok' : 'Semana difícil';
+    return {
+      week: 'Check-in',
+      date: dateStr,
+      mood: moodStr,
+      tag,
+      summary: c.training_feedback || 'Sem observações.',
+      fields: [
+        { l:'Treinos realizados', v: treinos + ' de 5' },
+        ...(c.had_pain ? [{ l:'Dor relatada', v: c.pain_description || 'Sim' }] : []),
+        ...(c.weight_reported ? [{ l:'Peso reportado', v: c.weight_reported + ' kg' }] : []),
+        ...(c.mood_score ? [{ l:'Disposição', v: c.mood_score + '/5' }] : []),
+      ]
+    };
+  });
+
+  // Update weight history from checkins
+  if (data.length > 1) {
+    const weights = data.filter(c => c.weight_reported).reverse();
+    if (weights.length >= 2) {
+      s.weight.labels = weights.map(c => new Date(c.created_at).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}));
+      s.weight.kg     = weights.map(c => parseFloat(c.weight_reported));
+      s.weight.bf     = weights.map(c => parseFloat(c.bf_measured) || s.weight.bf[0] || 22);
+    }
+  }
+
+  updateStudent();
+}
+
+// ── CHURN LIST FROM API ──────────────────────────────────────
+function renderChurnListFromAPI(data) {
+  const el = document.getElementById('churn-list');
+  if (!el) return;
+  const atRisk = data.filter(s => s.days_to_expire <= 21 || s.days_to_expire === null);
+  if (!atRisk.length) {
+    el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum aluno em risco crítico ✓</div>';
+    return;
+  }
+  el.innerHTML = atRisk.slice(0, 6).map(s => {
+    const level = s.days_to_expire <= 7 ? 'high' : 'med';
+    const detail = s.days_to_expire <= 7
+      ? 'Plano vence em ' + s.days_to_expire + ' dias · R$' + Math.round(s.price_paid) + ' em risco'
+      : 'Plano vence em ' + s.days_to_expire + ' dias';
+    const initials = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return `<div class="churn-item">
+      <div class="churn-avatar">${initials}</div>
+      <div><div class="churn-name">${s.name}</div><div class="churn-detail">${detail}</div></div>
+      <div class="churn-badge ${level}">${level==='high'?'CRÍTICO':'MÉDIO'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── TOP TABLE FROM API ────────────────────────────────────────
+function renderTopTableFromAPI(data) {
+  const el = document.getElementById('table-top-students');
+  if (!el) return;
+  const sorted = [...data].sort((a,b) => (b.ltv_total||0) - (a.ltv_total||0)).slice(0,10);
+  el.innerHTML = '<thead><tr><th>#</th><th>Nome</th><th>Plano</th><th>Tempo</th><th>Canal</th><th style="text-align:right">LTV</th><th style="text-align:right">Renovações</th></tr></thead>'
+    + '<tbody>' + sorted.map((s,i) => `<tr>
+      <td class="num">${i+1}</td>
+      <td>${s.name}</td>
+      <td>${s.plan_name || '—'}</td>
+      <td>${calcTime(s.student_since)}</td>
+      <td>${capitalize(s.channel || '—')}</td>
+      <td class="num">R$${Math.round(s.ltv_total||0).toLocaleString('pt-BR')}</td>
+      <td class="num">${s.renewals_count || 0}×</td>
+    </tr>`).join('') + '</tbody>';
+}
+
+// ── LOAD LEADS FROM API ──────────────────────────────────────
+function loadLeadsFromAPI(pipeline) {
+  // Clear KDATA and rebuild from API
+  Object.keys(KDATA).forEach(k => KDATA[k] = []);
+  Object.keys(kStatus).forEach(k => delete kStatus[k]);
+
+  Object.entries(pipeline).forEach(([status, leads]) => {
+    leads.forEach(l => {
+      const card = {
+        id:    l.id,
+        name:  l.name,
+        sub:   capitalize(l.channel || 'instagram') + ' · ' + capitalize(l.goal || 'emagrecimento'),
+        val:   l.plan_name ? l.plan_name + ' · R$' + Math.round(l.price_brl||0) : '',
+        days:  calcDays(l.created_at),
+        phone: l.phone || '',
+        email: l.email || '',
+        canal: capitalize(l.channel || 'instagram'),
+        dp:    daysSince(l.created_at),
+        ok:    status === 'fechado',
+        lost:  status === 'perdido',
+        hot:   status === 'proposta',
+      };
+      KDATA[status] = KDATA[status] || [];
+      KDATA[status].push(card);
+      kStatus[l.id] = status;
+    });
+  });
+
+  renderKanban();
+}
+
+function calcDays(dateStr) {
+  if (!dateStr) return '—';
+  const days = daysSince(dateStr);
+  if (days === 0) return 'Hoje';
+  if (days === 1) return '1d';
+  return days + 'd';
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return 0;
+  return Math.floor((new Date() - new Date(dateStr)) / (1000*60*60*24));
+}
+
+// ── LOAD PLANS FROM API ──────────────────────────────────────
+function loadPlansFromAPI(plans) {
+  // Atualiza os cards de plano na aba vendas
+  const grid = document.querySelector('.plans-grid-v');
+  if (!grid || !plans.length) return;
+  grid.innerHTML = plans.map((p, i) => {
+    const cls = ['p1','p3','p6','p12'][Math.min(i,3)];
+    const colors = ['var(--red)','var(--amber)','var(--gold)','var(--green)'];
+    return `<div class="plan-card-v ${cls}${i===2?' sel':''}" data-id="${p.id}" data-dur="${p.duration_months}m" data-price="${p.price_brl}" onclick="vSelectPlan(this)" style="${i===2?'border-color:rgba(201,168,76,0.35);background:rgba(201,168,76,0.05)':''}">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:${colors[Math.min(i,3)]};text-transform:uppercase;margin-bottom:6px">${p.name}</div>
+      <div class="plan-price" style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--white)">R$${Math.round(p.price_brl)}</div>
+      <div class="plan-dur" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">${p.duration_months} meses</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SAVE LEAD TO API ─────────────────────────────────────────
+async function saveLeadToAPI(leadData) {
+  const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  if (!session) return null;
+  return api('/leads', {
+    method: 'POST',
+    body: JSON.stringify({ ...leadData, personal_id: session.id }),
+  });
+}
+
+// ── UPDATE LEAD STATUS IN API ────────────────────────────────
+async function updateLeadInAPI(leadId, status, notes) {
+  return api('/leads/' + leadId, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, notes }),
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });

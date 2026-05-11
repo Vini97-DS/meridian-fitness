@@ -168,8 +168,19 @@ def login(data: LoginData, conn=Depends(get_db)):
     return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
 
 @app.get("/api/auth/me")
-def me(current_user=Depends(get_current_user)):
-    return current_user
+def me(current_user=Depends(get_current_user), conn=Depends(get_db)):
+    """Retorna usuario + personal_id para o dashboard."""
+    user_id = current_user.get("sub")
+    personal = query(conn, "SELECT id FROM personals WHERE clerk_user_id = %s", (user_id,))
+    if not personal:
+        result = execute(conn,
+            "INSERT INTO personals (clerk_user_id, name, email) VALUES (%s,%s,%s) ON CONFLICT (clerk_user_id) DO UPDATE SET name=EXCLUDED.name RETURNING id",
+            (user_id, current_user.get("name","Personal"), current_user.get("email",""))
+        )
+        personal_id = str(result.get("id", user_id))
+    else:
+        personal_id = str(personal[0]["id"])
+    return {**current_user, "personal_id": personal_id}
 
 # ═══════════════════════════════════════════════════════════════
 #  HEALTH
