@@ -34,11 +34,9 @@ function switchTab(tab, btn) {
       setTimeout(updateStudent, 60);
     }
   }
-  if (tab === 'config') {
-    if (!window._configInited) {
-      window._configInited = true;
-      initConfig();
-    }
+  if (tab === 'config' && !window._configInited) {
+    window._configInited = true;
+    initConfig();
   }
   setTimeout(() => {
     try { Object.values(charts).forEach(ch => ch && ch.resize()); } catch {}
@@ -1336,29 +1334,24 @@ async function updateLeadInAPI(leadId, status, notes) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });// Mon May 11 20:47:15 -03 2026
-
 // ═══════════════════════════════════════════════════════
 //  CONFIGURAÇÕES
 // ═══════════════════════════════════════════════════════
-
 let cfgPlanos = [];
 let cfgEditingPlanId = null;
 
-// ── Carrega dados quando aba config abre ─────────────────
 async function initConfig() {
   const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
   if (!session) return;
+  const personalId = session.personal_id || session.id;
 
-  // Preenche perfil com dados da sessão
+  // Preenche perfil
   const nomeEl = document.getElementById('cfg-nome');
-  const espEl  = document.getElementById('cfg-especialidade');
   if (nomeEl) nomeEl.value = session.name || '';
 
-  // Carrega planos e alunos em paralelo
-  const personalId = session.personal_id || session.id;
+  // Carrega planos (todos, incluindo inativos) e alunos
   const [planos, alunos] = await Promise.all([
-    api('/plans/' + personalId).catch(() => []),
+    api('/plans/' + personalId + '?all=true').catch(() => []),
     api('/students/' + personalId).catch(() => []),
   ]);
 
@@ -1372,34 +1365,26 @@ async function initConfig() {
   if (inicioEl) inicioEl.value = new Date().toISOString().split('T')[0];
 }
 
-// ── PLANOS ────────────────────────────────────────────────
 function renderPlanosList(planos) {
   const el = document.getElementById('cfg-planos-lista');
   if (!el) return;
-
   if (!planos.length) {
-    el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Nenhum plano cadastrado ainda. Clique em "+ Novo Plano" para começar.</div>';
+    el.innerHTML = '<div style="font-family:DM Mono,monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Nenhum plano cadastrado. Clique em + Novo Plano para começar.</div>';
     return;
   }
-
-  el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Duração</th><th style="text-align:right">Preço</th><th style="text-align:right">Status</th><th></th></tr></thead><tbody>'
-    + planos.map(p => `<tr>
-      <td>${p.name}</td>
-      <td>${p.duration_months} ${p.duration_months === 1 ? 'mês' : 'meses'}</td>
-      <td style="text-align:right;color:var(--gold)">R$${parseFloat(p.price_brl).toFixed(2)}</td>
-      <td style="text-align:right">
-        <span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;${p.is_active ? 'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)' : 'background:rgba(168,178,189,0.08);color:var(--dim);border:1px solid rgba(168,178,189,0.1)'}">
-          ${p.is_active ? 'ATIVO' : 'INATIVO'}
-        </span>
-      </td>
-      <td style="text-align:right">
-        <button onclick="editarPlano('${p.id}')" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>
-        <button onclick="togglePlanoStatus('${p.id}', ${p.is_active})" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid ${p.is_active ? 'rgba(248,113,113,0.25)' : 'rgba(74,222,128,0.25)'};color:${p.is_active ? 'var(--red)' : 'var(--green)'};cursor:pointer">
-          ${p.is_active ? 'Desativar' : 'Ativar'}
-        </button>
-      </td>
-    </tr>`).join('')
-    + '</tbody></table>';
+  const rows = planos.map(function(p) {
+    const dur    = p.duration_months + (p.duration_months === 1 ? ' mês' : ' meses');
+    const preco  = 'R$' + parseFloat(p.price_brl).toFixed(2);
+    const status = p.is_active
+      ? '<span style="font-size:8px;padding:3px 8px;background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)">ATIVO</span>'
+      : '<span style="font-size:8px;padding:3px 8px;background:rgba(168,178,189,0.08);color:var(--dim);border:1px solid rgba(168,178,189,0.1)">INATIVO</span>';
+    const editBtn   = '<button onclick="editarPlano(' + JSON.stringify(p.id) + ')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>';
+    const toggleBtn = p.is_active
+      ? '<button onclick="togglePlanoStatus(' + JSON.stringify(p.id) + ',true)" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Desativar</button>'
+      : '<button onclick="togglePlanoStatus(' + JSON.stringify(p.id) + ',false)" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(74,222,128,0.25);color:var(--green);cursor:pointer">Ativar</button>';
+    return '<tr><td>' + p.name + '</td><td>' + dur + '</td><td style="text-align:right;color:var(--gold)">' + preco + '</td><td style="text-align:right">' + status + '</td><td style="text-align:right">' + editBtn + toggleBtn + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Duração</th><th style="text-align:right">Preço</th><th style="text-align:right">Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 function abrirModalPlano() {
@@ -1436,71 +1421,51 @@ function editarPlano(planId) {
 }
 
 async function salvarPlano() {
-  const nome     = document.getElementById('cfg-plano-nome').value.trim();
-  const duracao  = parseInt(document.getElementById('cfg-plano-duracao').value);
-  const preco    = parseFloat(document.getElementById('cfg-plano-preco').value);
-  const planId   = document.getElementById('cfg-plano-id').value;
-  const erroEl   = document.getElementById('cfg-plano-erro');
-  const okEl     = document.getElementById('cfg-plano-ok');
-
+  const nome    = document.getElementById('cfg-plano-nome').value.trim();
+  const duracao = parseInt(document.getElementById('cfg-plano-duracao').value);
+  const preco   = parseFloat(document.getElementById('cfg-plano-preco').value);
+  const planId  = document.getElementById('cfg-plano-id').value;
+  const erroEl  = document.getElementById('cfg-plano-erro');
+  const okEl    = document.getElementById('cfg-plano-ok');
   erroEl.style.display = 'none';
-  if (!nome)      { erroEl.textContent = 'Informe o nome do plano.'; erroEl.style.display = 'block'; return; }
+
+  if (!nome)         { erroEl.textContent = 'Informe o nome do plano.'; erroEl.style.display = 'block'; return; }
   if (!preco || preco <= 0) { erroEl.textContent = 'Informe um preço válido.'; erroEl.style.display = 'block'; return; }
 
   const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
-  const personalId = session?.personal_id || session?.id;
+  const personalId = session && (session.personal_id || session.id);
   const btn        = document.getElementById('cfg-plano-save-btn');
   btn.disabled     = true; btn.textContent = 'Salvando...';
 
   try {
     if (planId) {
-      // Editar — chama PATCH
-      await api('/plans/' + planId, {
-        method: 'PATCH',
-        body: JSON.stringify({ name: nome, duration_months: duracao, price_brl: preco }),
-      });
+      await api('/plans/' + planId, { method:'PATCH', body:JSON.stringify({ name:nome, duration_months:duracao, price_brl:preco }) });
     } else {
-      // Novo
-      await api('/plans', {
-        method: 'POST',
-        body: JSON.stringify({ personal_id: personalId, name: nome, duration_months: duracao, price_brl: preco }),
-      });
+      await api('/plans', { method:'POST', body:JSON.stringify({ personal_id:personalId, name:nome, duration_months:duracao, price_brl:preco }) });
     }
-
-    // Recarrega lista
-    const planos = await api('/plans/' + personalId).catch(() => []);
-    cfgPlanos = planos || [];
+    const planos = await api('/plans/' + personalId + '?all=true').catch(() => []);
+    cfgPlanos    = planos || [];
     renderPlanosList(cfgPlanos);
     populatePlanoSelect(cfgPlanos);
-
+    if (planos.length) loadPlansFromAPI(planos.filter(p => p.is_active));
     okEl.style.display = 'block';
     setTimeout(() => { fecharModalPlano(); okEl.style.display = 'none'; }, 2000);
-
-    // Atualiza planos na aba vendas também
-    if (planos.length) loadPlansFromAPI(planos);
-
   } catch (err) {
     erroEl.textContent = err.message || 'Erro ao salvar plano.';
     erroEl.style.display = 'block';
   }
-
   btn.disabled = false; btn.textContent = 'Salvar Plano';
 }
 
 async function togglePlanoStatus(planId, isActive) {
   try {
-    await api('/plans/' + planId, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_active: !isActive }),
-    });
+    await api('/plans/' + planId, { method:'PATCH', body:JSON.stringify({ is_active:!isActive }) });
     const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
-    const personalId = session?.personal_id || session?.id;
-    const planos     = await api('/plans/' + personalId).catch(() => []);
+    const personalId = session && (session.personal_id || session.id);
+    const planos     = await api('/plans/' + personalId + '?all=true').catch(() => []);
     cfgPlanos        = planos || [];
     renderPlanosList(cfgPlanos);
-  } catch (err) {
-    alert('Erro ao alterar status: ' + err.message);
-  }
+  } catch(err) { alert('Erro: ' + err.message); }
 }
 
 function populatePlanoSelect(planos) {
@@ -1508,17 +1473,14 @@ function populatePlanoSelect(planos) {
   if (!sel) return;
   sel.innerHTML = '<option value="">Selecione o plano...</option>'
     + planos.filter(p => p.is_active).map(p =>
-        `<option value="${p.id}" data-price="${p.price_brl}">${p.name} — R$${parseFloat(p.price_brl).toFixed(0)}</option>`
+        '<option value="' + p.id + '" data-price="' + p.price_brl + '">' + p.name + ' — R$' + parseFloat(p.price_brl).toFixed(0) + '</option>'
       ).join('');
 }
 
-// ── ALUNOS ────────────────────────────────────────────────
 function toggleCadastroAluno() {
   const form = document.getElementById('cfg-aluno-form');
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
-  if (form.style.display === 'block') {
-    document.getElementById('cfg-aluno-nome').focus();
-  }
+  if (form.style.display === 'block') document.getElementById('cfg-aluno-nome').focus();
 }
 
 async function cadastrarAluno() {
@@ -1535,136 +1497,94 @@ async function cadastrarAluno() {
   const obs      = document.getElementById('cfg-aluno-obs').value.trim();
   const okEl     = document.getElementById('cfg-aluno-ok');
   const erroEl   = document.getElementById('cfg-aluno-erro');
-
   okEl.style.display = erroEl.style.display = 'none';
 
-  if (!nome)   { erroEl.textContent = 'Informe o nome do aluno.'; erroEl.style.display = 'block'; return; }
-  if (!phone)  { erroEl.textContent = 'Informe o WhatsApp.';      erroEl.style.display = 'block'; return; }
-  if (!planId) { erroEl.textContent = 'Selecione um plano.';      erroEl.style.display = 'block'; return; }
-  if (!inicio) { erroEl.textContent = 'Informe a data de início.'; erroEl.style.display = 'block'; return; }
+  if (!nome)   { erroEl.textContent = 'Informe o nome.';      erroEl.style.display='block'; return; }
+  if (!phone)  { erroEl.textContent = 'Informe o WhatsApp.';  erroEl.style.display='block'; return; }
+  if (!planId) { erroEl.textContent = 'Selecione um plano.';  erroEl.style.display='block'; return; }
+  if (!inicio) { erroEl.textContent = 'Informe o início.';    erroEl.style.display='block'; return; }
 
   const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
-  const personalId = session?.personal_id || session?.id;
-
-  // Calcula data de vencimento baseada no plano
+  const personalId = session && (session.personal_id || session.id);
   const plano      = cfgPlanos.find(p => p.id === planId);
-  const meses      = plano?.duration_months || 1;
-  const inicioDate = new Date(inicio);
-  const fimDate    = new Date(inicioDate);
+  const meses      = plano ? plano.duration_months : 1;
+  const fimDate    = new Date(inicio);
   fimDate.setMonth(fimDate.getMonth() + meses);
   const fim = fimDate.toISOString().split('T')[0];
 
-  const btn = document.querySelector('#cfg-aluno-form .vbtn-green');
-  if (btn) { btn.disabled = true; btn.textContent = 'Cadastrando...'; }
+  const btn = document.querySelector('#cfg-aluno-form button.vbtn-green');
+  if (btn) { btn.disabled=true; btn.textContent='Cadastrando...'; }
 
   try {
-    // 1. Cria o aluno
-    const aluno = await api('/students', {
-      method: 'POST',
-      body: JSON.stringify({
-        personal_id: personalId, name: nome, phone, email: email || null,
-        goal: objetivo, channel: canal,
-        weight_initial: peso, bf_initial: bf, notes: obs || null,
-      }),
-    });
+    const aluno = await api('/students', { method:'POST', body:JSON.stringify({
+      personal_id:personalId, name:nome, phone, email:email||null,
+      goal:objetivo, channel:canal, weight_initial:peso, bf_initial:bf, notes:obs||null,
+    })});
 
-    // 2. Cria a assinatura
-    await api('/subscriptions', {
-      method: 'POST',
-      body: JSON.stringify({
-        student_id: aluno.id, personal_id: personalId, plan_id: planId,
-        price_paid: plano?.price_brl || 0,
-        starts_at: inicio, expires_at: fim,
-        payment_method: pgto, status: 'active',
-      }),
-    });
+    await api('/subscriptions', { method:'POST', body:JSON.stringify({
+      student_id:aluno.id, personal_id:personalId, plan_id:planId,
+      price_paid:plano ? plano.price_brl : 0,
+      starts_at:inicio, expires_at:fim,
+      payment_method:pgto, status:'active',
+    })});
 
-    // 3. Feedback e limpeza
-    okEl.textContent    = '✓ ' + nome + ' cadastrado com sucesso! Assinatura ativa até ' + new Date(fim).toLocaleDateString('pt-BR');
-    okEl.style.display  = 'block';
-
-    // Limpa campos
+    okEl.textContent   = '✓ ' + nome + ' cadastrado! Assinatura ativa até ' + new Date(fim).toLocaleDateString('pt-BR');
+    okEl.style.display = 'block';
     ['cfg-aluno-nome','cfg-aluno-phone','cfg-aluno-email','cfg-aluno-peso','cfg-aluno-bf','cfg-aluno-obs']
-      .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-
-    // Recarrega listas
+      .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     const alunos = await api('/students/' + personalId).catch(() => []);
     renderAlunosList(alunos);
-
-    // Recarrega dashboard
     setTimeout(() => loadDashboard(), 1500);
-
-  } catch (err) {
-    erroEl.textContent = err.message || 'Erro ao cadastrar aluno.';
+  } catch(err) {
+    erroEl.textContent = err.message || 'Erro ao cadastrar.';
     erroEl.style.display = 'block';
   }
-
-  if (btn) { btn.disabled = false; btn.textContent = 'Cadastrar Aluno'; }
+  if (btn) { btn.disabled=false; btn.textContent='Cadastrar Aluno'; }
 }
 
 function renderAlunosList(alunos) {
   const el = document.getElementById('cfg-alunos-lista');
   if (!el) return;
-
   if (!alunos.length) {
-    el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno cadastrado ainda.</div>';
+    el.innerHTML = '<div style="font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno cadastrado ainda.</div>';
     return;
   }
-
-  el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:10px">'
-    + alunos.length + ' aluno(s) ativo(s)</div>'
-    + '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'
-    + alunos.map(a => {
-        const days = a.days_to_expire;
-        const daysColor = days <= 7 ? 'var(--red)' : days <= 30 ? 'var(--amber)' : 'var(--green)';
-        const daysText  = days === 0 ? 'Hoje' : days < 0 ? 'Vencido' : days + 'd';
-        return `<tr>
-          <td>${a.name}</td>
-          <td>${a.plan_name || '—'}</td>
-          <td style="color:${daysColor}">${daysText}</td>
-          <td style="text-transform:capitalize">${a.channel || '—'}</td>
-          <td style="text-align:right;color:var(--gold)">R$${Math.round(a.ltv_total || 0).toLocaleString('pt-BR')}</td>
-          <td style="text-align:right">
-            <button onclick="encerrarContrato('${a.id}','${a.name}')" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>
-          </td>
-        </tr>`;
-      }).join('')
-    + '</tbody></table>';
+  const rows = alunos.map(function(a) {
+    const days      = a.days_to_expire;
+    const daysColor = days <= 7 ? 'var(--red)' : days <= 30 ? 'var(--amber)' : 'var(--green)';
+    const daysText  = days === 0 ? 'Hoje' : days < 0 ? 'Vencido' : days + 'd';
+    const ltv       = 'R$' + Math.round(a.ltv_total || 0).toLocaleString('pt-BR');
+    const encBtn    = '<button onclick="encerrarContrato(' + JSON.stringify(a.id) + ',' + JSON.stringify(a.name) + ')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
+    return '<tr><td>' + a.name + '</td><td>' + (a.plan_name||'—') + '</td><td style="color:' + daysColor + '">' + daysText + '</td><td style="text-transform:capitalize">' + (a.channel||'—') + '</td><td style="text-align:right;color:var(--gold)">' + ltv + '</td><td style="text-align:right">' + encBtn + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<div style="font-size:9px;color:var(--dim);margin-bottom:10px">' + alunos.length + ' aluno(s) ativo(s)</div>'
+    + '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 async function encerrarContrato(studentId, name) {
-  if (!confirm('Encerrar contrato de ' + name + '? Esta ação marca a assinatura como cancelada.')) return;
+  if (!confirm('Encerrar contrato de ' + name + '?')) return;
   try {
-    await api('/students/' + studentId + '/cancel', { method: 'POST' });
+    await api('/students/' + studentId + '/cancel', { method:'POST' });
     const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
-    const personalId = session?.personal_id || session?.id;
+    const personalId = session && (session.personal_id || session.id);
     const alunos     = await api('/students/' + personalId).catch(() => []);
     renderAlunosList(alunos);
     loadDashboard();
-  } catch (err) {
-    alert('Erro ao encerrar contrato: ' + err.message);
-  }
+  } catch(err) { alert('Erro: ' + err.message); }
 }
 
-// ── PERFIL ────────────────────────────────────────────────
 function salvarPerfil() {
   const nome = document.getElementById('cfg-nome').value.trim();
   const okEl = document.getElementById('cfg-perfil-ok');
   if (!nome) return;
-
-  // Atualiza sessão local
   const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
-  if (session) {
-    session.name = nome;
-    localStorage.setItem('mf_user', JSON.stringify(session));
-  }
-
-  // Atualiza header
+  if (session) { session.name = nome; localStorage.setItem('mf_user', JSON.stringify(session)); }
   const h1 = document.getElementById('dash-user-h1');
   if (h1) h1.innerHTML = nome + ' — <em>Personal Trainer</em>';
   const nameEl = document.getElementById('dash-user-name');
   if (nameEl) nameEl.textContent = nome;
-
   okEl.style.display = 'block';
   setTimeout(() => { okEl.style.display = 'none'; }, 2500);
 }
+
+document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
