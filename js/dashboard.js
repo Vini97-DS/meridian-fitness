@@ -1015,7 +1015,7 @@ async function loadDashboard() {
   }
 
   renderSalesTable();
-  updateFormStudentName();
+  if (typeof updateFormStudentName === "function") updateFormStudentName();
 }
 
 // ── UPDATE KPI CARDS ─────────────────────────────────────────
