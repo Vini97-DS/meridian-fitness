@@ -759,67 +759,21 @@ canvas{background:transparent!important}
         </div>
         <div class="panel-badge">TOP CLIENTES</div>
       </div>
-      <table class="data-table">
+      <table id="table-top-students" class="data-table">
         <thead>
           <tr>
             <th>#</th><th>Nome</th><th>Plano</th><th>Tempo c/ PT</th><th>Canal</th>
             <th style="text-align:right">LTV Acum.</th><th style="text-align:right">Ticket</th><th style="text-align:right">Renovações</th><th>Status</th>
           </tr>
         </thead>
-        <tbody>
-          <tr><td class="num">1</td><td>Beatriz Tavares</td><td>12 meses</td><td>38 meses</td><td>Indicação</td><td class="num">R$10.146</td><td class="num">R$267</td><td class="num">3×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">2</td><td>Eduardo Campos</td><td>12 meses</td><td>34 meses</td><td>Instagram</td><td class="num">R$9.078</td><td class="num">R$267</td><td class="num">2×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">3</td><td>Fernanda Leal</td><td>6 meses</td><td>29 meses</td><td>YouTube</td><td class="num">R$6.873</td><td class="num">R$237</td><td class="num">4×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">4</td><td>Guilherme Braga</td><td>6 meses</td><td>27 meses</td><td>Indicação</td><td class="num">R$6.399</td><td class="num">R$237</td><td class="num">3×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">5</td><td>Isabela Nunes</td><td>3 meses</td><td>24 meses</td><td>Instagram</td><td class="num">R$4.728</td><td class="num">R$197</td><td class="num">7×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">6</td><td>Juliana Rocha</td><td>12 meses</td><td>22 meses</td><td>TikTok</td><td class="num">R$4.674</td><td class="num">R$267</td><td class="num">1×</td><td><span class="kpi-badge warn">RENOVANDO</span></td></tr>
-          <tr><td class="num">7</td><td>Lucas Mendes</td><td>6 meses</td><td>20 meses</td><td>Indicação</td><td class="num">R$4.740</td><td class="num">R$237</td><td class="num">2×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">8</td><td>Natália Oliveira</td><td>3 meses</td><td>18 meses</td><td>Instagram</td><td class="num">R$3.546</td><td class="num">R$197</td><td class="num">5×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">9</td><td>Pedro Viana</td><td>6 meses</td><td>16 meses</td><td>YouTube</td><td class="num">R$3.792</td><td class="num">R$237</td><td class="num">1×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-          <tr><td class="num">10</td><td>Renata Castro</td><td>12 meses</td><td>14 meses</td><td>Indicação</td><td class="num">R$3.738</td><td class="num">R$267</td><td class="num">1×</td><td><span class="kpi-badge pass">ATIVO</span></td></tr>
-        </tbody>
+        <tbody id="table-top-students-body"></tbody>
       </table>
     </div>
   </div>
 
 
   <!-- ROW 8: ROI -->
-  <div class="grid" style="margin-bottom:20px">
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">ROI — Retorno sobre Investimento</div>
-          <div class="panel-sub">Investimento × receita gerada × margem por canal</div>
-        </div>
-        <div class="panel-badge" style="color:var(--blue);border-color:rgba(96,165,250,0.3)">ROI TRACKER</div>
-      </div>
-      <div class="roi-cards">
-        <div class="roi-card">
-          <div class="roi-card-label">ROI Global</div>
-          <div class="roi-card-val" style="color:var(--green)">+482%</div>
-          <div class="roi-card-sub">—</div>
-        </div>
-        <div class="roi-card">
-          <div class="roi-card-label">ROI Instagram</div>
-          <div class="roi-card-val" style="color:var(--gold)">+318%</div>
-          <div class="roi-card-sub">R$3.200/mês investido<br>180 alunos · R$13.5K MRR</div>
-        </div>
-        <div class="roi-card">
-          <div class="roi-card-label">ROI Indicação</div>
-          <div class="roi-card-val" style="color:var(--green)">+1.240%</div>
-          <div class="roi-card-sub">Custo ≈ R$0<br>92 alunos · LTV R$2.180</div>
-        </div>
-        <div class="roi-card">
-          <div class="roi-card-label">ROI YouTube</div>
-          <div class="roi-card-val" style="color:var(--blue)">+410%</div>
-          <div class="roi-card-sub">R$1.800/mês produção<br>68 alunos · LTV R$1.680</div>
-        </div>
-      </div>
-      <div class="chart-wrap" style="height:220px"><canvas id="roiChart"></canvas></div>
-
-</div>
-
-</div>
+  
 
 
       
@@ -883,13 +837,7 @@ canvas{background:transparent!important}
       </div>
 
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);margin-bottom:10px">Selecionar plano</div>
-      <div class="plans-grid-v" id="v-plan-selector">
-        <div class="plan-card-v p1 sel" data-dur="1m" data-price="147" onclick="vSelectPlan(this)">
-          <div class="plan-dur">1 Mês</div>
-          <div class="plan-price-v">R$147</div>
-          <div class="plan-price-sub">/mês</div>
-          <div class="plan-renov" style="background:rgba(248,113,113,0.1);color:var(--red)">Renov. 52%</div>
-        </div>
+      <div class="plans-grid-v" id="v-plan-selector"></div>
         <div class="plan-card-v p3" data-dur="3m" data-price="197" onclick="vSelectPlan(this)">
           <div class="plan-dur">3 Meses</div>
           <div class="plan-price-v">R$197</div>
@@ -926,7 +874,7 @@ canvas{background:transparent!important}
         <div class="v-field">
           <label class="v-label">Canal de origem</label>
           <select class="v-select" id="v-lead-channel">
-            <option>Instagram</option><option>Indicação</option>
+            <option>Instagram</option><option></option>
             <option>YouTube</option><option>TikTok</option>
             <option>Google</option><option>Outro</option>
           </select>
@@ -1019,14 +967,14 @@ canvas{background:transparent!important}
       <div class="alert-dot amber" style="width:8px;height:8px;flex-shrink:0;animation:pulse 1.8s infinite"></div>
       <div>
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber);margin-bottom:3px">Planos vencendo em 30 dias</div>
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)">38 alunos · <strong style="color:var(--amber)">R$ 22.800</strong> em renovação</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)"><span id="acomp-expiring-text">Carregando...</span></div>
       </div>
     </div>
     <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);padding:14px 18px;display:flex;align-items:center;gap:12px">
       <div class="alert-dot" style="background:var(--blue);width:8px;height:8px;flex-shrink:0;animation:pulse 1.8s infinite"></div>
       <div>
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Formulários pendentes</div>
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)">23 alunos <strong style="color:var(--blue)">aguardando resposta</strong> desta semana</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)"><span id="acomp-pending-text">Carregando...</span></div>
       </div>
     </div>
   </div>
@@ -1041,37 +989,32 @@ canvas{background:transparent!important}
 
   <!-- STUDENT HEADER -->
   <div class="student-header" id="studentHeader">
-    <div class="student-avatar-big" id="studentAvatar">BT</div>
+    <div class="student-avatar-big" id="studentAvatar"></div>
     <div class="student-info">
-      <div class="student-name" id="studentName">Beatriz Tavares</div>
+      <div class="student-name" id="studentName"></div>
       <div class="student-meta">
-        <span>Aluna há <span id="studentTime">38 meses</span></span>
-        <span>Plano <span id="studentPlan">12 meses — R$267/mês</span></span>
+        <span>Aluna há <span id="studentTime"></span></span>
+        <span>Plano <span id="studentPlan"></span></span>
         <span>Canal <span id="studentChannel">Indicação</span></span>
-        <span>LTV acumulado <span id="studentLTV">R$10.146</span></span>
+        <span>LTV acumulado <span id="studentLTV"></span></span>
       </div>
-      <div class="student-badges" id="studentBadges">
-        <span class="s-badge active">✓ ATIVO</span>
-        <span class="s-badge plan">Plano 12m</span>
-        <span class="s-badge goal">Meta: Emagrecimento</span>
-        <span class="s-badge" style="background:rgba(167,139,250,0.1);color:var(--purple);border:1px solid rgba(167,139,250,0.2)">Top 1% LTV</span>
-      </div>
+      <div class="student-badges" id="studentBadges"></div>
     </div>
     <div class="student-kpis">
       <div class="s-kpi">
-        <div class="s-kpi-val" id="sk1">94%</div>
+        <div class="s-kpi-val" id="sk1"></div>
         <div class="s-kpi-label">Freq. Treino</div>
       </div>
       <div class="s-kpi">
-        <div class="s-kpi-val" id="sk2">8.9</div>
+        <div class="s-kpi-val" id="sk2"></div>
         <div class="s-kpi-label">Engaj. Score</div>
       </div>
       <div class="s-kpi">
-        <div class="s-kpi-val" id="sk3">4.7/5</div>
+        <div class="s-kpi-val" id="sk3"></div>
         <div class="s-kpi-label">Satisfação</div>
       </div>
       <div class="s-kpi">
-        <div class="s-kpi-val" id="sk4">3 indic.</div>
+        <div class="s-kpi-val" id="sk4"></div>
         <div class="s-kpi-label">Indicações</div>
       </div>
     </div>
@@ -1089,64 +1032,12 @@ canvas{background:transparent!important}
         </div>
         <div class="panel-badge green">PROGRESSO VISUAL</div>
       </div>
-      <div class="photo-compare" id="photo-compare">
-        <div class="photo-card">
-          <div class="photo-placeholder">
-            <div class="photo-icon">📷</div>
-            <div class="photo-date">JUN 2023 — INÍCIO</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Foto frontal · 74,2 kg · BF 28%</div>
-          </div>
-          <div class="photo-footer">
-            <span class="photo-footer-label">Peso Inicial</span>
-            <span class="photo-footer-val">74.2 kg</span>
-          </div>
-        </div>
-        <div class="photo-card">
-          <div class="photo-placeholder">
-            <div class="photo-icon">📷</div>
-            <div class="photo-date">DEZ 2023 — 6 MESES</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Foto frontal · 68,5 kg · BF 23%</div>
-          </div>
-          <div class="photo-footer">
-            <span class="photo-footer-label">6 Meses</span>
-            <span class="photo-footer-val">68.5 kg</span>
-          </div>
-        </div>
-        <div class="photo-card">
-          <div class="photo-placeholder" style="border:1px solid rgba(74,222,128,0.2)">
-            <div class="photo-icon">📷</div>
-            <div class="photo-date">MAI 2026 — ATUAL</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green);text-align:center;z-index:1;padding:0 20px">Foto frontal · 62,1 kg · BF 18%</div>
-          </div>
-          <div class="photo-footer" style="background:rgba(74,222,128,0.05)">
-            <span class="photo-footer-label">Atual</span>
-            <span class="photo-footer-val" style="color:var(--green)">62.1 kg</span>
-          </div>
-        </div>
-      </div>
+      <div class="photo-compare" id="photo-compare"></div>
       <!-- Barra de progresso corporal -->
-      <div id="student-stats" style="margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        <div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Peso Total Perdido</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green)">− 12.1 kg</div>
-          <div class="engagement-bar"><div class="engagement-fill" style="width:83%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.4))"></div></div>
-        </div>
-        <div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Redução BF</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green)">− 10 pp</div>
-          <div class="engagement-bar"><div class="engagement-fill" style="width:71%;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.4))"></div></div>
-        </div>
-        <div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Meta Atingida</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--gold)">76%</div>
-          <div class="engagement-bar"><div class="engagement-fill" style="width:76%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div></div>
-        </div>
-        <div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">Engajamento Score</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--blue)">8.9/10</div>
-          <div class="engagement-bar"><div class="engagement-fill" style="width:89%;background:linear-gradient(90deg,var(--blue),rgba(96,165,250,0.4))"></div></div>
-        </div>
-      </div>
+      <div id="student-stats" style="margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px"></div>
+    </div>
+
+  </div>
     </div>
 
   </div>
