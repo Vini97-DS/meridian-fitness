@@ -1133,12 +1133,99 @@ function renderAlunosList(alunos) {
     const days=a.days_to_expire;
     const daysColor=days<=7?'var(--red)':days<=30?'var(--amber)':'var(--green)';
     const daysText=days===0?'Hoje':days<0?'Vencido':days+'d';
+    const renovBtn='<button onclick="abrirRenovacao('+JSON.stringify(a.id)+','+JSON.stringify(a.name)+')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Renovar</button>';
     const encBtn='<button onclick="encerrarContrato('+JSON.stringify(a.id)+','+JSON.stringify(a.name)+')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
-    return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right">'+encBtn+'</td></tr>';
+    return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
   }).join('');
   el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+alunos.length+' aluno(s) ativo(s)</div>'
-    +'<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    +'<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div id="cfg-renov-form" style="display:none;margin-top:16px;padding:16px;background:rgba(201,168,76,0.04);border:1px solid rgba(201,168,76,0.15)">'
+      +'<div style="font-family:\'DM Mono\',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">RENOVAR CONTRATO — <span id="cfg-renov-name"></span></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        +'<div class="v-field"><label class="v-label">Novo plano *</label>'
+          +'<select class="v-select" id="cfg-renov-plano"></select></div>'
+        +'<div class="v-field"><label class="v-label">Data de início *</label>'
+          +'<input class="v-input" id="cfg-renov-inicio" type="date" /></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:10px;margin-top:12px">'
+        +'<button class="vbtn vbtn-gold" onclick="confirmarRenovacao()">Confirmar Renovação</button>'
+        +'<button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="fecharRenovacao()">Cancelar</button>'
+      +'</div>'
+      +'<div id="cfg-renov-ok" style="display:none;margin-top:10px;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--green)"></div>'
+      +'<div id="cfg-renov-erro" style="display:none;margin-top:10px;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--red)"></div>'
+      +'<input type="hidden" id="cfg-renov-student-id" />'
+    +'</div>';
 }
+
+function abrirRenovacao(studentId, name) {
+  const form = document.getElementById('cfg-renov-form');
+  if (!form) return;
+  document.getElementById('cfg-renov-name').textContent = name;
+  document.getElementById('cfg-renov-student-id').value = studentId;
+  document.getElementById('cfg-renov-inicio').value = new Date().toISOString().split('T')[0];
+  document.getElementById('cfg-renov-ok').style.display   = 'none';
+  document.getElementById('cfg-renov-erro').style.display = 'none';
+  // Populate plan select
+  const sel = document.getElementById('cfg-renov-plano');
+  sel.innerHTML = cfgPlanos.filter(p=>p.is_active).map(p =>
+    '<option value="'+p.id+'" data-months="'+p.duration_months+'">'+p.name+' — R$'+parseFloat(p.price_brl).toFixed(0)+'</option>'
+  ).join('');
+  form.style.display = 'block';
+  form.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function fecharRenovacao() {
+  const form = document.getElementById('cfg-renov-form');
+  if (form) form.style.display = 'none';
+}
+
+async function confirmarRenovacao() {
+  const studentId = document.getElementById('cfg-renov-student-id').value;
+  const planId    = document.getElementById('cfg-renov-plano').value;
+  const inicio    = document.getElementById('cfg-renov-inicio').value;
+  const okEl      = document.getElementById('cfg-renov-ok');
+  const erroEl    = document.getElementById('cfg-renov-erro');
+  okEl.style.display = erroEl.style.display = 'none';
+
+  if (!planId) { erroEl.textContent='Selecione um plano.'; erroEl.style.display='block'; return; }
+  if (!inicio) { erroEl.textContent='Informe a data de início.'; erroEl.style.display='block'; return; }
+
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session&&(session.personal_id||session.id);
+  const plano      = cfgPlanos.find(p=>p.id===planId);
+  const meses      = plano ? plano.duration_months : 1;
+  const fimDate    = new Date(inicio);
+  fimDate.setMonth(fimDate.getMonth() + meses);
+  const fim = fimDate.toISOString().split('T')[0];
+
+  try {
+    await api('/subscriptions', { method:'POST', body:JSON.stringify({
+      student_id:     studentId,
+      personal_id:    personalId,
+      plan_id:        planId,
+      price_paid:     plano ? plano.price_brl : 0,
+      starts_at:      inicio,
+      expires_at:     fim,
+      payment_method: 'pix',
+      status:         'active',
+    })});
+
+    okEl.textContent = '✓ Renovado! Novo vencimento: ' + new Date(fim).toLocaleDateString('pt-BR');
+    okEl.style.display = 'block';
+
+    // Recarrega lista após 1.5s
+    setTimeout(async () => {
+      const alunos = await api('/students/'+personalId).catch(()=>[]);
+      renderAlunosList(alunos);
+      loadDashboard();
+    }, 1500);
+
+  } catch(err) {
+    erroEl.textContent = err.message || 'Erro ao renovar.';
+    erroEl.style.display = 'block';
+  }
+}
+
 async function encerrarContrato(studentId,name){
   if(!confirm('Encerrar contrato de '+name+'?')) return;
   try {
