@@ -489,7 +489,7 @@ canvas{background:transparent!important}
   </div>
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
     <div class="header-meta">
-      <div class="meta-pill">Alunos Ativos <span>410</span></div>
+      <div class="meta-pill">Alunos Ativos <span><span id="kpi-alunos-val">0</span></span></div>
       <div class="meta-pill">MRR <span>R$ 89.400</span></div>
       <div class="meta-pill">Atualizado <span>Mai 2026</span></div>
     </div>
@@ -523,39 +523,39 @@ canvas{background:transparent!important}
 <div class="kpi-row">
   <div class="kpi-card">
     <div class="kpi-label">MRR Atual</div>
-    <div class="kpi-value" id="kpi-mrr-val">89.4K</div>
-    <div class="kpi-sub">Receita mensal recorrente</div>
+    <div class="kpi-value" id="kpi-mrr-val"><span id="kpi-mrr-val">—</span></div>
+    <div class="kpi-sub" id="kpi-mrr-sub">Receita mensal recorrente</div>
     <div class="kpi-badge pass" id="kpi-mrr-badge" style="display:none">—</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Alunos Ativos</div>
-    <div class="kpi-value" id="kpi-alunos-val">410</div>
+    <div class="kpi-value" id="kpi-alunos-val">0</div>
     <div class="kpi-sub" id="kpi-alunos-sub">—</div>
     <div class="kpi-badge pass" id="kpi-alunos-badge" style="display:none">—</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Ticket Médio</div>
-    <div class="kpi-value" id="kpi-ticket-val">R$218</div>
+    <div class="kpi-value" id="kpi-ticket-val"><span id="kpi-ticket-val">—</span></div>
     <div class="kpi-sub" id="kpi-ticket-sub">—</div>
     <div class="kpi-badge warn">↑ Meta: R$240</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Taxa de Renovação</div>
-    <div class="kpi-value">74%</div>
-    <div class="kpi-sub">Média últimos 6 meses</div>
-    <div class="kpi-badge warn">Meta: 82%</div>
+    <div class="kpi-value"><span id="kpi-renovacao-val">—</span></div>
+    <div class="kpi-sub" id="kpi-renovacao-sub">—</div>
+    
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Churn Rate</div>
-    <div class="kpi-value">8.2%</div>
-    <div class="kpi-sub">Média mensal · 33 alunos/mês</div>
-    <div class="kpi-badge fail">↑ Acima da meta 6%</div>
+    <div class="kpi-value"><span id="kpi-churn-val">—</span></div>
+    <div class="kpi-sub" id="kpi-churn-sub">—</div>
+    
   </div>
   <div class="kpi-card">
     <div class="kpi-label">LTV Médio</div>
-    <div class="kpi-value">R$1.540</div>
-    <div class="kpi-sub">Tempo médio: 7,1 meses</div>
-    <div class="kpi-badge info">LTV/CAC: 4.8x</div>
+    <div class="kpi-value"><span id="kpi-ltv-val">—</span></div>
+    <div class="kpi-sub" id="kpi-ltv-sub">—</div>
+    
   </div>
 </div>
 
@@ -595,9 +595,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">FINANCEIRO</div>
       </div>
       <div class="chart-wrap" style="height:250px"><canvas id="mrrChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">+58%</div>
+      
           <div class="insight-desc">Crescimento do MRR<br>Jan 25 → Mai 26</div>
         </div>
         <div class="insight">
@@ -620,14 +618,12 @@ canvas{background:transparent!important}
         <div class="panel-badge">ALUNOS</div>
       </div>
       <div class="chart-wrap" style="height:250px"><canvas id="studentsChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">+48/mês</div>
+      
           <div class="insight-desc">Média de novos alunos<br>últimos 6 meses</div>
         </div>
         <div class="insight red">
           <div class="insight-val">-33/mês</div>
-          <div class="insight-desc">Churn médio mensal<br>8.2% da base</div>
+          <div class="insight-desc">Churn médio mensal</div>
         </div>
         <div class="insight">
           <div class="insight-val">+15/mês</div>
@@ -650,9 +646,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">AQUISIÇÃO</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="channelChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">Instagram</div>
+      
           <div class="insight-desc">Maior volume: 44% dos alunos<br>LTV médio: R$1.340</div>
         </div>
         <div class="insight">
@@ -671,9 +665,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">RETENÇÃO</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="renewalChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">Plano 12m</div>
+      
           <div class="insight-desc">Renovação: 91%<br>Menor custo operacional</div>
         </div>
         <div class="insight red">
@@ -697,9 +689,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">SAZONALIDADE</div>
       </div>
       <div class="chart-wrap" style="height:230px"><canvas id="seasonChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">Jan / Mar</div>
+      
           <div class="insight-desc">Pico de matrículas<br>+68% vs média anual</div>
         </div>
         <div class="insight red">
@@ -718,9 +708,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">META</div>
       </div>
       <div class="chart-wrap" style="height:230px"><canvas id="metaChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight">
-          <div class="insight-val">+R$7.1K</div>
+      
           <div class="insight-desc">Superação acumulada<br>Jan–Mai 2026</div>
         </div>
         <div class="insight warn" style="border-left-color:var(--amber);background:rgba(251,191,36,0.04)">
@@ -981,7 +969,7 @@ canvas{background:transparent!important}
       <div class="insight-row" style="margin-top:12px">
         <div class="insight">
           <div class="insight-val">R$320</div>
-          <div class="insight-desc">CAC médio atual<br>vs LTV R$1.540 → 4.8×</div>
+          <div class="insight-desc">CAC médio atual<br>vs LTV</div>
         </div>
         <div class="insight green">
           <div class="insight-val">DM→Proposta</div>
@@ -1004,9 +992,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">RPS</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="rpsChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight green">
-          <div class="insight-val">Plano 12m</div>
+      
           <div class="insight-desc">Maior RPS: R$267/mês<br>91% de renovação</div>
         </div>
         <div class="insight blue">
@@ -1025,9 +1011,7 @@ canvas{background:transparent!important}
         <div class="panel-badge">SOCIAL</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="socialChart"></canvas></div>
-      <div class="insight-row">
-        <div class="insight">
-          <div class="insight-val">Instagram</div>
+      
           <div class="insight-desc">180 alunos ativos<br>Principal canal de aquisição</div>
         </div>
         <div class="insight green">
@@ -1087,7 +1071,7 @@ canvas{background:transparent!important}
         <div class="roi-card">
           <div class="roi-card-label">ROI Global</div>
           <div class="roi-card-val" style="color:var(--green)">+482%</div>
-          <div class="roi-card-sub">R$89.4K receita vs R$15.4K custo<br>Jan–Mai 2026</div>
+          <div class="roi-card-sub">—</div>
         </div>
         <div class="roi-card">
           <div class="roi-card-label">ROI Instagram</div>
@@ -1137,33 +1121,33 @@ canvas{background:transparent!important}
   <div class="vkpi-row">
     <div class="kpi-card">
       <div class="kpi-label">Vendas no Mês</div>
-      <div class="kpi-value">48</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">Novas assinaturas · Mai/26</div>
-      <div class="kpi-badge pass">↑ +14% vs Abr</div>
+      
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Receita de Vendas</div>
-      <div class="kpi-value">R$9.456</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">Novos contratos fechados</div>
       <div class="kpi-badge pass">↑ +18% vs Abr</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Taxa de Fechamento</div>
-      <div class="kpi-value">50%</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">Proposta → fechado</div>
-      <div class="kpi-badge warn">Meta: 60%</div>
+      
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Leads no Pipeline</div>
-      <div class="kpi-value">31</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">Em diferentes etapas</div>
-      <div class="kpi-badge info">R$6.107 potencial</div>
+      
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Tempo Médio</div>
-      <div class="kpi-value">4.2d</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">1º contato → pagamento</div>
-      <div class="kpi-badge pass">↓ Melhorou</div>
+      
     </div>
   </div>
 
