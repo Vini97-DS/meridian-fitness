@@ -308,7 +308,9 @@ def update_lead(lead_id: str, data: LeadUpdate, conn=Depends(get_db), _=Depends(
 #  PLANOS
 # ═══════════════════════════════════════════════════════════════
 @app.get("/api/plans/{personal_id}")
-def get_plans(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+def get_plans(personal_id: str, all: bool = False, conn=Depends(get_db), _=Depends(get_current_user)):
+    if all:
+        return query(conn, "SELECT * FROM plans WHERE personal_id=%s ORDER BY duration_months", (personal_id,))
     return query(conn, "SELECT * FROM plans WHERE personal_id=%s AND is_active=true ORDER BY duration_months", (personal_id,))
 
 # ═══════════════════════════════════════════════════════════════
