@@ -1006,13 +1006,23 @@ function renderPlanosList(planos) {
     const status = p.is_active
       ? '<span style="font-size:8px;padding:3px 8px;background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)">ATIVO</span>'
       : '<span style="font-size:8px;padding:3px 8px;background:rgba(168,178,189,0.08);color:var(--dim);border:1px solid rgba(168,178,189,0.1)">INATIVO</span>';
-    const editBtn   = '<button onclick="editarPlano('+JSON.stringify(p.id)+')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>';
+    const editBtn   = '<button data-action="editar" data-id="'+p.id+'" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>';
     const toggleBtn = p.is_active
-      ? '<button onclick="togglePlanoStatus('+JSON.stringify(p.id)+',true)" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Desativar</button>'
-      : '<button onclick="togglePlanoStatus('+JSON.stringify(p.id)+',false)" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(74,222,128,0.25);color:var(--green);cursor:pointer">Ativar</button>';
+      ? '<button data-action="desativar" data-id="'+p.id+'" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Desativar</button>'
+      : '<button data-action="ativar" data-id="'+p.id+'" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(74,222,128,0.25);color:var(--green);cursor:pointer">Ativar</button>';
     return '<tr><td>'+p.name+'</td><td>'+dur+'</td><td style="text-align:right;color:var(--gold)">'+preco+'</td><td style="text-align:right">'+status+'</td><td style="text-align:right">'+editBtn+toggleBtn+'</td></tr>';
   }).join('');
   el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Duração</th><th style="text-align:right">Preço</th><th style="text-align:right">Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+
+  el.addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id     = btn.dataset.id;
+    if (action === 'editar')    editarPlano(id);
+    if (action === 'desativar') togglePlanoStatus(id, true);
+    if (action === 'ativar')    togglePlanoStatus(id, false);
+  }, { once: true });
 }
 
 function abrirModalPlano() {
@@ -1133,8 +1143,9 @@ function renderAlunosList(alunos) {
     const days=a.days_to_expire;
     const daysColor=days<=7?'var(--red)':days<=30?'var(--amber)':'var(--green)';
     const daysText=days===0?'Hoje':days<0?'Vencido':days+'d';
-    const renovBtn='<button onclick="abrirRenovacao('+JSON.stringify(a.id)+','+JSON.stringify(a.name)+')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Renovar</button>';
-    const encBtn='<button onclick="encerrarContrato('+JSON.stringify(a.id)+','+JSON.stringify(a.name)+')" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
+    const sid=a.id, sname=a.name.replace(/'/g,'\'');
+    const renovBtn='<button data-action="renovar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Renovar</button>';
+    const encBtn='<button data-action="encerrar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
     return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
   }).join('');
   el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+alunos.length+' aluno(s) ativo(s)</div>'
@@ -1155,6 +1166,17 @@ function renderAlunosList(alunos) {
       +'<div id="cfg-renov-erro" style="display:none;margin-top:10px;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--red)"></div>'
       +'<input type="hidden" id="cfg-renov-student-id" />'
     +'</div>';
+
+  // Event delegation — handles dynamically generated buttons
+  el.addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id     = btn.dataset.id;
+    const name   = btn.dataset.name;
+    if (action === 'renovar')  abrirRenovacao(id, name);
+    if (action === 'encerrar') encerrarContrato(id, name);
+  }, { once: true });
 }
 
 function abrirRenovacao(studentId, name) {
