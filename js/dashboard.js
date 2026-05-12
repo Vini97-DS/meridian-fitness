@@ -34,6 +34,12 @@ function switchTab(tab, btn) {
       setTimeout(updateStudent, 60);
     }
   }
+  if (tab === 'config') {
+    if (!window._configInited) {
+      window._configInited = true;
+      initConfig();
+    }
+  }
   setTimeout(() => {
     try { Object.values(charts).forEach(ch => ch && ch.resize()); } catch {}
   }, 150);
@@ -1331,3 +1337,334 @@ async function updateLeadInAPI(leadId, status, notes) {
 }
 
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });// Mon May 11 20:47:15 -03 2026
+
+// ═══════════════════════════════════════════════════════
+//  CONFIGURAÇÕES
+// ═══════════════════════════════════════════════════════
+
+let cfgPlanos = [];
+let cfgEditingPlanId = null;
+
+// ── Carrega dados quando aba config abre ─────────────────
+async function initConfig() {
+  const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  if (!session) return;
+
+  // Preenche perfil com dados da sessão
+  const nomeEl = document.getElementById('cfg-nome');
+  const espEl  = document.getElementById('cfg-especialidade');
+  if (nomeEl) nomeEl.value = session.name || '';
+
+  // Carrega planos e alunos em paralelo
+  const personalId = session.personal_id || session.id;
+  const [planos, alunos] = await Promise.all([
+    api('/plans/' + personalId).catch(() => []),
+    api('/students/' + personalId).catch(() => []),
+  ]);
+
+  cfgPlanos = planos || [];
+  renderPlanosList(cfgPlanos);
+  renderAlunosList(alunos || []);
+  populatePlanoSelect(cfgPlanos);
+
+  // Seta data de hoje como padrão
+  const inicioEl = document.getElementById('cfg-aluno-inicio');
+  if (inicioEl) inicioEl.value = new Date().toISOString().split('T')[0];
+}
+
+// ── PLANOS ────────────────────────────────────────────────
+function renderPlanosList(planos) {
+  const el = document.getElementById('cfg-planos-lista');
+  if (!el) return;
+
+  if (!planos.length) {
+    el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Nenhum plano cadastrado ainda. Clique em "+ Novo Plano" para começar.</div>';
+    return;
+  }
+
+  el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Duração</th><th style="text-align:right">Preço</th><th style="text-align:right">Status</th><th></th></tr></thead><tbody>'
+    + planos.map(p => `<tr>
+      <td>${p.name}</td>
+      <td>${p.duration_months} ${p.duration_months === 1 ? 'mês' : 'meses'}</td>
+      <td style="text-align:right;color:var(--gold)">R$${parseFloat(p.price_brl).toFixed(2)}</td>
+      <td style="text-align:right">
+        <span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;${p.is_active ? 'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)' : 'background:rgba(168,178,189,0.08);color:var(--dim);border:1px solid rgba(168,178,189,0.1)'}">
+          ${p.is_active ? 'ATIVO' : 'INATIVO'}
+        </span>
+      </td>
+      <td style="text-align:right">
+        <button onclick="editarPlano('${p.id}')" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>
+        <button onclick="togglePlanoStatus('${p.id}', ${p.is_active})" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid ${p.is_active ? 'rgba(248,113,113,0.25)' : 'rgba(74,222,128,0.25)'};color:${p.is_active ? 'var(--red)' : 'var(--green)'};cursor:pointer">
+          ${p.is_active ? 'Desativar' : 'Ativar'}
+        </button>
+      </td>
+    </tr>`).join('')
+    + '</tbody></table>';
+}
+
+function abrirModalPlano() {
+  cfgEditingPlanId = null;
+  document.getElementById('cfg-plano-form-title').textContent = 'NOVO PLANO';
+  document.getElementById('cfg-plano-nome').value    = '';
+  document.getElementById('cfg-plano-preco').value   = '';
+  document.getElementById('cfg-plano-duracao').value = '6';
+  document.getElementById('cfg-plano-id').value      = '';
+  document.getElementById('cfg-plano-ok').style.display   = 'none';
+  document.getElementById('cfg-plano-erro').style.display = 'none';
+  document.getElementById('cfg-plano-form').style.display = 'block';
+  document.getElementById('cfg-plano-nome').focus();
+}
+
+function fecharModalPlano() {
+  document.getElementById('cfg-plano-form').style.display = 'none';
+  cfgEditingPlanId = null;
+}
+
+function editarPlano(planId) {
+  const plano = cfgPlanos.find(p => p.id === planId);
+  if (!plano) return;
+  cfgEditingPlanId = planId;
+  document.getElementById('cfg-plano-form-title').textContent = 'EDITAR PLANO';
+  document.getElementById('cfg-plano-nome').value    = plano.name;
+  document.getElementById('cfg-plano-preco').value   = plano.price_brl;
+  document.getElementById('cfg-plano-duracao').value = plano.duration_months;
+  document.getElementById('cfg-plano-id').value      = planId;
+  document.getElementById('cfg-plano-ok').style.display   = 'none';
+  document.getElementById('cfg-plano-erro').style.display = 'none';
+  document.getElementById('cfg-plano-form').style.display = 'block';
+  document.getElementById('cfg-plano-nome').focus();
+}
+
+async function salvarPlano() {
+  const nome     = document.getElementById('cfg-plano-nome').value.trim();
+  const duracao  = parseInt(document.getElementById('cfg-plano-duracao').value);
+  const preco    = parseFloat(document.getElementById('cfg-plano-preco').value);
+  const planId   = document.getElementById('cfg-plano-id').value;
+  const erroEl   = document.getElementById('cfg-plano-erro');
+  const okEl     = document.getElementById('cfg-plano-ok');
+
+  erroEl.style.display = 'none';
+  if (!nome)      { erroEl.textContent = 'Informe o nome do plano.'; erroEl.style.display = 'block'; return; }
+  if (!preco || preco <= 0) { erroEl.textContent = 'Informe um preço válido.'; erroEl.style.display = 'block'; return; }
+
+  const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  const personalId = session?.personal_id || session?.id;
+  const btn        = document.getElementById('cfg-plano-save-btn');
+  btn.disabled     = true; btn.textContent = 'Salvando...';
+
+  try {
+    if (planId) {
+      // Editar — chama PATCH
+      await api('/plans/' + planId, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: nome, duration_months: duracao, price_brl: preco }),
+      });
+    } else {
+      // Novo
+      await api('/plans', {
+        method: 'POST',
+        body: JSON.stringify({ personal_id: personalId, name: nome, duration_months: duracao, price_brl: preco }),
+      });
+    }
+
+    // Recarrega lista
+    const planos = await api('/plans/' + personalId).catch(() => []);
+    cfgPlanos = planos || [];
+    renderPlanosList(cfgPlanos);
+    populatePlanoSelect(cfgPlanos);
+
+    okEl.style.display = 'block';
+    setTimeout(() => { fecharModalPlano(); okEl.style.display = 'none'; }, 2000);
+
+    // Atualiza planos na aba vendas também
+    if (planos.length) loadPlansFromAPI(planos);
+
+  } catch (err) {
+    erroEl.textContent = err.message || 'Erro ao salvar plano.';
+    erroEl.style.display = 'block';
+  }
+
+  btn.disabled = false; btn.textContent = 'Salvar Plano';
+}
+
+async function togglePlanoStatus(planId, isActive) {
+  try {
+    await api('/plans/' + planId, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: !isActive }),
+    });
+    const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
+    const personalId = session?.personal_id || session?.id;
+    const planos     = await api('/plans/' + personalId).catch(() => []);
+    cfgPlanos        = planos || [];
+    renderPlanosList(cfgPlanos);
+  } catch (err) {
+    alert('Erro ao alterar status: ' + err.message);
+  }
+}
+
+function populatePlanoSelect(planos) {
+  const sel = document.getElementById('cfg-aluno-plano');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione o plano...</option>'
+    + planos.filter(p => p.is_active).map(p =>
+        `<option value="${p.id}" data-price="${p.price_brl}">${p.name} — R$${parseFloat(p.price_brl).toFixed(0)}</option>`
+      ).join('');
+}
+
+// ── ALUNOS ────────────────────────────────────────────────
+function toggleCadastroAluno() {
+  const form = document.getElementById('cfg-aluno-form');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') {
+    document.getElementById('cfg-aluno-nome').focus();
+  }
+}
+
+async function cadastrarAluno() {
+  const nome     = document.getElementById('cfg-aluno-nome').value.trim();
+  const phone    = document.getElementById('cfg-aluno-phone').value.trim();
+  const email    = document.getElementById('cfg-aluno-email').value.trim();
+  const canal    = document.getElementById('cfg-aluno-canal').value;
+  const objetivo = document.getElementById('cfg-aluno-objetivo').value;
+  const planId   = document.getElementById('cfg-aluno-plano').value;
+  const inicio   = document.getElementById('cfg-aluno-inicio').value;
+  const pgto     = document.getElementById('cfg-aluno-pagamento').value;
+  const peso     = parseFloat(document.getElementById('cfg-aluno-peso').value) || null;
+  const bf       = parseFloat(document.getElementById('cfg-aluno-bf').value)   || null;
+  const obs      = document.getElementById('cfg-aluno-obs').value.trim();
+  const okEl     = document.getElementById('cfg-aluno-ok');
+  const erroEl   = document.getElementById('cfg-aluno-erro');
+
+  okEl.style.display = erroEl.style.display = 'none';
+
+  if (!nome)   { erroEl.textContent = 'Informe o nome do aluno.'; erroEl.style.display = 'block'; return; }
+  if (!phone)  { erroEl.textContent = 'Informe o WhatsApp.';      erroEl.style.display = 'block'; return; }
+  if (!planId) { erroEl.textContent = 'Selecione um plano.';      erroEl.style.display = 'block'; return; }
+  if (!inicio) { erroEl.textContent = 'Informe a data de início.'; erroEl.style.display = 'block'; return; }
+
+  const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  const personalId = session?.personal_id || session?.id;
+
+  // Calcula data de vencimento baseada no plano
+  const plano      = cfgPlanos.find(p => p.id === planId);
+  const meses      = plano?.duration_months || 1;
+  const inicioDate = new Date(inicio);
+  const fimDate    = new Date(inicioDate);
+  fimDate.setMonth(fimDate.getMonth() + meses);
+  const fim = fimDate.toISOString().split('T')[0];
+
+  const btn = document.querySelector('#cfg-aluno-form .vbtn-green');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cadastrando...'; }
+
+  try {
+    // 1. Cria o aluno
+    const aluno = await api('/students', {
+      method: 'POST',
+      body: JSON.stringify({
+        personal_id: personalId, name: nome, phone, email: email || null,
+        goal: objetivo, channel: canal,
+        weight_initial: peso, bf_initial: bf, notes: obs || null,
+      }),
+    });
+
+    // 2. Cria a assinatura
+    await api('/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: aluno.id, personal_id: personalId, plan_id: planId,
+        price_paid: plano?.price_brl || 0,
+        starts_at: inicio, expires_at: fim,
+        payment_method: pgto, status: 'active',
+      }),
+    });
+
+    // 3. Feedback e limpeza
+    okEl.textContent    = '✓ ' + nome + ' cadastrado com sucesso! Assinatura ativa até ' + new Date(fim).toLocaleDateString('pt-BR');
+    okEl.style.display  = 'block';
+
+    // Limpa campos
+    ['cfg-aluno-nome','cfg-aluno-phone','cfg-aluno-email','cfg-aluno-peso','cfg-aluno-bf','cfg-aluno-obs']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+
+    // Recarrega listas
+    const alunos = await api('/students/' + personalId).catch(() => []);
+    renderAlunosList(alunos);
+
+    // Recarrega dashboard
+    setTimeout(() => loadDashboard(), 1500);
+
+  } catch (err) {
+    erroEl.textContent = err.message || 'Erro ao cadastrar aluno.';
+    erroEl.style.display = 'block';
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Cadastrar Aluno'; }
+}
+
+function renderAlunosList(alunos) {
+  const el = document.getElementById('cfg-alunos-lista');
+  if (!el) return;
+
+  if (!alunos.length) {
+    el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno cadastrado ainda.</div>';
+    return;
+  }
+
+  el.innerHTML = '<div style="font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:10px">'
+    + alunos.length + ' aluno(s) ativo(s)</div>'
+    + '<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'
+    + alunos.map(a => {
+        const days = a.days_to_expire;
+        const daysColor = days <= 7 ? 'var(--red)' : days <= 30 ? 'var(--amber)' : 'var(--green)';
+        const daysText  = days === 0 ? 'Hoje' : days < 0 ? 'Vencido' : days + 'd';
+        return `<tr>
+          <td>${a.name}</td>
+          <td>${a.plan_name || '—'}</td>
+          <td style="color:${daysColor}">${daysText}</td>
+          <td style="text-transform:capitalize">${a.channel || '—'}</td>
+          <td style="text-align:right;color:var(--gold)">R$${Math.round(a.ltv_total || 0).toLocaleString('pt-BR')}</td>
+          <td style="text-align:right">
+            <button onclick="encerrarContrato('${a.id}','${a.name}')" style="font-family:'DM Mono',monospace;font-size:8px;padding:4px 10px;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>
+          </td>
+        </tr>`;
+      }).join('')
+    + '</tbody></table>';
+}
+
+async function encerrarContrato(studentId, name) {
+  if (!confirm('Encerrar contrato de ' + name + '? Esta ação marca a assinatura como cancelada.')) return;
+  try {
+    await api('/students/' + studentId + '/cancel', { method: 'POST' });
+    const session    = JSON.parse(localStorage.getItem('mf_user') || 'null');
+    const personalId = session?.personal_id || session?.id;
+    const alunos     = await api('/students/' + personalId).catch(() => []);
+    renderAlunosList(alunos);
+    loadDashboard();
+  } catch (err) {
+    alert('Erro ao encerrar contrato: ' + err.message);
+  }
+}
+
+// ── PERFIL ────────────────────────────────────────────────
+function salvarPerfil() {
+  const nome = document.getElementById('cfg-nome').value.trim();
+  const okEl = document.getElementById('cfg-perfil-ok');
+  if (!nome) return;
+
+  // Atualiza sessão local
+  const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  if (session) {
+    session.name = nome;
+    localStorage.setItem('mf_user', JSON.stringify(session));
+  }
+
+  // Atualiza header
+  const h1 = document.getElementById('dash-user-h1');
+  if (h1) h1.innerHTML = nome + ' — <em>Personal Trainer</em>';
+  const nameEl = document.getElementById('dash-user-name');
+  if (nameEl) nameEl.textContent = nome;
+
+  okEl.style.display = 'block';
+  setTimeout(() => { okEl.style.display = 'none'; }, 2500);
+}

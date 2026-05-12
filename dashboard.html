@@ -564,6 +564,7 @@ canvas{background:transparent!important}
   <button class="nav-tab active" onclick="switchTab('bi',this)">BI & Negócio</button>
   <button class="nav-tab" onclick="switchTab('vendas',this)">Vendas</button>
   <button class="nav-tab" onclick="switchTab('acompanhamento',this)">Acompanhamento de Alunos</button>
+  <button class="nav-tab" onclick="switchTab('config',this)">⚙ Configurações</button>
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
@@ -1818,6 +1819,199 @@ canvas{background:transparent!important}
 </div>
 <!-- fim tab-acompanhamento -->
 
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- ═══════════════ TAB: CONFIGURAÇÕES ════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="section" id="tab-config">
+
+  <!-- ── PERFIL DO PERSONAL ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Perfil do Negócio</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Informações do Personal</div>
+          <div class="panel-sub">Dados exibidos no dashboard e nos links de pagamento</div>
+        </div>
+        <button class="vbtn vbtn-gold" onclick="salvarPerfil()">Salvar Perfil</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
+        <div class="v-field">
+          <label class="v-label">Nome completo</label>
+          <input class="v-input" id="cfg-nome" type="text" placeholder="Ex: Rafael Moura" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Especialidade</label>
+          <input class="v-input" id="cfg-especialidade" type="text" placeholder="Ex: Personal Trainer · Online + Presencial" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">WhatsApp / Contato</label>
+          <input class="v-input" id="cfg-whatsapp" type="tel" placeholder="(11) 99999-9999" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">E-mail profissional</label>
+          <input class="v-input" id="cfg-email" type="email" placeholder="rafael@email.com" />
+        </div>
+        <div class="v-field" style="grid-column:1/-1">
+          <label class="v-label">Bio / Apresentação</label>
+          <textarea class="v-input" id="cfg-bio" rows="2" placeholder="Ex: 10 anos de experiência · Especialista em emagrecimento e hipertrofia..."></textarea>
+        </div>
+      </div>
+      <div id="cfg-perfil-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Perfil salvo com sucesso</div>
+    </div>
+  </div>
+
+  <!-- ── PLANOS ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Planos de Assinatura</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Gerenciar Planos</div>
+          <div class="panel-sub">Crie e edite os planos oferecidos aos alunos</div>
+        </div>
+        <button class="vbtn vbtn-green" onclick="abrirModalPlano()">+ Novo Plano</button>
+      </div>
+
+      <!-- Lista de planos -->
+      <div id="cfg-planos-lista" style="margin-top:8px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Carregando planos...</div>
+      </div>
+
+      <!-- Form novo/editar plano -->
+      <div id="cfg-plano-form" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:0.1em;margin-bottom:14px" id="cfg-plano-form-title">NOVO PLANO</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="v-field">
+            <label class="v-label">Nome do plano *</label>
+            <input class="v-input" id="cfg-plano-nome" type="text" placeholder="Ex: Plano 6 Meses" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Duração (meses) *</label>
+            <select class="v-select" id="cfg-plano-duracao">
+              <option value="1">1 mês</option>
+              <option value="3">3 meses</option>
+              <option value="6" selected>6 meses</option>
+              <option value="12">12 meses</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Preço (R$) *</label>
+            <input class="v-input" id="cfg-plano-preco" type="number" placeholder="Ex: 237.00" step="0.01" />
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="vbtn vbtn-green" onclick="salvarPlano()" id="cfg-plano-save-btn">Salvar Plano</button>
+          <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="fecharModalPlano()">Cancelar</button>
+        </div>
+        <input type="hidden" id="cfg-plano-id" />
+        <div id="cfg-plano-ok" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Plano salvo com sucesso</div>
+        <div id="cfg-plano-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ALUNOS ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Gerenciar Alunos</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Cadastrar Novo Aluno</div>
+          <div class="panel-sub">Adicione alunos manualmente com assinatura ativa</div>
+        </div>
+        <button class="vbtn vbtn-green" onclick="toggleCadastroAluno()">+ Novo Aluno</button>
+      </div>
+
+      <!-- Form cadastro aluno -->
+      <div id="cfg-aluno-form" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="v-field">
+            <label class="v-label">Nome completo *</label>
+            <input class="v-input" id="cfg-aluno-nome" type="text" placeholder="Ex: Maria Silva" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">WhatsApp *</label>
+            <input class="v-input" id="cfg-aluno-phone" type="tel" placeholder="(11) 99999-9999" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">E-mail</label>
+            <input class="v-input" id="cfg-aluno-email" type="email" placeholder="maria@email.com" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Canal de origem</label>
+            <select class="v-select" id="cfg-aluno-canal">
+              <option value="instagram">Instagram</option>
+              <option value="indicacao">Indicação</option>
+              <option value="youtube">YouTube</option>
+              <option value="tiktok">TikTok</option>
+              <option value="google">Google</option>
+              <option value="presencial">Presencial</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Objetivo</label>
+            <select class="v-select" id="cfg-aluno-objetivo">
+              <option value="emagrecimento">Emagrecimento</option>
+              <option value="hipertrofia">Hipertrofia</option>
+              <option value="condicionamento">Condicionamento</option>
+              <option value="saude_geral">Saúde Geral</option>
+              <option value="reabilitacao">Reabilitação</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Plano contratado *</label>
+            <select class="v-select" id="cfg-aluno-plano">
+              <option value="">Selecione o plano...</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Data de início *</label>
+            <input class="v-input" id="cfg-aluno-inicio" type="date" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Forma de pagamento</label>
+            <select class="v-select" id="cfg-aluno-pagamento">
+              <option value="pix">Pix</option>
+              <option value="cartao">Cartão</option>
+              <option value="boleto">Boleto</option>
+              <option value="dinheiro">Dinheiro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Peso inicial (kg)</label>
+            <input class="v-input" id="cfg-aluno-peso" type="number" placeholder="Ex: 85.0" step="0.1" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">% Gordura inicial</label>
+            <input class="v-input" id="cfg-aluno-bf" type="number" placeholder="Ex: 28.5" step="0.1" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Observações</label>
+            <textarea class="v-input" id="cfg-aluno-obs" rows="2" placeholder="Histórico médico, restrições, objetivos específicos..."></textarea>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="vbtn vbtn-green" onclick="cadastrarAluno()">Cadastrar Aluno</button>
+          <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="toggleCadastroAluno()">Cancelar</button>
+        </div>
+        <div id="cfg-aluno-ok" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)"></div>
+        <div id="cfg-aluno-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+      </div>
+
+      <!-- Lista de alunos ativos -->
+      <div id="cfg-alunos-lista" style="margin-top:16px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);padding:12px 0">Carregando alunos...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- fim tab-config -->
+
+
+
 
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <div class="footer">
@@ -1862,7 +2056,7 @@ canvas{background:transparent!important}
 </div>
 
   <script src="js/dashboard.js"></script>
-  <script src="js/auth.js?v=1778239510"></script>
+  <script src="js/auth.js"></script>
 
 </body>
 </html>

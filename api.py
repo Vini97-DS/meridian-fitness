@@ -369,3 +369,66 @@ def save_photo(data: PhotoCreate, conn=Depends(get_db), _=Depends(get_current_us
         VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id, url, taken_at
     """, (data.student_id, data.checkin_id, data.cloudinary_id,
           data.url, data.angle, data.taken_at or date.today(), data.notes))
+# ═══════════════════════════════════════════════════════════════
+#  PLANOS — CRUD completo
+# ═══════════════════════════════════════════════════════════════
+class PlanCreate(BaseModel):
+    personal_id:     str
+    name:            str
+    duration_months: int
+    price_brl:       float
+
+class PlanUpdate(BaseModel):
+    name:            Optional[str]   = None
+    duration_months: Optional[int]   = None
+    price_brl:       Optional[float] = None
+    is_active:       Optional[bool]  = None
+
+@app.post("/api/plans")
+def create_plan(data: PlanCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO plans (personal_id, name, duration_months, price_brl)
+        VALUES (%s,%s,%s,%s) RETURNING id, name, duration_months, price_brl, is_active
+    """, (data.personal_id, data.name, data.duration_months, data.price_brl))
+
+@app.patch("/api/plans/{plan_id}")
+def update_plan(plan_id: str, data: PlanUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
+    fields, values = [], []
+    if data.name            is not None: fields.append("name = %s");            values.append(data.name)
+    if data.duration_months is not None: fields.append("duration_months = %s"); values.append(data.duration_months)
+    if data.price_brl       is not None: fields.append("price_brl = %s");       values.append(data.price_brl)
+    if data.is_active       is not None: fields.append("is_active = %s");       values.append(data.is_active)
+    if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
+    values.append(plan_id)
+    return execute(conn, f"UPDATE plans SET {', '.join(fields)} WHERE id=%s RETURNING id, name, price_brl, is_active", values)
+
+# ═══════════════════════════════════════════════════════════════
+#  ASSINATURAS
+# ═══════════════════════════════════════════════════════════════
+class SubscriptionCreate(BaseModel):
+    student_id:     str
+    personal_id:    str
+    plan_id:        str
+    price_paid:     float
+    starts_at:      date
+    expires_at:     date
+    payment_method: Optional[str] = "pix"
+    status:         Optional[str] = "active"
+
+@app.post("/api/subscriptions")
+def create_subscription(data: SubscriptionCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO subscriptions (student_id, personal_id, plan_id, price_paid,
+          starts_at, expires_at, payment_method, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, student_id, expires_at, status
+    """, (data.student_id, data.personal_id, data.plan_id, data.price_paid,
+          data.starts_at, data.expires_at, data.payment_method, data.status))
+
+# ═══════════════════════════════════════════════════════════════
+#  ENCERRAR CONTRATO
+# ═══════════════════════════════════════════════════════════════
+@app.post("/api/students/{student_id}/cancel")
+def cancel_student(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    execute(conn, "UPDATE subscriptions SET status='cancelled', updated_at=NOW() WHERE student_id=%s AND status='active'", (student_id,))
+    execute(conn, "UPDATE students SET status='cancelled', updated_at=NOW() WHERE id=%s", (student_id,))
+    return {"ok": True, "student_id": student_id}
