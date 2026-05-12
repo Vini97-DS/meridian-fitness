@@ -506,16 +506,16 @@ canvas{background:transparent!important}
 </div>
 
 <!-- ══════════════════ ALERT BAR ══════════════════ -->
-<div class="alert-bar">
-  <div class="alert-item">
+<div class="alert-bar" id="alert-bar" style="display:none">
+  <div class="alert-item" id="alert-expiring" style="display:none">
     <div class="alert-dot red"></div>
     <span class="alert-label">Planos vencendo em 7 dias:</span>&nbsp;
-    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600">14 alunos — R$ 8.260 em risco</span>
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600" id="alert-expiring-text"></span>
   </div>
-  <div class="alert-item">
+  <div class="alert-item" id="alert-churn" style="display:none">
     <div class="alert-dot red"></div>
     <span class="alert-label">Churn crítico:</span>&nbsp;
-    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600">9 alunos sem check-in há +21 dias</span>
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);font-weight:600" id="alert-churn-text"></span>
   </div>
 </div>
 
@@ -523,20 +523,20 @@ canvas{background:transparent!important}
 <div class="kpi-row">
   <div class="kpi-card">
     <div class="kpi-label">MRR Atual</div>
-    <div class="kpi-value">89.4K</div>
+    <div class="kpi-value" id="kpi-mrr-val">89.4K</div>
     <div class="kpi-sub">Receita mensal recorrente</div>
-    <div class="kpi-badge pass">↑ +12.3% vs jan</div>
+    <div class="kpi-badge pass" id="kpi-mrr-badge" style="display:none">—</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Alunos Ativos</div>
-    <div class="kpi-value">410</div>
-    <div class="kpi-sub">400 online · 10 presenciais</div>
-    <div class="kpi-badge pass">Máx. histórico</div>
+    <div class="kpi-value" id="kpi-alunos-val">410</div>
+    <div class="kpi-sub" id="kpi-alunos-sub">—</div>
+    <div class="kpi-badge pass" id="kpi-alunos-badge" style="display:none">—</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Ticket Médio</div>
-    <div class="kpi-value">R$218</div>
-    <div class="kpi-sub">Online: R$197 · Presencial: R$580</div>
+    <div class="kpi-value" id="kpi-ticket-val">R$218</div>
+    <div class="kpi-sub" id="kpi-ticket-sub">—</div>
     <div class="kpi-badge warn">↑ Meta: R$240</div>
   </div>
   <div class="kpi-card">
@@ -572,48 +572,16 @@ canvas{background:transparent!important}
 <!-- ══════════════════════════════════════════════ -->
 <div class="section active" id="tab-bi">
 
-  <!-- ML FORECAST BOX -->
-  <div class="forecast-box">
-    <div class="forecast-title">
-      <span>⚡</span> ML Forecast — Próximos 3 Meses
-      <span class="forecast-badge">MODELO PREDITIVO</span>
-      <span class="forecast-badge" style="background:rgba(74,222,128,0.1);color:var(--green);margin-left:4px">CONFIANÇA 87%</span>
-    </div>
-    <div class="forecast-row">
-      <div class="forecast-item">
-        <div class="forecast-item-val">R$96.2K</div>
-        <div class="forecast-item-label">MRR Jun/26</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val">R$103.8K</div>
-        <div class="forecast-item-label">MRR Jul/26</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val">R$109.1K</div>
-        <div class="forecast-item-label">MRR Ago/26</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val" style="color:var(--green)">437</div>
-        <div class="forecast-item-label">Alunos projetados Jun</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val" style="color:var(--green)">461</div>
-        <div class="forecast-item-label">Alunos projetados Jul</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val" style="color:var(--amber)">6.4%</div>
-        <div class="forecast-item-label">Churn projetado Jun</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val" style="color:var(--amber)">28</div>
-        <div class="forecast-item-label">Alunos churn alto risco</div>
-      </div>
-      <div class="forecast-item">
-        <div class="forecast-item-val">R$320.9K</div>
-        <div class="forecast-item-label">Receita trim. projetada</div>
-      </div>
+  <!-- ML FORECAST — disponível após 3 meses de dados -->
+  <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.12);padding:20px 28px;margin-bottom:20px;display:flex;align-items:center;gap:16px">
+    <div style="font-size:1.4rem;opacity:0.4">📊</div>
+    <div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue);margin-bottom:4px">ML Forecast — Modelo Preditivo</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)">Disponível após 3 meses de dados reais. Cadastre seus alunos para ativar as projeções.</div>
     </div>
   </div>
+
+
 
   <!-- ROW 1: MRR + Alunos -->
   <div class="grid g2" style="margin-bottom:20px">

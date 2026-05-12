@@ -996,9 +996,8 @@ async function loadDashboard() {
   if (studentsData?.length) {
     loadStudentsFromAPI(studentsData);
   } else {
-    // sem alunos no banco ainda — mantém mock
-    renderChurnList();
-    renderTopTable();
+    // sem alunos ainda — mostra estado vazio
+    renderEmptyState();
     updateStudent();
   }
 
@@ -1019,37 +1018,70 @@ async function loadDashboard() {
 }
 
 // ── UPDATE KPI CARDS ─────────────────────────────────────────
+function fmtBRL(n) {
+  if (!n || n === 0) return 'R$0';
+  if (n >= 1000) return 'R$' + (n/1000).toFixed(1) + 'K';
+  return 'R$' + Math.round(n).toLocaleString('pt-BR');
+}
+
 function updateKPICards(m) {
-  const fmt = (n) => {
-    if (n >= 1000) return 'R$' + (n/1000).toFixed(1) + 'K';
-    return 'R$' + Math.round(n).toLocaleString('pt-BR');
-  };
-  // MRR
-  const mrrEl = document.querySelector('.kpi-card:nth-child(1) .kpi-value');
-  if (mrrEl) mrrEl.textContent = fmt(m.mrr || 0);
-  // Alunos ativos
-  const alunosEl = document.querySelector('.kpi-card:nth-child(2) .kpi-value');
-  if (alunosEl) alunosEl.textContent = m.active_students || 0;
-  // Ticket médio
-  const ticketEl = document.querySelector('.kpi-card:nth-child(3) .kpi-value');
-  if (ticketEl) ticketEl.textContent = fmt(m.avg_ticket || 0);
-  // Meta pills no header
+  const mrr     = m.mrr || 0;
+  const alunos  = m.active_students || 0;
+  const ticket  = m.avg_ticket || 0;
+
+  // KPI values
+  const mrrEl    = document.getElementById('kpi-mrr-val');
+  const alunosEl = document.getElementById('kpi-alunos-val');
+  const ticketEl = document.getElementById('kpi-ticket-val');
+  if (mrrEl)    mrrEl.textContent    = fmtBRL(mrr);
+  if (alunosEl) alunosEl.textContent = alunos;
+  if (ticketEl) ticketEl.textContent = fmtBRL(ticket);
+
+  // KPI subs — show real data or neutral text
+  const alunosSubEl = document.getElementById('kpi-alunos-sub');
+  const ticketSubEl = document.getElementById('kpi-ticket-sub');
+  if (alunosSubEl) alunosSubEl.textContent = alunos > 0 ? alunos + ' alunos ativos' : 'Nenhum aluno ainda';
+  if (ticketSubEl) ticketSubEl.textContent = ticket > 0 ? 'Ticket médio atual' : 'Sem assinaturas ativas';
+
+  // Header meta pills
   const pills = document.querySelectorAll('.meta-pill span');
-  if (pills[0]) pills[0].textContent = m.active_students || 0;
-  if (pills[1]) pills[1].textContent = fmt(m.mrr || 0);
+  if (pills[0]) pills[0].textContent = alunos;
+  if (pills[1]) pills[1].textContent = fmtBRL(mrr);
+
+  // Alert bar — only show if there's something to alert
+  updateAlertBar(m);
 }
 
 // ── UPDATE ALERT BAR ─────────────────────────────────────────
 function updateAlertBar(m) {
-  const e7 = m.expiring_7d?.count || 0;
-  const e7v = m.expiring_7d?.value || 0;
-  const e30 = m.expiring_30d?.count || 0;
-  // Update alert items
-  const alerts = document.querySelectorAll('.alert-item');
-  if (alerts[0]) {
-    const span = alerts[0].querySelector('strong') || alerts[0].querySelector('.alert-val');
-    if (span) span.textContent = e7 + ' alunos — R$ ' + Math.round(e7v).toLocaleString('pt-BR') + ' em risco';
+  const e7    = m.expiring_7d?.count || 0;
+  const e7v   = m.expiring_7d?.value || 0;
+  const bar   = document.getElementById('alert-bar');
+  const expEl = document.getElementById('alert-expiring');
+  const churnEl = document.getElementById('alert-churn');
+  const expText  = document.getElementById('alert-expiring-text');
+  const churnText = document.getElementById('alert-churn-text');
+
+  let hasAlert = false;
+
+  if (e7 > 0) {
+    if (expEl)   expEl.style.display   = 'flex';
+    if (expText) expText.textContent   = e7 + ' alunos — R$ ' + Math.round(e7v).toLocaleString('pt-BR') + ' em risco';
+    hasAlert = true;
+  } else if (expEl) {
+    expEl.style.display = 'none';
   }
+
+  // Churn alert from students with no checkin — populated by loadStudentsFromAPI
+  if (window._churnCount > 0) {
+    if (churnEl)   churnEl.style.display   = 'flex';
+    if (churnText) churnText.textContent   = window._churnCount + ' alunos sem check-in recente';
+    hasAlert = true;
+  } else if (churnEl) {
+    churnEl.style.display = 'none';
+  }
+
+  if (bar) bar.style.display = hasAlert ? 'flex' : 'none';
 }
 
 // ── UPDATE MRR CHART ─────────────────────────────────────────
@@ -1332,6 +1364,16 @@ async function updateLeadInAPI(leadId, status, notes) {
     method: 'PATCH',
     body: JSON.stringify({ status, notes }),
   });
+}
+
+
+// ── EMPTY STATE — sem dados ainda ───────────────────────────
+function renderEmptyState() {
+  const churnEl = document.getElementById('churn-list');
+  if (churnEl) churnEl.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Nenhum aluno em risco · Cadastre alunos na aba Configurações</div>';
+
+  const topEl = document.getElementById('table-top-students');
+  if (topEl) topEl.innerHTML = '<thead><tr><th>#</th><th>Nome</th><th>Plano</th><th>Tempo</th><th>Canal</th><th style="text-align:right">LTV</th><th style="text-align:right">Renovações</th></tr></thead><tbody><tr><td colspan="7" style="text-align:center;color:var(--dim);padding:20px;font-family:\'DM Mono\',monospace;font-size:10px">Nenhum aluno cadastrado ainda</td></tr></tbody>';
 }
 
 // ═══════════════════════════════════════════════════════
