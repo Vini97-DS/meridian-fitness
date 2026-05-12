@@ -572,37 +572,27 @@ canvas{background:transparent!important}
 <!-- ══════════════════════════════════════════════ -->
 <div class="section active" id="tab-bi">
 
-  <!-- ML FORECAST — disponível após 3 meses de dados -->
-  <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.12);padding:20px 28px;margin-bottom:20px;display:flex;align-items:center;gap:16px">
-    <div style="font-size:1.4rem;opacity:0.4">📊</div>
+  <!-- ML Forecast placeholder -->
+  <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.1);padding:16px 24px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+    <div style="font-size:1.2rem;opacity:0.35">📊</div>
     <div>
-      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue);margin-bottom:4px">ML Forecast — Modelo Preditivo</div>
-      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)">Disponível após 3 meses de dados reais. Cadastre seus alunos para ativar as projeções.</div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--blue);margin-bottom:3px">ML Forecast — Modelo Preditivo</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)">Disponível após 3 meses de dados reais. Cadastre seus alunos para ativar.</div>
     </div>
   </div>
 
-
-
   <!-- ROW 1: MRR + Alunos -->
   <div class="grid g2" style="margin-bottom:20px">
-
     <div class="panel">
       <div class="panel-header">
         <div>
           <div class="panel-title">Evolução do MRR</div>
-          <div class="panel-sub">Janeiro 2025 → Maio 2026 · receita mensal recorrente</div>
+          <div class="panel-sub">Receita mensal recorrente</div>
         </div>
         <div class="panel-badge">FINANCEIRO</div>
       </div>
       <div class="chart-wrap" style="height:250px"><canvas id="mrrChart"></canvas></div>
-</div>
-
-</div>
-
-</div>
-      
-    
-
+    </div>
     <div class="panel">
       <div class="panel-header">
         <div>
@@ -612,19 +602,11 @@ canvas{background:transparent!important}
         <div class="panel-badge">ALUNOS</div>
       </div>
       <div class="chart-wrap" style="height:250px"><canvas id="studentsChart"></canvas></div>
-</div>
+    </div>
+  </div>
 
-
-
-
-      
-    
-
-  
-
-  <!-- ROW 2: Canal de Aquisição + Renovação por Plano -->
+  <!-- ROW 2: Canal + Renovação -->
   <div class="grid g2" style="margin-bottom:20px">
-
     <div class="panel">
       <div class="panel-header">
         <div>
@@ -634,153 +616,124 @@ canvas{background:transparent!important}
         <div class="panel-badge">AQUISIÇÃO</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="channelChart"></canvas></div>
-</div>
-
-</div>
-      
-    
-
+    </div>
     <div class="panel">
       <div class="panel-header">
         <div>
           <div class="panel-title">Taxa de Renovação por Plano</div>
-          <div class="panel-sub">Plano 1m · 3m · 6m · 12m — retenção real</div>
+          <div class="panel-sub">Plano 1m · 3m · 6m · 12m</div>
         </div>
         <div class="panel-badge">RETENÇÃO</div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="renewalChart"></canvas></div>
-</div>
+    </div>
+  </div>
 
-
-      
-    
-
-  
-
-  <!-- ROW 3: Sazonalidade + Receita por Canal -->
+  <!-- ROW 3: Sazonalidade + Meta -->
   <div class="grid g2" style="margin-bottom:20px">
-
     <div class="panel">
       <div class="panel-header">
         <div>
           <div class="panel-title">Sazonalidade de Matrículas</div>
-          <div class="panel-sub">Picos e vales de novos alunos ao longo do ano</div>
+          <div class="panel-sub">Picos e vales ao longo do ano</div>
         </div>
         <div class="panel-badge">SAZONALIDADE</div>
       </div>
-      <div class="chart-wrap" style="height:230px"><canvas id="seasonChart"></canvas></div>
-</div>
-
-</div>
-      
-    
-
+      <div class="chart-wrap" style="height:240px"><canvas id="seasonChart"></canvas></div>
+    </div>
     <div class="panel">
       <div class="panel-header">
         <div>
-          <div class="panel-title">Meta vs Realizado — 2026</div>
-          <div class="panel-sub">MRR mensal · planejado × executado</div>
+          <div class="panel-title">Meta vs Realizado</div>
+          <div class="panel-sub">MRR planejado vs executado</div>
         </div>
         <div class="panel-badge">META</div>
       </div>
-      <div class="chart-wrap" style="height:230px"><canvas id="metaChart"></canvas></div>
-</div>
-
-
-      
-    
-
-  
-
-  <!-- ROW 4: Churn risk + Renovações próximas -->
-  <div class="grid g2" style="margin-bottom:20px">
-
-    
-
-    
-
-  </div>
-
-  <!-- ROW 5: Perfil dominante + Funil -->
-  <div class="grid g2" style="margin-bottom:20px">
-
-    
-
-    
-
-</div>
-      
-    
-
-  
-
-  <!-- ROW 6: Revenue per Student + Redes Sociais -->
-  <div class="grid g2" style="margin-bottom:20px">
-
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Receita por Aluno — Distribuição</div>
-          <div class="panel-sub">Revenue per student · plano 1m / 3m / 6m / 12m</div>
-        </div>
-        <div class="panel-badge">RPS</div>
-      </div>
-      <div class="chart-wrap" style="height:240px"><canvas id="rpsChart"></canvas></div>
-</div>
-
-</div>
-      
-    
-
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Performance por Rede Social</div>
-          <div class="panel-sub">Volume de alunos originados × LTV médio por canal</div>
-        </div>
-        <div class="panel-badge">SOCIAL</div>
-      </div>
-      <div class="chart-wrap" style="height:240px"><canvas id="socialChart"></canvas></div>
-</div>
-
-
-      
-    
-
-  
-
-  <!-- ROW 7: Tabela top alunos / planos -->
-  <div class="grid" style="margin-bottom:20px">
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Top 10 Alunos por LTV Acumulado</div>
-          <div class="panel-sub">Clientes de maior valor · tempo de casa · plano atual</div>
-        </div>
-        <div class="panel-badge">TOP CLIENTES</div>
-      </div>
-      <table id="table-top-students" class="data-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Nome</th><th>Plano</th><th>Tempo c/ PT</th><th>Canal</th>
-            <th style="text-align:right">LTV Acum.</th><th style="text-align:right">Ticket</th><th style="text-align:right">Renovações</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="table-top-students-body"></tbody>
-      </table>
+      <div class="chart-wrap" style="height:240px"><canvas id="metaChart"></canvas></div>
     </div>
   </div>
 
+  <!-- ROW 4: Mix de Planos + Canais Social -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Mix de Planos</div>
+          <div class="panel-sub">Distribuição da base por duração</div>
+        </div>
+        <div class="panel-badge">MIX</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="rpsChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Performance por Canal</div>
+          <div class="panel-sub">Volume · LTV · engajamento · renovação</div>
+        </div>
+        <div class="panel-badge">CANAIS</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="socialChart"></canvas></div>
+    </div>
+  </div>
 
-  <!-- ROW 8: ROI -->
-  
+  <!-- ROW 5: ROI + Top Alunos -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">ROI por Canal</div>
+          <div class="panel-sub">Investimento vs receita gerada</div>
+        </div>
+        <div class="panel-badge">ROI</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="roiChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Top 10 Alunos por LTV</div>
+          <div class="panel-sub">Maiores receitas acumuladas</div>
+        </div>
+        <div class="panel-badge">TOP LTV</div>
+      </div>
+      <div style="overflow-x:auto;margin-top:8px">
+        <table id="table-top-students" class="data-table" style="width:100%">
+          <thead><tr>
+            <th>#</th><th>Nome</th><th>Plano</th><th>Tempo</th>
+            <th>Canal</th><th style="text-align:right">LTV</th><th style="text-align:right">Renovações</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
+  <!-- ROW 6: Churn Risk -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Potencial Churn — Alto Risco</div>
+          <div class="panel-sub">Alunos com sinais de desengajamento</div>
+        </div>
+        <div class="panel-badge fail">RISCO</div>
+      </div>
+      <div id="churn-list" style="margin-top:8px"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Renovações — Próximos 30 dias</div>
+          <div class="panel-sub">Alunos com plano vencendo em breve</div>
+        </div>
+        <div class="panel-badge warn">RENOVAÇÃO</div>
+      </div>
+      <div id="renewal-list" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)">Sem dados ainda</div>
+    </div>
+  </div>
 
-      
-    
-  
-
-
+</div>
 <!-- fim tab-bi -->
 
 
