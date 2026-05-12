@@ -747,77 +747,54 @@ canvas{background:transparent!important}
   <div class="vkpi-row">
     <div class="kpi-card">
       <div class="kpi-label">Vendas no Mês</div>
-      <div class="kpi-value">—</div>
-      <div class="kpi-sub">Novas assinaturas · Mai/26</div>
-      
+      <div class="kpi-value" id="v-kpi-vendas">—</div>
+      <div class="kpi-sub">Novas assinaturas</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Receita de Vendas</div>
-      <div class="kpi-value">—</div>
+      <div class="kpi-value" id="v-kpi-receita">—</div>
       <div class="kpi-sub">Novos contratos fechados</div>
-      <div class="kpi-badge pass">↑ +18% vs Abr</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Taxa de Fechamento</div>
-      <div class="kpi-value">—</div>
+      <div class="kpi-value" id="v-kpi-fechamento">—</div>
       <div class="kpi-sub">Proposta → fechado</div>
-      
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Leads no Pipeline</div>
-      <div class="kpi-value">—</div>
+      <div class="kpi-value" id="v-kpi-leads">—</div>
       <div class="kpi-sub">Em diferentes etapas</div>
-      
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Tempo Médio</div>
-      <div class="kpi-value">—</div>
+      <div class="kpi-value" id="v-kpi-tempo">—</div>
       <div class="kpi-sub">1º contato → pagamento</div>
-      
     </div>
   </div>
 
+  <!-- Lead form + Kanban -->
   <div class="grid g2" style="margin-bottom:20px">
 
-    <!-- Lead form + gerador de link -->
+    <!-- Novo Lead -->
     <div class="panel">
       <div class="panel-header">
         <div>
-          <div class="panel-title">Novo Lead & Link de Pagamento</div>
-          <div class="panel-sub">Cadastre e gere o link do plano na hora</div>
+          <div class="panel-title">Novo Lead &amp; Link de Pagamento</div>
+          <div class="panel-sub">Cadastra e gera o link do plano na hora</div>
         </div>
-        <div class="panel-badge" style="color:var(--green);border-color:rgba(74,222,128,0.3)">NOVA VENDA</div>
+        <div class="panel-badge blue">NOVA VENDA</div>
       </div>
 
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);margin-bottom:10px">Selecionar plano</div>
       <div class="plans-grid-v" id="v-plan-selector"></div>
-        <div class="plan-card-v p3" data-dur="3m" data-price="197" onclick="vSelectPlan(this)">
-          <div class="plan-dur">3 Meses</div>
-          <div class="plan-price-v">R$197</div>
-          <div class="plan-price-sub">/mês · R$591</div>
-          <div class="plan-renov" style="background:rgba(251,191,36,0.1);color:var(--amber)">Renov. 68%</div>
-        </div>
-        <div class="plan-card-v p6" data-dur="6m" data-price="237" onclick="vSelectPlan(this)">
-          <div class="plan-dur">6 Meses</div>
-          <div class="plan-price-v">R$237</div>
-          <div class="plan-price-sub">/mês · R$1.422</div>
-          <div class="plan-renov" style="background:rgba(201,168,76,0.1);color:var(--gold)">Renov. 82%</div>
-        </div>
-        <div class="plan-card-v p12" data-dur="12m" data-price="267" onclick="vSelectPlan(this)">
-          <div class="plan-dur">12 Meses</div>
-          <div class="plan-price-v">R$267</div>
-          <div class="plan-price-sub">/mês · R$3.204</div>
-          <div class="plan-renov" style="background:rgba(74,222,128,0.1);color:var(--green)">Renov. 91% ★</div>
-        </div>
-      </div>
 
-      <div class="grid g2" style="margin-top:16px">
+      <div class="grid g2" style="margin-top:16px;gap:12px">
         <div class="v-field">
-          <label class="v-label">Nome completo *</label>
+          <label class="v-label">Nome Completo <span style="color:var(--red)">*</span></label>
           <input class="v-input" id="v-lead-name" type="text" placeholder="Ex: João Silva" />
         </div>
         <div class="v-field">
-          <label class="v-label">WhatsApp *</label>
+          <label class="v-label">WhatsApp <span style="color:var(--red)">*</span></label>
           <input class="v-input" id="v-lead-phone" type="tel" placeholder="(11) 99999-9999" />
         </div>
         <div class="v-field">
@@ -825,9 +802,9 @@ canvas{background:transparent!important}
           <input class="v-input" id="v-lead-email" type="email" placeholder="joao@email.com" />
         </div>
         <div class="v-field">
-          <label class="v-label">Canal de origem</label>
+          <label class="v-label">Canal de Origem</label>
           <select class="v-select" id="v-lead-channel">
-            <option>Instagram</option><option></option>
+            <option>Instagram</option><option>Indicação</option>
             <option>YouTube</option><option>TikTok</option>
             <option>Google</option><option>Outro</option>
           </select>
@@ -839,15 +816,10 @@ canvas{background:transparent!important}
         <button class="vbtn vbtn-blue" onclick="vGerarLink()">🔗 Gerar Link de Pagamento</button>
       </div>
 
-      <div id="v-link-result" style="display:none">
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);margin-top:16px;margin-bottom:6px">Link gerado — copie e envie pelo WhatsApp</div>
-        <div class="link-box-v">
-          <span class="link-url-v" id="v-generated-link"></span>
-          <button class="link-copy-v" id="v-copy-btn" onclick="vCopyLink()">Copiar</button>
-        </div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:8px;line-height:1.6">
-          ⚡ Link expira em 48h · Pix, cartão ou boleto · Stripe / Hotmart / Kiwify
-        </div>
+      <div id="v-link-result" style="display:none;margin-top:14px;padding:12px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px">Link gerado</div>
+        <div id="v-generated-link" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);word-break:break-all"></div>
+        <button id="v-copy-btn" onclick="vCopyLink()" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;padding:6px 14px;background:transparent;border:1px solid rgba(74,222,128,0.3);color:var(--green);cursor:pointer">Copiar</button>
       </div>
     </div>
 
@@ -856,17 +828,16 @@ canvas{background:transparent!important}
       <div class="panel-header">
         <div>
           <div class="panel-title">Pipeline de Leads</div>
-          <div class="panel-sub">Funil de vendas ativo — 31 leads</div>
+          <div class="panel-sub">Funil de vendas ativo</div>
         </div>
         <div class="panel-badge">PIPELINE</div>
       </div>
       <div class="v-kanban" id="v-kanban-board"></div>
-
     </div>
 
   </div>
 
-    <!-- Histórico de vendas + Mix de planos -->
+  <!-- Histórico de vendas + Mix de planos -->
   <div class="grid" style="margin-bottom:20px;grid-template-columns:3fr 2fr">
 
     <div class="panel">
@@ -877,19 +848,18 @@ canvas{background:transparent!important}
         </div>
         <div class="panel-badge">HISTÓRICO</div>
       </div>
-      <table style="width:100%;border-collapse:collapse">
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
         <thead>
-          <tr>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Data</th>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Aluno</th>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Plano</th>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Canal</th>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:right;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Valor</th>
-            <th style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(168,178,189,0.08)">Status</th>
+          <tr style="border-bottom:1px solid rgba(168,178,189,0.08)">
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Data</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Aluno</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Plano</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Canal</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:right">Valor</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px">Status</th>
           </tr>
         </thead>
-        <tbody id="v-sales-body">
-        </tbody>
+        <tbody id="v-sales-body"></tbody>
       </table>
     </div>
 
@@ -902,11 +872,11 @@ canvas{background:transparent!important}
         <div class="panel-badge">MIX</div>
       </div>
       <div class="chart-wrap" style="height:300px"><canvas id="vMixChart"></canvas></div>
+    </div>
+
+  </div>
 
 </div>
-
-</div>
-      </div>
 <!-- fim tab-vendas -->
 
 <!-- ══════════════════════════════════════════════════════ -->
@@ -1202,7 +1172,6 @@ canvas{background:transparent!important}
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <div class="footer">
   <div class="footer-brand">MERIDIAN</div>
-  <div class="footer-note">Performance Hub v1.0 · Dados simulados para fins de apresentação · Mai 2026</div>
   <div class="footer-note" style="color:rgba(201,168,76,0.4)">Meridian Strategy & Performance · meridianstrategy.com</div>
 </div>
 
