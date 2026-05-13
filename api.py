@@ -246,28 +246,25 @@ class StudentCreate(BaseModel):
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    # Returns one row per student with their most recent active subscription
     return query(conn, """
         SELECT DISTINCT ON (s.id)
             s.id, s.name, s.phone, s.email, s.goal, s.channel,
             s.weight_initial, s.weight_current, s.bf_initial, s.bf_current,
             s.created_at AS student_since,
-            sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at, sub.status,
-            p.name AS plan_name, p.duration_months,
-            EXTRACT(DAY FROM sub.expires_at - CURRENT_DATE)::int AS days_to_expire,
-            COALESCE((
-                SELECT SUM(price_paid) FROM subscriptions
-                WHERE student_id = s.id
-            ), 0) AS ltv_total,
-            (
-                SELECT COUNT(*) FROM subscriptions
-                WHERE student_id = s.id AND status IN ('active','cancelled')
-            ) - 1 AS renewals_count
+            sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at,
+            sub.status,
+            p.name AS plan_name,
+            p.duration_months,
+            EXTRACT(DAY FROM (sub.expires_at - CURRENT_DATE))::int AS days_to_expire,
+            COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2
+                      WHERE s2.student_id = s.id), 0) AS ltv_total,
+            GREATEST((SELECT COUNT(*) FROM subscriptions s3
+                      WHERE s3.student_id = s.id) - 1, 0) AS renewals_count
         FROM students s
         JOIN subscriptions sub ON sub.student_id = s.id
         JOIN plans p ON p.id = sub.plan_id
         WHERE s.personal_id = %s
-          AND s.status != 'cancelled'
+          AND COALESCE(s.status, 'active') != 'cancelled'
         ORDER BY s.id, sub.starts_at DESC
     """, (personal_id,))
 
@@ -457,87 +454,3 @@ def cancel_student(student_id: str, conn=Depends(get_db), _=Depends(get_current_
     execute(conn, "UPDATE subscriptions SET status='cancelled', updated_at=NOW() WHERE student_id=%s AND status='active'", (student_id,))
     execute(conn, "UPDATE students SET status='cancelled', updated_at=NOW() WHERE id=%s", (student_id,))
     return {"ok": True, "student_id": student_id}
-# ═══════════════════════════════════════════════════════════════
-#  FORMULÁRIO PÚBLICO POR TOKEN
-# ═══════════════════════════════════════════════════════════════
-import secrets
-
-@app.post("/api/form/generate")
-def generate_form_token(data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
-    """Personal gera um link de formulário para um aluno."""
-    student_id  = data.get("student_id")
-    personal_id = data.get("personal_id")
-    form_type   = data.get("type", "semanal")  # semanal | mensal | trimestral
-
-    if not student_id or not personal_id:
-        raise HTTPException(400, "student_id e personal_id obrigatórios")
-
-    token = secrets.token_urlsafe(16)
-    execute(conn, """
-        INSERT INTO form_tokens (token, student_id, personal_id, form_type, expires_at)
-        VALUES (%s, %s, %s, %s, NOW() + INTERVAL '7 days')
-        ON CONFLICT DO NOTHING
-    """, (token, student_id, personal_id, form_type))
-    return {"token": token, "url": f"/form/{token}"}
-
-@app.get("/api/form/{token}")
-def get_form(token: str, conn=Depends(get_db)):
-    """Retorna dados do formulário para o aluno (sem auth)."""
-    rows = query(conn, """
-        SELECT ft.token, ft.form_type, ft.student_id, ft.personal_id,
-               s.name AS student_name, s.goal,
-               p.name AS personal_name
-        FROM form_tokens ft
-        JOIN students s ON s.id = ft.student_id
-        JOIN personals p ON p.id = ft.personal_id
-        WHERE ft.token = %s
-          AND ft.expires_at > NOW()
-          AND ft.used = false
-    """, (token,))
-    if not rows:
-        raise HTTPException(404, "Link inválido ou expirado")
-    return rows[0]
-
-@app.post("/api/form/{token}")
-def submit_form(token: str, data: dict, conn=Depends(get_db)):
-    """Aluno submete o formulário (sem auth)."""
-    rows = query(conn, """
-        SELECT * FROM form_tokens
-        WHERE token = %s AND expires_at > NOW() AND used = false
-    """, (token,))
-    if not rows:
-        raise HTTPException(404, "Link inválido ou expirado")
-
-    ft = rows[0]
-    execute(conn, """
-        INSERT INTO checkins (student_id, personal_id, type,
-            training_feedback, trainings_done, had_pain, pain_description,
-            nutrition_notes, mood_score, energy_score, weight_reported,
-            general_notes, responded_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
-    """, (
-        str(ft["student_id"]), str(ft["personal_id"]),
-        ft.get("form_type","semanal"),
-        data.get("training_feedback"),
-        data.get("trainings_done"),
-        data.get("had_pain", False),
-        data.get("pain_description"),
-        data.get("nutrition_notes"),
-        data.get("mood_score"),
-        data.get("energy_score"),
-        data.get("weight_reported"),
-        data.get("general_notes"),
-    ))
-
-    if data.get("weight_reported"):
-        execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
-                (data["weight_reported"], str(ft["student_id"])))
-
-    # Marca token como usado
-    execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
-    return {"ok": True, "message": "Formulário enviado com sucesso!"}
-
-@app.get("/form/{token}")
-def serve_form(token: str):
-    """Serve a página HTML do formulário público."""
-    return FileResponse("form.html")
