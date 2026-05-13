@@ -196,11 +196,19 @@ def health(conn=Depends(get_db)):
 @app.get("/api/metrics/{personal_id}")
 def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     mrr = query(conn, """
-        SELECT COUNT(*) AS active_students,
+        SELECT COUNT(DISTINCT student_id) AS active_students,
                COALESCE(SUM(price_paid),0) AS mrr,
                COALESCE(AVG(price_paid),0) AS avg_ticket
-        FROM subscriptions WHERE personal_id = %s AND status = 'active'
-    """, (personal_id,))
+        FROM subscriptions
+        WHERE personal_id = %s
+          AND status = 'active'
+          AND student_id IN (
+              SELECT DISTINCT ON (student_id) student_id
+              FROM subscriptions
+              WHERE personal_id = %s AND status = 'active'
+              ORDER BY student_id, starts_at DESC
+          )
+    """, (personal_id, personal_id))
     e7 = query(conn, """
         SELECT COUNT(*) AS count, COALESCE(SUM(price_paid),0) AS value
         FROM subscriptions WHERE personal_id = %s AND status = 'active'
