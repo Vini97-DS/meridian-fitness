@@ -255,7 +255,7 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
             sub.status,
             p.name AS plan_name,
             p.duration_months,
-            EXTRACT(DAY FROM (sub.expires_at - CURRENT_DATE))::int AS days_to_expire,
+            (sub.expires_at - CURRENT_DATE) AS days_to_expire,
             COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2
                       WHERE s2.student_id = s.id), 0) AS ltv_total,
             GREATEST((SELECT COUNT(*) FROM subscriptions s3
