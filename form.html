@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formulário de Evolução — Meridian</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#081321; --navy2:#0D1E30; --gold:#C9A84C;
+  --silver:#A8B2BD; --white:#F0F4F8; --dim:#3D5068;
+  --green:#4ade80; --red:#f87171; --amber:#fbbf24; --purple:#a78bfa;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%;scroll-behavior:smooth}
+body{font-family:'Syne',sans-serif;background:var(--navy);color:var(--white);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(201,168,76,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.02) 1px,transparent 1px);background-size:55px 55px;pointer-events:none;z-index:0}
+
+.container{max-width:640px;margin:0 auto;padding:40px 20px 80px;position:relative;z-index:1}
+
+.logo-bar{display:flex;align-items:center;gap:12px;margin-bottom:40px}
+.logo-mark{width:40px;height:40px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--navy);font-weight:600}
+.logo-text{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold)}
+
+.hero{margin-bottom:32px}
+.hero-greeting{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.hero-name{font-family:'Cormorant Garamond',serif;font-size:2.2rem;color:var(--white);margin-bottom:4px}
+.hero-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
+.hero-type{display:inline-block;margin-top:10px;font-family:'DM Mono',monospace;font-size:8px;padding:4px 12px;letter-spacing:0.15em;text-transform:uppercase;background:rgba(201,168,76,0.08);color:var(--gold);border:1px solid rgba(201,168,76,0.2)}
+
+.form-card{background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:28px}
+
+.field{margin-bottom:22px}
+.field-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--silver);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.field-required{color:var(--red);font-size:11px}
+.field-input{width:100%;background:var(--navy);border:1px solid rgba(168,178,189,0.12);color:var(--white);font-family:'DM Mono',monospace;font-size:11px;padding:10px 14px;outline:none;transition:border-color 0.2s;resize:none}
+.field-input:focus{border-color:rgba(201,168,76,0.4)}
+.field-input::placeholder{color:var(--dim)}
+
+.scale{display:flex;gap:8px;flex-wrap:wrap}
+.scale-btn{width:44px;height:44px;background:transparent;border:1px solid rgba(168,178,189,0.12);color:var(--silver);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
+.scale-btn:hover{border-color:rgba(201,168,76,0.3);color:var(--gold)}
+.scale-btn.active{background:rgba(201,168,76,0.1);border-color:var(--gold);color:var(--gold)}
+
+.divider{height:1px;background:rgba(168,178,189,0.06);margin:24px 0}
+
+.submit-btn{width:100%;padding:14px;background:var(--gold);color:var(--navy);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;border:none;cursor:pointer;transition:opacity 0.2s;font-weight:600}
+.submit-btn:hover{opacity:0.85}
+.submit-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+.success-card{text-align:center;padding:60px 20px;display:none}
+.success-icon{font-size:3rem;margin-bottom:16px}
+.success-title{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--green);margin-bottom:8px}
+.success-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
+
+.error-card{background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);padding:20px;text-align:center;display:none}
+.error-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--red)}
+
+.loading{text-align:center;padding:60px 20px}
+.loading-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:0.1em}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo-bar">
+    <div class="logo-mark">M</div>
+    <div class="logo-text">Meridian Performance Hub</div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="loading-text">Carregando formulário...</div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-card" class="error-card">
+    <div class="error-text" id="error-msg">Link inválido ou expirado.</div>
+  </div>
+
+  <!-- Form -->
+  <div id="form-wrap" style="display:none">
+    <div class="hero">
+      <div class="hero-greeting">Formulário de Evolução</div>
+      <div class="hero-name" id="student-name">—</div>
+      <div class="hero-sub">Personal: <span id="personal-name">—</span></div>
+      <div class="hero-type" id="form-type-badge">SEMANAL</div>
+    </div>
+
+    <div class="form-card">
+      <div class="field">
+        <div class="field-label">Como foi a semana de treinos? <span class="field-required">*</span></div>
+        <textarea class="field-input" id="f-treinos" rows="3" placeholder="Descreva como foram seus treinos..."></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Quantos treinos você completou? <span class="field-required">*</span></div>
+        <div class="scale" id="scale-qtd">
+          <button class="scale-btn" data-val="0">0</button>
+          <button class="scale-btn" data-val="1">1</button>
+          <button class="scale-btn" data-val="2">2</button>
+          <button class="scale-btn" data-val="3">3</button>
+          <button class="scale-btn" data-val="4">4</button>
+          <button class="scale-btn" data-val="5">5</button>
+          <button class="scale-btn" data-val="6">6</button>
+          <button class="scale-btn" data-val="7">7</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Houve alguma dor ou desconforto?</div>
+        <textarea class="field-input" id="f-dor" rows="2" placeholder="Descreva qualquer dor ou lesão..."></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Como está a alimentação?</div>
+        <textarea class="field-input" id="f-alimentacao" rows="2" placeholder="Como foi sua alimentação?"></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Humor & Disposição Geral <span class="field-required">*</span></div>
+        <div class="scale" id="scale-humor">
+          <button class="scale-btn" data-val="1">1<br><span style="font-size:14px">😞</span></button>
+          <button class="scale-btn" data-val="2">2<br><span style="font-size:14px">😐</span></button>
+          <button class="scale-btn" data-val="3">3<br><span style="font-size:14px">🙂</span></button>
+          <button class="scale-btn" data-val="4">4<br><span style="font-size:14px">😊</span></button>
+          <button class="scale-btn" data-val="5">5<br><span style="font-size:14px">🔥</span></button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Peso atual (kg)</div>
+        <input type="number" class="field-input" id="f-peso" placeholder="Ex: 72.5" step="0.1" style="height:42px">
+      </div>
+
+      <div class="field">
+        <div class="field-label">Feedback ou dúvida para o personal</div>
+        <textarea class="field-input" id="f-feedback" rows="2" placeholder="Dúvidas, pedidos de ajuste no treino..."></textarea>
+      </div>
+
+      <div class="divider"></div>
+
+      <div id="submit-error" style="display:none;margin-bottom:16px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+      <button class="submit-btn" id="submit-btn" onclick="submitForm()">Enviar Resposta</button>
+    </div>
+  </div>
+
+  <!-- Success -->
+  <div id="success-card" class="success-card">
+    <div class="success-icon">✅</div>
+    <div class="success-title">Enviado!</div>
+    <div class="success-sub">Suas respostas foram registradas.<br>Seu personal já pode acompanhar seu progresso.</div>
+  </div>
+</div>
+
+<script>
+const token = location.pathname.split('/form/')[1];
+let formData = null;
+
+// Scale buttons
+document.querySelectorAll('.scale').forEach(scale => {
+  scale.querySelectorAll('.scale-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scale.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+});
+
+// Load form data
+async function loadForm() {
+  try {
+    const res  = await fetch('/api/form/' + token);
+    if (!res.ok) throw new Error('Link inválido ou expirado');
+    formData   = await res.json();
+
+    document.getElementById('student-name').textContent  = formData.student_name || '—';
+    document.getElementById('personal-name').textContent = formData.personal_name || '—';
+    const typeBadge = document.getElementById('form-type-badge');
+    const types = { semanal:'SEMANAL', mensal:'MENSAL', trimestral:'TRIMESTRAL' };
+    typeBadge.textContent = types[formData.form_type] || 'SEMANAL';
+
+    document.getElementById('loading').style.display   = 'none';
+    document.getElementById('form-wrap').style.display = 'block';
+  } catch (err) {
+    document.getElementById('loading').style.display    = 'none';
+    document.getElementById('error-msg').textContent    = err.message;
+    document.getElementById('error-card').style.display = 'block';
+  }
+}
+
+async function submitForm() {
+  const treinos = document.getElementById('f-treinos').value.trim();
+  const qtd     = document.querySelector('#scale-qtd .scale-btn.active')?.dataset.val;
+  const humor   = document.querySelector('#scale-humor .scale-btn.active')?.dataset.val;
+  const errEl   = document.getElementById('submit-error');
+  errEl.style.display = 'none';
+
+  if (!treinos) { errEl.textContent='Descreva como foi sua semana de treinos.'; errEl.style.display='block'; return; }
+  if (!qtd)     { errEl.textContent='Selecione quantos treinos completou.';     errEl.style.display='block'; return; }
+  if (!humor)   { errEl.textContent='Selecione seu humor e disposição.';        errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+
+  try {
+    const res = await fetch('/api/form/' + token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        training_feedback: treinos,
+        trainings_done:    parseInt(qtd),
+        had_pain:          !!document.getElementById('f-dor').value.trim(),
+        pain_description:  document.getElementById('f-dor').value.trim() || null,
+        nutrition_notes:   document.getElementById('f-alimentacao').value.trim() || null,
+        mood_score:        parseInt(humor),
+        energy_score:      parseInt(humor),
+        weight_reported:   parseFloat(document.getElementById('f-peso').value) || null,
+        general_notes:     document.getElementById('f-feedback').value.trim() || null,
+      })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro ao enviar'); }
+    document.getElementById('form-wrap').style.display    = 'none';
+    document.getElementById('success-card').style.display = 'block';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Enviar Resposta';
+  }
+}
+
+loadForm();
+</script>
+</body>
+</html>

@@ -1271,5 +1271,40 @@ function salvarPerfil(){
   setTimeout(()=>okEl.style.display='none',2500);
 }
 
+
+// ── GERAR LINK DE FORMULÁRIO ─────────────────────────────
+async function gerarLinkFormulario(tipo) {
+  const sel        = document.getElementById('studentSelect');
+  const studentId  = sel?.value;
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session?.personal_id || session?.id;
+  if (!studentId) { alert('Selecione um aluno primeiro.'); return; }
+
+  const btn = document.getElementById('btn-gerar-link-' + tipo);
+  if (btn) { btn.disabled=true; btn.textContent='Gerando...'; }
+
+  try {
+    const res = await api('/form/generate', { method:'POST', body:JSON.stringify({
+      student_id: studentId, personal_id: personalId, type: tipo
+    })});
+    const url = window.location.origin + '/form/' + res.token;
+    navigator.clipboard.writeText(url).catch(()=>{});
+    const resultEl = document.getElementById('form-link-result');
+    const urlEl    = document.getElementById('form-link-url');
+    if (urlEl)    urlEl.textContent = url;
+    if (resultEl) resultEl.style.display = 'block';
+  } catch(err) {
+    alert('Erro ao gerar link: ' + err.message);
+  }
+  if (btn) { btn.disabled=false; btn.textContent='Gerar Link ' + tipo.charAt(0).toUpperCase() + tipo.slice(1); }
+}
+
+function copyFormLink() {
+  const url = document.getElementById('form-link-url')?.textContent;
+  navigator.clipboard.writeText(url||'').catch(()=>{});
+  const btn = document.getElementById('btn-copy-form-link');
+  if (btn) { btn.textContent='✓ Copiado!'; setTimeout(()=>btn.textContent='Copiar',2000); }
+}
+
 // ── INIT ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });

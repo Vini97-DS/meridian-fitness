@@ -910,6 +910,22 @@ canvas{background:transparent!important}
     <button class="filter-btn" style="border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.05)">Ver Apenas Churn Risk</button>
   </div>
 
+
+  <!-- ── GERAR LINK DE FORMULÁRIO ── -->
+  <div style="margin-bottom:20px;padding:16px 0;border-bottom:1px solid rgba(168,178,189,0.06)">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--dim);margin-bottom:12px">Solicitar Formulário de Evolução</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <button id="btn-gerar-link-semanal"    onclick="gerarLinkFormulario('semanal')"    class="vbtn vbtn-blue"  style="font-size:9px">Gerar Link Semanal</button>
+      <button id="btn-gerar-link-mensal"     onclick="gerarLinkFormulario('mensal')"     class="vbtn"            style="font-size:9px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);color:var(--purple)">Gerar Link Mensal</button>
+      <button id="btn-gerar-link-trimestral" onclick="gerarLinkFormulario('trimestral')" class="vbtn"            style="font-size:9px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--amber)">Gerar Link Trimestral</button>
+    </div>
+    <div id="form-link-result" style="display:none;padding:12px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px">✓ Link gerado e copiado para a área de transferência</div>
+      <div id="form-link-url" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);word-break:break-all;margin-bottom:8px"></div>
+      <button id="btn-copy-form-link" onclick="copyFormLink()" style="font-family:'DM Mono',monospace;font-size:9px;padding:5px 14px;background:transparent;border:1px solid rgba(74,222,128,0.3);color:var(--green);cursor:pointer">Copiar</button>
+    </div>
+  </div>
+
   <!-- STUDENT HEADER -->
   <div class="student-header" id="studentHeader">
     <div class="student-avatar-big" id="studentAvatar"></div>
