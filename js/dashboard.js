@@ -548,7 +548,55 @@ async function loadStudentCheckins(studentId) {
     s.mood.data   = moodData;
   }
 
-  updateStudent();
+  // Calculate real engagement metrics
+  const freq  = freqData.length ? (freqData.reduce((a,b)=>a+b,0)/freqData.length) : 0;
+  const total = data.length;
+  const avgMood = moodData.length ? (moodData.reduce((a,b)=>a+b,0)/moodData.length) : 0;
+
+  if (s.engagement) {
+    s.engagement.score = freq > 0 ? (freq/5*10).toFixed(1)+'/10' : '—';
+    s.engagement.bars = [
+      { label:'Frequência de Treino',        val: freq>0 ? freq.toFixed(1)+'/5 treinos/semana' : 'Sem dados',   pct: Math.round(freq/5*100),     color: freq>=4?'var(--green)':freq>=3?'var(--gold)':'var(--red)'   },
+      { label:'Responsividade ao Formulário', val: total>0 ? total+' respostas registradas' : 'Sem respostas',  pct: Math.min(100,total*10),      color: total>=5?'var(--green)':total>=2?'var(--gold)':'var(--red)'  },
+      { label:'Humor Médio',                 val: avgMood>0 ? avgMood.toFixed(1)+'/5' : 'Sem dados',            pct: Math.round(avgMood/5*100),  color: avgMood>=4?'var(--green)':avgMood>=3?'var(--gold)':'var(--red)' },
+    ];
+    s.engagement.mood = { labels: s.mood.labels, data: s.mood.data };
+  }
+
+  // Update sk1/sk2/sk3 with real values
+  s.sk1 = freq > 0 ? Math.round(freq/5*100)+'%' : '—';
+  s.sk2 = avgMood > 0 ? avgMood.toFixed(1) : '—';
+  s.sk3 = avgMood > 0 ? (avgMood/5).toFixed(1)+'/5' : '—';
+
+  // Re-render engagement panel
+  if (typeof renderEngagementPanel === 'function') renderEngagementPanel(s.engagement);
+
+  // Refresh charts
+  if (acompChartsDone) setTimeout(initAcompCharts, 100);
+
+  // Update sk values in DOM
+  const skSet = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  skSet('sk1', s.sk1); skSet('sk2', s.sk2); skSet('sk3', s.sk3);
+
+  // Rebuild responses
+  const respEl = document.getElementById('student-responses');
+  const respBadge = document.getElementById('responses-badge');
+  if (respBadge) respBadge.textContent = (s.responses?.length||0) + ' RESPOSTAS';
+  if (respEl && s.responses?.length) {
+    respEl.innerHTML = s.responses.map(r=>`
+      <div class="response-item" onclick="toggleResponse(this)">
+        <div class="response-header">
+          <span class="response-date">${r.date}</span>
+          <span class="response-week">${r.week}</span>
+          <span class="response-tag">${r.tag}</span>
+          <div class="response-stars">${r.mood}</div>
+        </div>
+        <div class="response-body">
+          <div class="response-summary">${r.summary}</div>
+          ${r.fields.map(f=>`<div class="response-field"><span class="response-field-label">${f.l}</span><span class="response-field-val">${f.v}</span></div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
 }
 
 function updateStudent() {
@@ -556,12 +604,6 @@ function updateStudent() {
   if (!sel?.value) return;
   const s = students[sel.value];
   if (!s) return;
-
-  // Load checkins if not yet loaded for this student
-  if (!s._checkinsLoaded) {
-    s._checkinsLoaded = true;
-    loadStudentCheckins(sel.value);
-  }
 
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('studentAvatar',  s.avatar);
