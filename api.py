@@ -222,10 +222,12 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
     mrr_history = query(conn, """
         SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
                SUM(price_paid) AS mrr
-        FROM subscriptions WHERE personal_id = %s
-          AND starts_at >= NOW() - INTERVAL '12 months'
+        FROM subscriptions
+        WHERE personal_id = %s
+          AND starts_at IS NOT NULL
         GROUP BY DATE_TRUNC('month', starts_at)
         ORDER BY DATE_TRUNC('month', starts_at)
+        LIMIT 18
     """, (personal_id,))
     m = mrr[0] if mrr else {}
     return {
