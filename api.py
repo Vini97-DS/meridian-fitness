@@ -462,3 +462,129 @@ def cancel_student(student_id: str, conn=Depends(get_db), _=Depends(get_current_
     execute(conn, "UPDATE subscriptions SET status='cancelled', updated_at=NOW() WHERE student_id=%s AND status='active'", (student_id,))
     execute(conn, "UPDATE students SET status='cancelled', updated_at=NOW() WHERE id=%s", (student_id,))
     return {"ok": True, "student_id": student_id}
+
+@app.get("/api/students/{student_id}/detail")
+def get_student_detail(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    """Retorna dados enriquecidos do aluno: checkins, frequência, progresso."""
+    # Checkins recentes
+    checkins = query(conn, """
+        SELECT id, type, trainings_done, mood_score, weight_reported,
+               training_feedback, general_notes,
+               responded_at, created_at
+        FROM checkins WHERE student_id = %s
+        ORDER BY responded_at DESC NULLS LAST LIMIT 20
+    """, (student_id,))
+
+    # Frequência média (últimas 8 semanas)
+    freq = query(conn, """
+        SELECT ROUND(AVG(trainings_done), 1) AS avg_freq,
+               COUNT(*) AS total_checkins
+        FROM checkins
+        WHERE student_id = %s
+          AND trainings_done IS NOT NULL
+          AND created_at >= NOW() - INTERVAL '8 weeks'
+    """, (student_id,))
+
+    # Score de humor médio
+    mood = query(conn, """
+        SELECT ROUND(AVG(mood_score), 1) AS avg_mood
+        FROM checkins
+        WHERE student_id = %s AND mood_score IS NOT NULL
+    """, (student_id,))
+
+    # Timeline de eventos (assinaturas + checkins importantes)
+    timeline = query(conn, """
+        SELECT 'renovacao' AS type,
+               TO_CHAR(starts_at, 'Mon YYYY') AS date,
+               p.name AS title,
+               price_paid::text AS detail
+        FROM subscriptions sub
+        JOIN plans p ON p.id = sub.plan_id
+        WHERE sub.student_id = %s
+        ORDER BY starts_at DESC LIMIT 10
+    """, (student_id,))
+
+    f = freq[0] if freq else {}
+    m = mood[0] if mood else {}
+    return {
+        "checkins":        checkins,
+        "avg_freq":        float(f.get("avg_freq") or 0),
+        "total_checkins":  int(f.get("total_checkins") or 0),
+        "avg_mood":        float(m.get("avg_mood") or 0),
+        "timeline":        timeline,
+    }
+
+# ═══════════════════════════════════════════════════════════════
+#  FORMULÁRIO PÚBLICO POR TOKEN
+# ═══════════════════════════════════════════════════════════════
+import secrets
+from starlette.responses import FileResponse
+
+@app.post("/api/form/generate")
+def generate_form_token(data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
+    student_id  = data.get("student_id")
+    personal_id = data.get("personal_id")
+    form_type   = data.get("type", "semanal")
+    if not student_id or not personal_id:
+        raise HTTPException(400, "student_id e personal_id obrigatórios")
+    token = secrets.token_urlsafe(16)
+    execute(conn, """
+        INSERT INTO form_tokens (token, student_id, personal_id, form_type)
+        VALUES (%s, %s, %s, %s)
+    """, (token, student_id, personal_id, form_type))
+    return {"token": token, "url": f"/form/{token}"}
+
+@app.get("/api/form/{token}")
+def get_form(token: str, conn=Depends(get_db)):
+    rows = query(conn, """
+        SELECT ft.token, ft.form_type, ft.student_id::text, ft.personal_id::text,
+               s.name AS student_name, s.goal,
+               p.name AS personal_name
+        FROM form_tokens ft
+        JOIN students  s ON s.id = ft.student_id
+        JOIN personals p ON p.id = ft.personal_id
+        WHERE ft.token = %s
+          AND ft.expires_at > NOW()
+          AND ft.used = false
+    """, (token,))
+    if not rows:
+        raise HTTPException(404, "Link inválido ou expirado")
+    return rows[0]
+
+@app.post("/api/form/{token}")
+def submit_form(token: str, data: dict, conn=Depends(get_db)):
+    rows = query(conn, """
+        SELECT * FROM form_tokens
+        WHERE token = %s AND expires_at > NOW() AND used = false
+    """, (token,))
+    if not rows:
+        raise HTTPException(404, "Link inválido ou expirado")
+    ft = rows[0]
+    execute(conn, """
+        INSERT INTO checkins (student_id, personal_id, type,
+            training_feedback, trainings_done, had_pain, pain_description,
+            nutrition_notes, mood_score, energy_score, weight_reported,
+            general_notes, responded_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+    """, (
+        str(ft["student_id"]), str(ft["personal_id"]),
+        ft.get("form_type","semanal"),
+        data.get("training_feedback"),
+        data.get("trainings_done"),
+        data.get("had_pain", False),
+        data.get("pain_description"),
+        data.get("nutrition_notes"),
+        data.get("mood_score"),
+        data.get("energy_score"),
+        data.get("weight_reported"),
+        data.get("general_notes"),
+    ))
+    if data.get("weight_reported"):
+        execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
+                (data["weight_reported"], str(ft["student_id"])))
+    execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
+    return {"ok": True, "message": "Formulário enviado com sucesso!"}
+
+@app.get("/form/{token}")
+def serve_form(token: str):
+    return FileResponse("form.html")

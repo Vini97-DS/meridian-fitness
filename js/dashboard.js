@@ -507,9 +507,47 @@ function buildEngagement(s) {
 }
 
 async function loadStudentCheckins(studentId) {
-  const data = await api('/checkins/' + studentId).catch(() => null);
-  const s    = students[studentId];
-  if (!data?.length || !s) return;
+  // Load both checkins and detail in parallel
+  const [data, detail] = await Promise.all([
+    api('/checkins/' + studentId).catch(() => null),
+    api('/students/' + studentId + '/detail').catch(() => null),
+  ]);
+  const s = students[studentId];
+  if (!s) return;
+
+  // Update KPI scores from real data
+  if (detail) {
+    const freq = detail.avg_freq || 0;
+    const mood = detail.avg_mood || 0;
+    const total = detail.total_checkins || 0;
+    s.sk1 = freq > 0 ? (freq/5*100).toFixed(0)+'%' : '—';
+    s.sk2 = mood > 0 ? mood.toFixed(1) : '—';
+    s.sk3 = total > 0 ? (mood/5).toFixed(1)+'/5' : '—';
+    // Timeline from subscriptions
+    if (detail.timeline?.length) {
+      s.timeline = detail.timeline.map(t => ({
+        dot: 'blue',
+        date: t.date,
+        title: '🔄 ' + t.title,
+        desc: 'R$' + parseFloat(t.detail||0).toFixed(0) + '/mês'
+      }));
+    }
+    // Engagement bars
+    if (s.engagement) {
+      s.engagement.score = freq > 0 ? (freq/5*10).toFixed(1)+'/10' : '—';
+      s.engagement.bars = [
+        { label:'Frequência de Treino',        val: freq>0 ? freq+'/5 treinos/semana' : 'Sem dados', pct: Math.round(freq/5*100), color: freq>=4?'var(--green)':freq>=3?'var(--gold)':'var(--red)' },
+        { label:'Responsividade ao Formulário', val: total>0 ? total+' respostas' : 'Sem respostas', pct: Math.min(100,total*10), color: total>=5?'var(--green)':total>=2?'var(--gold)':'var(--red)' },
+        { label:'Humor Médio',                 val: mood>0 ? mood.toFixed(1)+'/5' : 'Sem dados', pct: Math.round(mood/5*100), color: mood>=4?'var(--green)':mood>=3?'var(--gold)':'var(--red)' },
+      ];
+      s.mood = {
+        labels: detail.checkins?.slice(0,6).reverse().map((_,i)=>'Sem '+(i+1)) || [],
+        data:   detail.checkins?.slice(0,6).reverse().map(c=>c.mood_score||0) || [],
+      };
+    }
+  }
+
+  if (!data?.length) { updateStudent(); return; }
 
   // Respostas
   s.responses = data.map(c => {
@@ -661,6 +699,10 @@ function updateStudent() {
 
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
   if (acompChartsDone) setTimeout(initAcompCharts, 50);
+  // Load fresh detail data from API
+  if (sel?.value && students[sel.value]) {
+    loadStudentCheckins(sel.value);
+  }
 }
 
 // ── CHURN LIST — do banco ────────────────────────────────
