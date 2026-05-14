@@ -507,47 +507,9 @@ function buildEngagement(s) {
 }
 
 async function loadStudentCheckins(studentId) {
-  // Load both checkins and detail in parallel
-  const [data, detail] = await Promise.all([
-    api('/checkins/' + studentId).catch(() => null),
-    api('/students/' + studentId + '/detail').catch(() => null),
-  ]);
-  const s = students[studentId];
-  if (!s) return;
-
-  // Update KPI scores from real data
-  if (detail) {
-    const freq = detail.avg_freq || 0;
-    const mood = detail.avg_mood || 0;
-    const total = detail.total_checkins || 0;
-    s.sk1 = freq > 0 ? (freq/5*100).toFixed(0)+'%' : '—';
-    s.sk2 = mood > 0 ? mood.toFixed(1) : '—';
-    s.sk3 = total > 0 ? (mood/5).toFixed(1)+'/5' : '—';
-    // Timeline from subscriptions
-    if (detail.timeline?.length) {
-      s.timeline = detail.timeline.map(t => ({
-        dot: 'blue',
-        date: t.date,
-        title: '🔄 ' + t.title,
-        desc: 'R$' + parseFloat(t.detail||0).toFixed(0) + '/mês'
-      }));
-    }
-    // Engagement bars
-    if (s.engagement) {
-      s.engagement.score = freq > 0 ? (freq/5*10).toFixed(1)+'/10' : '—';
-      s.engagement.bars = [
-        { label:'Frequência de Treino',        val: freq>0 ? freq+'/5 treinos/semana' : 'Sem dados', pct: Math.round(freq/5*100), color: freq>=4?'var(--green)':freq>=3?'var(--gold)':'var(--red)' },
-        { label:'Responsividade ao Formulário', val: total>0 ? total+' respostas' : 'Sem respostas', pct: Math.min(100,total*10), color: total>=5?'var(--green)':total>=2?'var(--gold)':'var(--red)' },
-        { label:'Humor Médio',                 val: mood>0 ? mood.toFixed(1)+'/5' : 'Sem dados', pct: Math.round(mood/5*100), color: mood>=4?'var(--green)':mood>=3?'var(--gold)':'var(--red)' },
-      ];
-      s.mood = {
-        labels: detail.checkins?.slice(0,6).reverse().map((_,i)=>'Sem '+(i+1)) || [],
-        data:   detail.checkins?.slice(0,6).reverse().map(c=>c.mood_score||0) || [],
-      };
-    }
-  }
-
-  if (!data?.length) { updateStudent(); return; }
+  const data = await api('/checkins/' + studentId).catch(() => null);
+  const s    = students[studentId];
+  if (!data?.length || !s) return;
 
   // Respostas
   s.responses = data.map(c => {
@@ -586,7 +548,44 @@ async function loadStudentCheckins(studentId) {
     s.mood.data   = moodData;
   }
 
-  updateStudent();
+  // Update UI directly without calling updateStudent() to avoid loop
+  if (acompChartsDone) setTimeout(initAcompCharts, 100);
+  // Refresh responses badge
+  const respBadge = document.getElementById('responses-badge');
+  if (respBadge) respBadge.textContent = (students[document.getElementById('studentSelect')?.value]?.responses?.length||0) + ' RESPOSTAS';
+  // Rebuild responses list
+  const sel2 = document.getElementById('studentSelect');
+  const s2   = sel2 ? students[sel2.value] : null;
+  if (s2) {
+    const respEl = document.getElementById('student-responses');
+    const tlEl   = document.getElementById('student-timeline');
+    const skSet  = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+    skSet('sk1',s2.sk1); skSet('sk2',s2.sk2); skSet('sk3',s2.sk3);
+    if (respEl && s2.responses?.length) {
+      respEl.innerHTML = s2.responses.map(r=>`
+        <div class="response-item" onclick="toggleResponse(this)">
+          <div class="response-header">
+            <span class="response-date">${r.date}</span>
+            <span class="response-week">${r.week}</span>
+            <span class="response-tag">${r.tag}</span>
+            <div class="response-stars">${r.mood}</div>
+          </div>
+          <div class="response-body">
+            <div class="response-summary">${r.summary}</div>
+            ${r.fields.map(f=>`<div class="response-field"><span class="response-field-label">${f.l}</span><span class="response-field-val">${f.v}</span></div>`).join('')}
+          </div>
+        </div>`).join('');
+    }
+    if (tlEl && s2.timeline?.length) {
+      tlEl.innerHTML = s2.timeline.map(t=>`
+        <div class="tl-item">
+          <div class="tl-dot ${t.dot||'blue'}"></div>
+          <div class="tl-date">${t.date}</div>
+          <div class="tl-title">${t.title}</div>
+          <div class="tl-desc">${t.desc}</div>
+        </div>`).join('');
+    }
+  }
 }
 
 function updateStudent() {
@@ -699,10 +698,6 @@ function updateStudent() {
 
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
   if (acompChartsDone) setTimeout(initAcompCharts, 50);
-  // Load fresh detail data from API
-  if (sel?.value && students[sel.value]) {
-    loadStudentCheckins(sel.value);
-  }
 }
 
 // ── CHURN LIST — do banco ────────────────────────────────
@@ -1314,36 +1309,4 @@ function salvarPerfil(){
 }
 
 // ── INIT ─────────────────────────────────────────────────
-
-// ── GERAR LINK DE FORMULÁRIO ─────────────────────────────
-async function gerarLinkFormulario(tipo) {
-  const sel        = document.getElementById('studentSelect');
-  const studentId  = sel?.value;
-  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
-  const personalId = session?.personal_id || session?.id;
-  if (!studentId) { alert('Selecione um aluno primeiro.'); return; }
-  const tipos = { semanal:'Semanal', mensal:'Mensal', semestral:'Semestral' };
-  const btn = document.getElementById('btn-gerar-link-' + tipo);
-  if (btn) { btn.disabled=true; btn.textContent='Gerando...'; }
-  try {
-    const res = await api('/form/generate', { method:'POST', body:JSON.stringify({
-      student_id: studentId, personal_id: personalId, type: tipo
-    })});
-    const url = window.location.origin + '/form/' + res.token;
-    navigator.clipboard.writeText(url).catch(()=>{});
-    const resultEl = document.getElementById('form-link-result');
-    const urlEl    = document.getElementById('form-link-url');
-    if (urlEl)    urlEl.textContent = url;
-    if (resultEl) resultEl.style.display = 'block';
-  } catch(err) { alert('Erro ao gerar link: ' + err.message); }
-  if (btn) { btn.disabled=false; btn.textContent='Gerar Link ' + (tipos[tipo]||tipo); }
-}
-
-function copyFormLink() {
-  const url = document.getElementById('form-link-url')?.textContent;
-  navigator.clipboard.writeText(url||'').catch(()=>{});
-  const btn = document.getElementById('btn-copy-form-link');
-  if (btn) { btn.textContent='✓ Copiado!'; setTimeout(()=>btn.textContent='Copiar Link',2000); }
-}
-
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
