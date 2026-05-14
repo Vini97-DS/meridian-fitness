@@ -978,16 +978,87 @@ canvas{background:transparent!important}
   </div>
     </div>
 
+  
+
+  
+
+  
+
+
+  <!-- ROW: Gráficos Evolução + Frequência -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Evolução de Peso &amp; Composição</div>
+          <div class="panel-sub">Histórico de peso e % gordura corporal</div>
+        </div>
+        <div class="panel-badge">EVOLUÇÃO</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="weightChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Frequência de Treino</div>
+          <div class="panel-sub">Treinos realizados por semana vs meta</div>
+        </div>
+        <div class="panel-badge">FREQUÊNCIA</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="freqChart"></canvas></div>
+    </div>
   </div>
 
-  
+  <!-- ROW: Respostas + Timeline -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Respostas do Formulário de Evolução</div>
+          <div class="panel-sub">Check-ins semanais · clique para expandir</div>
+        </div>
+        <div class="panel-badge blue" id="responses-badge">0 RESPOSTAS</div>
+      </div>
+      <div class="response-list" id="student-responses" style="margin-top:8px"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Linha do Tempo de Progresso</div>
+          <div class="panel-sub">Marcos da jornada do aluno</div>
+        </div>
+        <div class="panel-badge">JORNADA</div>
+      </div>
+      <div class="timeline" id="student-timeline" style="margin-top:8px"></div>
+    </div>
+  </div>
 
-  
+  <!-- ROW: Engajamento + Humor -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel" id="engagement-panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Métricas de Engajamento Detalhadas</div>
+          <div class="panel-sub">Score composto · frequência · responsividade · satisfação</div>
+        </div>
+        <div class="panel-badge green" id="engagement-score-badge">SCORE —</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Histórico de Humor / Disposição</div>
+          <div class="panel-sub">Evolução do bem-estar nas últimas semanas</div>
+        </div>
+        <div class="panel-badge">HUMOR</div>
+      </div>
+      <div class="chart-wrap" style="height:220px"><canvas id="moodChart"></canvas></div>
+    </div>
+  </div>
 
   <!-- FORMULÁRIO DE ENVIO -->
-  
 
-</div>
+
 <!-- fim tab-acompanhamento -->
 
 <!-- ══════════════════════════════════════════════════════ -->
