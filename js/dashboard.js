@@ -548,44 +548,7 @@ async function loadStudentCheckins(studentId) {
     s.mood.data   = moodData;
   }
 
-  // Update UI directly without calling updateStudent() to avoid loop
-  if (acompChartsDone) setTimeout(initAcompCharts, 100);
-  // Refresh responses badge
-  const respBadge = document.getElementById('responses-badge');
-  if (respBadge) respBadge.textContent = (students[document.getElementById('studentSelect')?.value]?.responses?.length||0) + ' RESPOSTAS';
-  // Rebuild responses list
-  const sel2 = document.getElementById('studentSelect');
-  const s2   = sel2 ? students[sel2.value] : null;
-  if (s2) {
-    const respEl = document.getElementById('student-responses');
-    const tlEl   = document.getElementById('student-timeline');
-    const skSet  = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-    skSet('sk1',s2.sk1); skSet('sk2',s2.sk2); skSet('sk3',s2.sk3);
-    if (respEl && s2.responses?.length) {
-      respEl.innerHTML = s2.responses.map(r=>`
-        <div class="response-item" onclick="toggleResponse(this)">
-          <div class="response-header">
-            <span class="response-date">${r.date}</span>
-            <span class="response-week">${r.week}</span>
-            <span class="response-tag">${r.tag}</span>
-            <div class="response-stars">${r.mood}</div>
-          </div>
-          <div class="response-body">
-            <div class="response-summary">${r.summary}</div>
-            ${r.fields.map(f=>`<div class="response-field"><span class="response-field-label">${f.l}</span><span class="response-field-val">${f.v}</span></div>`).join('')}
-          </div>
-        </div>`).join('');
-    }
-    if (tlEl && s2.timeline?.length) {
-      tlEl.innerHTML = s2.timeline.map(t=>`
-        <div class="tl-item">
-          <div class="tl-dot ${t.dot||'blue'}"></div>
-          <div class="tl-date">${t.date}</div>
-          <div class="tl-title">${t.title}</div>
-          <div class="tl-desc">${t.desc}</div>
-        </div>`).join('');
-    }
-  }
+  updateStudent();
 }
 
 function updateStudent() {
@@ -593,6 +556,12 @@ function updateStudent() {
   if (!sel?.value) return;
   const s = students[sel.value];
   if (!s) return;
+
+  // Load checkins if not yet loaded for this student
+  if (!s._checkinsLoaded) {
+    s._checkinsLoaded = true;
+    loadStudentCheckins(sel.value);
+  }
 
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('studentAvatar',  s.avatar);
