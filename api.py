@@ -244,11 +244,31 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         "ORDER BY DATE_TRUNC('month', starts_at) LIMIT 12",
         (personal_id,))
 
+    # Taxa de renovação, churn e LTV médio
+    renov_data = query(conn,
+        "SELECT COUNT(*) FILTER (WHERE status=\'active\') AS active, COUNT(*) AS total "
+        "FROM subscriptions WHERE personal_id=%s",
+        (personal_id,))
+    ltv_data = query(conn,
+        "SELECT COALESCE(AVG(total),0) AS avg_ltv FROM "
+        "(SELECT student_id, SUM(price_paid) AS total FROM subscriptions "
+        " WHERE personal_id=%s GROUP BY student_id) t",
+        (personal_id,))
+    rd = renov_data[0] if renov_data else {}
+    total_s  = int(rd.get("total") or 0)
+    active_s = int(rd.get("active") or 0)
+    renewal_rate = round(active_s / total_s * 100) if total_s > 0 else 0
+    churn_rate   = round((total_s - active_s) / total_s * 100) if total_s > 0 else 0
+    avg_ltv = float((ltv_data[0] if ltv_data else {}).get("avg_ltv") or 0)
+
     m = mrr[0] if mrr else {}
     return {
         "active_students": int(m.get("active_students") or 0),
         "mrr":             float(m.get("mrr") or 0),
         "avg_ticket":      float(m.get("avg_ticket") or 0),
+        "renewal_rate":    renewal_rate,
+        "churn_rate":      churn_rate,
+        "avg_ltv":         round(avg_ltv, 2),
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
                             "value": float((e7[0] if e7 else {}).get("value") or 0)},
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
@@ -275,23 +295,7 @@ class StudentCreate(BaseModel):
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    return query(conn, """
-        SELECT DISTINCT ON (s.id)
-            s.id, s.name, s.phone, s.email, s.goal, s.channel,
-            s.weight_initial, s.weight_current, s.bf_initial, s.bf_current,
-            s.created_at AS student_since,
-            sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at, sub.status,
-            p.name AS plan_name, p.duration_months,
-            (sub.expires_at - CURRENT_DATE) AS days_to_expire,
-            COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2 WHERE s2.student_id=s.id),0) AS ltv_total,
-            GREATEST((SELECT COUNT(*) FROM subscriptions s3 WHERE s3.student_id=s.id)-1,0) AS renewals_count
-        FROM students s
-        JOIN subscriptions sub ON sub.student_id = s.id
-        JOIN plans p ON p.id = sub.plan_id
-        WHERE s.personal_id = %s
-          AND COALESCE(s.status,'active') != 'cancelled'
-        ORDER BY s.id, sub.starts_at DESC
-    """, (personal_id,))
+    return query(conn, "SELECT * FROM v_active_students WHERE personal_id = %s ORDER BY days_to_expire ASC", (personal_id,))
 
 @app.post("/api/students")
 def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
