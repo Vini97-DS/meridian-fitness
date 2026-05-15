@@ -31,29 +31,51 @@ const _carouselAngles = [
 function renderCarouselFrame() {
   const el = document.getElementById('photo-compare');
   if (!el || !_carouselPhotos.length) return;
-  const cur = _carouselPhotos[_carouselIdx];
-  const hasPhoto = cur.photo?.url;
-  const imgHtml = hasPhoto
-    ? `<img src="${cur.photo.url}" style="width:100%;height:260px;object-fit:cover;display:block;" />`
-    : `<div class="photo-placeholder"><div class="photo-icon">📷</div><div class="photo-date">SEM FOTO</div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Nenhuma foto registrada</div></div>`;
+
+  const cur   = _carouselPhotos[_carouselIdx];
+  const pair  = _comparisonByAngle[cur.angle] || {};
+  const first  = pair.first  || null;
+  const latest = pair.latest || null;
+  const same   = first && latest && first.id === latest.id;
+
+  const btnStyle = `background:rgba(168,178,189,0.08);border:1px solid rgba(168,178,189,0.15);color:var(--silver);padding:8px 14px;cursor:pointer;font-size:14px;transition:all 0.2s;flex-shrink:0;align-self:stretch`;
+
+  function fmtD(taken_at) {
+    if (!taken_at) return '—';
+    return new Date(taken_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+  }
+
+  function panel(photo, tag, isAfter, noPhotoMsg) {
+    const tagCss = isAfter
+      ? `background:rgba(201,168,76,0.85);color:#0a0a0f`
+      : `background:rgba(0,0,0,0.6);color:#94a3b8`;
+    const inner = photo?.url
+      ? `<img src="${photo.url}" style="width:100%;height:260px;object-fit:cover;display:block;" />`
+      : `<div class="photo-placeholder"><div class="photo-icon">📷</div><div class="photo-date">${noPhotoMsg}</div></div>`;
+    return `
+      <div style="flex:1;position:relative;min-width:0">
+        ${inner}
+        <div style="position:absolute;top:8px;left:8px;${tagCss};font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;border-radius:3px;letter-spacing:.06em;font-weight:700;pointer-events:none">${tag}</div>
+        <div class="photo-footer">
+          <span class="photo-footer-label">${cur.label}</span>
+          <span class="photo-footer-val">${fmtD(photo?.taken_at)}</span>
+        </div>
+      </div>`;
+  }
+
   const thumbs = _carouselPhotos.map((p, i) => {
     const active = i === _carouselIdx ? 'rgba(201,168,76,0.5)' : 'rgba(168,178,189,0.15)';
-    const inner = p.photo?.url
+    const inner  = p.photo?.url
       ? `<img src="${p.photo.url}" style="width:100%;height:100%;object-fit:cover" />`
       : `<span style="font-size:11px;opacity:0.3">📷</span>`;
     return `<div onclick="goToPhoto(${i})" style="width:56px;height:38px;border:1px solid ${active};cursor:pointer;overflow:hidden;transition:border-color 0.2s;display:flex;align-items:center;justify-content:center">${inner}</div>`;
   }).join('');
-  const btnStyle = `background:rgba(168,178,189,0.08);border:1px solid rgba(168,178,189,0.15);color:var(--silver);padding:8px 14px;cursor:pointer;font-size:14px;transition:all 0.2s;flex-shrink:0`;
+
   el.innerHTML = `
-    <div style="display:flex;align-items:stretch;gap:10px">
+    <div style="display:flex;align-items:stretch;gap:6px">
       <button style="${btnStyle}" onclick="prevPhoto()">←</button>
-      <div style="flex:1">
-        ${imgHtml}
-        <div class="photo-footer">
-          <span class="photo-footer-label">${cur.label}</span>
-          <span class="photo-footer-val">${_carouselIdx + 1} / ${_carouselPhotos.length}</span>
-        </div>
-      </div>
+      ${panel(first, 'INÍCIO', false, 'SEM FOTO')}
+      ${panel(same ? null : latest, 'AGORA', true, 'AGUARDANDO')}
       <button style="${btnStyle}" onclick="nextPhoto()">→</button>
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">${thumbs}</div>`;
@@ -815,7 +837,6 @@ function updateStudent() {
   _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: null }));
   _comparisonByAngle = {};
   renderCarouselFrame();
-  renderComparisonGrid();
 
   // Timeline
   const tlEl = document.getElementById('student-timeline');
