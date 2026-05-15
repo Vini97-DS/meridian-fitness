@@ -371,8 +371,62 @@ function initBICharts(m) {
     });
   } else { mkEmptyChart('renewalChart', empty); }
 
-  // Demais gráficos — vazios até ter dados suficientes
-  ['seasonChart','metaChart','rpsChart','socialChart','roiChart'].forEach(id => mkEmptyChart(id, empty));
+  // Sazonalidade e meta — justificados: precisam de histórico longo e metas cadastradas
+  mkEmptyChart('seasonChart', 'Sem dados · histórico de 12+ meses necessário');
+  mkEmptyChart('metaChart',   'Sem dados · metas de MRR não configuradas');
+
+  // rpsChart — Mix de Planos (doughnut por duração)
+  if (m?.renewal_by_plan?.length) {
+    mkChart('rpsChart', {
+      type: 'doughnut',
+      data: {
+        labels: m.renewal_by_plan.map(r => r.plan_name || r.duration_months + 'm'),
+        datasets: [{ data: m.renewal_by_plan.map(r => parseInt(r.renewals) || 0),
+          backgroundColor: [GOLD+'99', SILV+'88', GREEN+'77', AMBER+'88', BLUE+'77', PURPLE+'77'],
+          borderColor: 'transparent', borderWidth: 2 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } }, tooltip: { ...tt } } }
+    });
+  } else { mkEmptyChart('rpsChart', empty); }
+
+  // socialChart — Performance por Canal (alunos ativos por canal)
+  if (m?.channels?.length) {
+    mkChart('socialChart', {
+      type: 'bar',
+      data: {
+        labels: m.channels.map(r => capitalize(r.channel)),
+        datasets: [{ label: 'Alunos Ativos', data: m.channels.map(r => parseInt(r.count) || 0),
+          backgroundColor: BLUE + '66', borderColor: BLUE, borderWidth: 1.5, borderRadius: 3 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { ...tt } },
+        scales: { x: { grid: { display: false }, ticks: { color: SILV, font: { size: 9 } } }, y: { grid, ticks: { color: SILV } } } }
+    });
+  } else { mkEmptyChart('socialChart', empty); }
+
+  // roiChart — Receita + Alunos por Canal (barras agrupadas, eixo duplo)
+  if (m?.revenue_by_channel?.length) {
+    mkChart('roiChart', {
+      type: 'bar',
+      data: {
+        labels: m.revenue_by_channel.map(r => capitalize(r.channel)),
+        datasets: [
+          { label: 'Receita (R$)', data: m.revenue_by_channel.map(r => parseFloat(r.revenue) || 0),
+            backgroundColor: GOLD + '66', borderColor: GOLD, borderWidth: 1.5, borderRadius: 3, yAxisID: 'y' },
+          { label: 'Alunos', data: m.revenue_by_channel.map(r => parseInt(r.students) || 0),
+            backgroundColor: PURPLE + '66', borderColor: PURPLE, borderWidth: 1.5, borderRadius: 3, yAxisID: 'y2' },
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } }, tooltip: { ...tt } },
+        scales: {
+          x:  { grid: { display: false }, ticks: { color: SILV, font: { size: 9 } } },
+          y:  { grid, ticks: { color: SILV, callback: v => 'R$' + (v >= 1000 ? (v/1000).toFixed(0)+'K' : v) }, position: 'left' },
+          y2: { grid: { display: false }, ticks: { color: PURPLE, font: { size: 8 } }, position: 'right' }
+        } }
+    });
+  } else { mkEmptyChart('roiChart', empty); }
 }
 
 // ── VENDAS CHARTS ────────────────────────────────────────

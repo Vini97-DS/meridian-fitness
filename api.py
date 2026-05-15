@@ -235,6 +235,15 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         "GROUP BY p.name, p.duration_months ORDER BY p.duration_months",
         (personal_id,))
 
+    # Receita e alunos por canal (para ROI chart)
+    revenue_by_channel = query(conn,
+        "SELECT s.channel, COALESCE(SUM(sub.price_paid),0) AS revenue, "
+        "COUNT(DISTINCT sub.student_id) AS students "
+        "FROM subscriptions sub JOIN students s ON s.id = sub.student_id "
+        "WHERE sub.personal_id = %s AND s.channel IS NOT NULL "
+        "GROUP BY s.channel ORDER BY revenue DESC",
+        (personal_id,))
+
     # Novos alunos por mês
     student_flow = query(conn,
         "SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month, "
@@ -272,10 +281,11 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
                             "value": float((e7[0] if e7 else {}).get("value") or 0)},
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
-        "mrr_history":     mrr_history,
-        "student_flow":    student_flow,
-        "channels":        channels,
-        "renewal_by_plan": renewal_by_plan,
+        "mrr_history":          mrr_history,
+        "student_flow":         student_flow,
+        "channels":             channels,
+        "renewal_by_plan":      renewal_by_plan,
+        "revenue_by_channel":   revenue_by_channel,
     }
 
 # ═══════════════════════════════════════════════════════════════
