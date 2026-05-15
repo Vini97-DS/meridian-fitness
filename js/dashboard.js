@@ -245,6 +245,7 @@ async function loadDashboard() {
   }
 
   renderSalesTable([]);
+  if (personalId) loadSalesTable(personalId);
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
 }
 
