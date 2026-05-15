@@ -157,16 +157,68 @@ def check_invite(email: str, conn=Depends(get_db)):
         raise HTTPException(400, "Este convite ja foi utilizado.")
     return {"ok": True}
 
+def _check_admin_key(key: str):
+    expected = os.getenv("ADMIN_KEY", "meridian-admin-2024")
+    if key != expected:
+        raise HTTPException(403, "Chave admin invalida")
+
 @app.post("/api/admin/invite")
 def add_invite(data: dict, conn=Depends(get_db)):
-    admin_key = os.getenv("ADMIN_KEY", "meridian-admin-2024")
-    if data.get("admin_key") != admin_key:
-        raise HTTPException(403, "Chave admin invalida")
+    _check_admin_key(data.get("admin_key", ""))
     email = data.get("email", "").lower().strip()
     if not email or "@" not in email:
         raise HTTPException(400, "E-mail invalido")
     execute(conn, "INSERT INTO invites (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email,))
     return {"ok": True, "email": email}
+
+@app.get("/api/admin/overview")
+def admin_overview(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    row = query(conn, """
+        SELECT
+            (SELECT COUNT(*) FROM personals)                                      AS total_personais,
+            (SELECT COUNT(*) FROM students)                                       AS total_students,
+            (SELECT COALESCE(SUM(price_paid),0) FROM subscriptions WHERE status='active') AS mrr_total,
+            (SELECT COUNT(*) FROM checkins)                                       AS total_checkins,
+            (SELECT COUNT(*) FROM invites WHERE used = false)                     AS invites_pending
+    """)
+    return row[0]
+
+@app.get("/api/admin/personais")
+def admin_personais(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    rows = query(conn, """
+        SELECT
+            p.id                                                            AS personal_id,
+            u.name,
+            u.email,
+            u.created_at,
+            COUNT(DISTINCT s.id)                                            AS total_students,
+            COUNT(DISTINCT s.id) FILTER (WHERE sub.status = 'active')      AS active_students,
+            COALESCE(SUM(sub.price_paid) FILTER (WHERE sub.status='active'), 0) AS mrr,
+            COUNT(DISTINCT sub.id)                                          AS total_subs,
+            COUNT(DISTINCT c.id)                                            AS total_checkins
+        FROM personals p
+        JOIN users u ON u.id::text = p.clerk_user_id
+        LEFT JOIN students s ON s.personal_id = p.id
+        LEFT JOIN subscriptions sub ON sub.student_id = s.id
+        LEFT JOIN checkins c ON c.student_id = s.id
+        GROUP BY p.id, u.name, u.email, u.created_at
+        ORDER BY mrr DESC
+    """)
+    return rows
+
+@app.get("/api/admin/invites")
+def admin_invites(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    rows = query(conn, "SELECT email, used, created_at FROM invites ORDER BY created_at DESC")
+    return rows
+
+@app.delete("/api/admin/invite/{email}")
+def delete_invite(email: str, admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    execute(conn, "DELETE FROM invites WHERE email = %s AND used = false", (email.lower().strip(),))
+    return {"ok": True}
 
 @app.post("/api/auth/register")
 def register(data: RegisterData, conn=Depends(get_db)):

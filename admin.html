@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meridian · Admin</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Layout base ─────────────────────────────────── */
+    body { font-family: 'Inter', system-ui, sans-serif; background: #0a0a0f; color: #e2e8f0; margin: 0; }
+
+    /* ── Login ───────────────────────────────────────── */
+    #login-screen {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+    }
+    .login-card {
+      background: #12121a; border: 1px solid #1e2030; border-radius: 16px;
+      padding: 40px 36px; width: 360px;
+    }
+    .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .login-logo-mark {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 18px; color: #fff;
+    }
+    .login-logo-text { font-size: 16px; font-weight: 600; color: #e2e8f0; }
+    .login-logo-sub  { font-size: 11px; color: #64748b; margin-top: 1px; }
+    .login-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .login-desc  { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+    .field-label { font-size: 12px; color: #94a3b8; font-weight: 500; display: block; margin-bottom: 6px; }
+    .field-input {
+      width: 100%; box-sizing: border-box; background: #0d0d14; border: 1px solid #1e2030;
+      border-radius: 8px; padding: 10px 12px; color: #e2e8f0; font-size: 14px; outline: none;
+    }
+    .field-input:focus { border-color: #6366f1; }
+    .btn-login {
+      width: 100%; margin-top: 20px; padding: 12px; background: #6366f1; border: none;
+      border-radius: 8px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-login:hover { background: #4f46e5; }
+    .alert-err {
+      background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+      color: #f87171; border-radius: 8px; padding: 10px 12px; font-size: 13px;
+      margin-bottom: 14px; display: none;
+    }
+
+    /* ── App shell ───────────────────────────────────── */
+    #app { display: none; }
+    .topbar {
+      background: #12121a; border-bottom: 1px solid #1e2030;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-mark {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff;
+    }
+    .topbar-title { font-weight: 700; font-size: 15px; }
+    .topbar-sub   { font-size: 11px; color: #64748b; }
+    .btn-logout {
+      background: transparent; border: 1px solid #1e2030; color: #94a3b8;
+      border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+    }
+    .btn-logout:hover { border-color: #ef4444; color: #f87171; }
+
+    /* ── Content ─────────────────────────────────────── */
+    .content { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+
+    /* ── KPI cards ───────────────────────────────────── */
+    .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-card {
+      background: #12121a; border: 1px solid #1e2030; border-radius: 12px; padding: 18px 20px;
+    }
+    .kpi-label { font-size: 11px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+    .kpi-val   { font-size: 26px; font-weight: 700; margin-top: 6px; color: #e2e8f0; }
+    .kpi-val.green { color: #22c55e; }
+    .kpi-val.blue  { color: #60a5fa; }
+    .kpi-val.amber { color: #f59e0b; }
+    .kpi-val.purple{ color: #a78bfa; }
+
+    /* ── Section header ──────────────────────────────── */
+    .section-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-title { font-size: 15px; font-weight: 600; }
+    .section-sub   { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+    /* ── Table ───────────────────────────────────────── */
+    .tbl-wrap { background: #12121a; border: 1px solid #1e2030; border-radius: 12px; overflow: hidden; margin-bottom: 28px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: #0d0d14; color: #64748b; font-size: 11px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .04em;
+      padding: 10px 14px; text-align: left; border-bottom: 1px solid #1e2030;
+    }
+    tbody tr { border-bottom: 1px solid #1e2030; transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(99,102,241,.04); }
+    tbody td { padding: 12px 14px; color: #cbd5e1; vertical-align: middle; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-green { background: rgba(34,197,94,.12); color: #22c55e; }
+    .badge-amber { background: rgba(245,158,11,.12); color: #f59e0b; }
+    .badge-gray  { background: rgba(100,116,139,.15); color: #94a3b8; }
+    .name-cell   { font-weight: 600; color: #e2e8f0; }
+    .email-cell  { color: #64748b; font-size: 12px; }
+    .mrr-cell    { font-weight: 700; color: #22c55e; }
+
+    /* ── Invites section ─────────────────────────────── */
+    .invite-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+    .invite-form-card {
+      background: #12121a; border: 1px solid #1e2030; border-radius: 12px; padding: 20px 22px;
+    }
+    .invite-form-card h3 { font-size: 14px; font-weight: 600; margin: 0 0 14px; }
+    .invite-row { display: flex; gap: 8px; }
+    .invite-row .field-input { flex: 1; }
+    .btn-invite {
+      background: #6366f1; border: none; color: #fff; border-radius: 8px;
+      padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .btn-invite:hover { background: #4f46e5; }
+    .invite-feedback { font-size: 12px; margin-top: 10px; min-height: 18px; }
+    .invite-feedback.ok  { color: #22c55e; }
+    .invite-feedback.err { color: #f87171; }
+
+    /* ── Empty states ────────────────────────────────── */
+    .empty { text-align: center; padding: 40px; color: #64748b; font-size: 13px; }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 900px) {
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .invite-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+      .content { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     LOGIN
+════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-mark">M</div>
+      <div>
+        <div class="login-logo-text">Meridian Admin</div>
+        <div class="login-logo-sub">Painel de Gestão</div>
+      </div>
+    </div>
+    <h2 class="login-title">Acesso Restrito</h2>
+    <p class="login-desc">Digite a chave de administrador para continuar.</p>
+    <div class="alert-err" id="login-err"></div>
+    <label class="field-label" for="admin-key-input">Chave de Admin</label>
+    <input class="field-input" id="admin-key-input" type="password" placeholder="••••••••••••" autocomplete="off" />
+    <button class="btn-login" id="btn-login-admin">Entrar</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     APP
+════════════════════════════════════════ -->
+<div id="app">
+
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-mark">M</div>
+      <div>
+        <div class="topbar-title">Meridian Admin</div>
+        <div class="topbar-sub">Painel de Gestão da Plataforma</div>
+      </div>
+    </div>
+    <button class="btn-logout" id="btn-logout">Sair</button>
+  </div>
+
+  <div class="content">
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Personais</div>
+        <div class="kpi-val purple" id="kpi-personais">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Alunos Total</div>
+        <div class="kpi-val blue" id="kpi-students">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">MRR Consolidado</div>
+        <div class="kpi-val green" id="kpi-mrr">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Checkins Total</div>
+        <div class="kpi-val" id="kpi-checkins">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Convites Pendentes</div>
+        <div class="kpi-val amber" id="kpi-invites">—</div>
+      </div>
+    </div>
+
+    <!-- Personais table -->
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Personais Cadastrados</div>
+        <div class="section-sub">Métricas por personal trainer na plataforma</div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Personal</th>
+            <th>Alunos Ativos</th>
+            <th>Total Alunos</th>
+            <th>MRR (R$)</th>
+            <th>Assinaturas</th>
+            <th>Checkins</th>
+            <th>Cadastro</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-personais">
+          <tr><td colspan="7" class="empty">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Invites -->
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Convites</div>
+        <div class="section-sub">Gerencie o acesso de novos personais à plataforma</div>
+      </div>
+    </div>
+    <div class="invite-grid">
+      <!-- List -->
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>E-mail</th>
+              <th>Status</th>
+              <th>Enviado em</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbl-invites">
+            <tr><td colspan="4" class="empty">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Add form -->
+      <div class="invite-form-card">
+        <h3>Enviar Convite</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 16px;">
+          O personal poderá criar conta em <strong style="color:#94a3b8">/primeiro-acesso</strong> com o e-mail cadastrado abaixo.
+        </p>
+        <div class="invite-row">
+          <input class="field-input" id="invite-email" type="email" placeholder="email@exemplo.com" />
+          <button class="btn-invite" id="btn-add-invite">Convidar</button>
+        </div>
+        <div class="invite-feedback" id="invite-feedback"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+// ── State ────────────────────────────────────────────
+let _adminKey = '';
+
+function fmt(n)   { return 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtDate(s){ if (!s) return '—'; return new Date(s).toLocaleDateString('pt-BR'); }
+
+// ── Admin API ─────────────────────────────────────────
+async function adminGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch('/api/admin/' + path + sep + 'admin_key=' + encodeURIComponent(_adminKey));
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ' + res.status);
+  }
+  return res.json();
+}
+
+async function adminPost(path, body) {
+  const res = await fetch('/api/admin/' + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, admin_key: _adminKey }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ' + res.status);
+  }
+  return res.json();
+}
+
+async function adminDelete(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch('/api/admin/' + path + sep + 'admin_key=' + encodeURIComponent(_adminKey), { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ' + res.status);
+  }
+  return res.json();
+}
+
+// ── Login ─────────────────────────────────────────────
+document.getElementById('btn-login-admin').addEventListener('click', tryLogin);
+document.getElementById('admin-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
+async function tryLogin() {
+  const key = document.getElementById('admin-key-input').value.trim();
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  if (!key) { errEl.textContent = 'Informe a chave de admin.'; errEl.style.display = 'block'; return; }
+  _adminKey = key;
+  try {
+    await adminGet('overview');
+    sessionStorage.setItem('meridian_admin_key', key);
+    showApp();
+  } catch (err) {
+    errEl.textContent = err.message.includes('403') || err.message.toLowerCase().includes('chave')
+      ? 'Chave incorreta. Tente novamente.'
+      : 'Erro ao conectar. Verifique a chave.';
+    errEl.style.display = 'block';
+    _adminKey = '';
+  }
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadAll();
+}
+
+// ── Logout ────────────────────────────────────────────
+document.getElementById('btn-logout').addEventListener('click', () => {
+  sessionStorage.removeItem('meridian_admin_key');
+  _adminKey = '';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('admin-key-input').value = '';
+});
+
+// ── Load all ──────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadOverview(), loadPersonais(), loadInvites()]);
+}
+
+async function loadOverview() {
+  try {
+    const d = await adminGet('overview');
+    document.getElementById('kpi-personais').textContent = d.total_personais ?? '0';
+    document.getElementById('kpi-students').textContent  = d.total_students ?? '0';
+    document.getElementById('kpi-mrr').textContent       = fmt(d.mrr_total ?? 0);
+    document.getElementById('kpi-checkins').textContent  = d.total_checkins ?? '0';
+    document.getElementById('kpi-invites').textContent   = d.invites_pending ?? '0';
+  } catch (e) { console.error('overview', e); }
+}
+
+async function loadPersonais() {
+  const tbody = document.getElementById('tbl-personais');
+  try {
+    const rows = await adminGet('personais');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum personal cadastrado ainda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const activeClass = r.active_students > 0 ? 'badge-green' : 'badge-gray';
+      return `
+        <tr>
+          <td>
+            <div class="name-cell">${esc(r.name)}</div>
+            <div class="email-cell">${esc(r.email)}</div>
+          </td>
+          <td><span class="badge ${activeClass}">${r.active_students}</span></td>
+          <td>${r.total_students}</td>
+          <td class="mrr-cell">${fmt(r.mrr)}</td>
+          <td>${r.total_subs}</td>
+          <td>${r.total_checkins}</td>
+          <td>${fmtDate(r.created_at)}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function loadInvites() {
+  const tbody = document.getElementById('tbl-invites');
+  try {
+    const rows = await adminGet('invites');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum convite enviado ainda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const badge = r.used
+        ? '<span class="badge badge-gray">Usado</span>'
+        : '<span class="badge badge-amber">Pendente</span>';
+      const del = r.used ? '' : `<button onclick="removeInvite('${esc(r.email)}')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px;" title="Remover">✕</button>`;
+      return `
+        <tr>
+          <td>${esc(r.email)}</td>
+          <td>${badge}</td>
+          <td>${fmtDate(r.created_at)}</td>
+          <td>${del}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">Erro: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ── Add invite ────────────────────────────────────────
+document.getElementById('btn-add-invite').addEventListener('click', addInvite);
+document.getElementById('invite-email').addEventListener('keydown', e => { if (e.key === 'Enter') addInvite(); });
+
+async function addInvite() {
+  const input = document.getElementById('invite-email');
+  const fb    = document.getElementById('invite-feedback');
+  const email = input.value.trim().toLowerCase();
+  fb.textContent = '';
+  fb.className = 'invite-feedback';
+  if (!email || !email.includes('@')) {
+    fb.textContent = 'Informe um e-mail válido.';
+    fb.className = 'invite-feedback err';
+    return;
+  }
+  document.getElementById('btn-add-invite').disabled = true;
+  try {
+    await adminPost('invite', { email });
+    fb.textContent = `Convite adicionado: ${email}`;
+    fb.className = 'invite-feedback ok';
+    input.value = '';
+    await Promise.all([loadInvites(), loadOverview()]);
+  } catch (e) {
+    fb.textContent = e.message;
+    fb.className = 'invite-feedback err';
+  }
+  document.getElementById('btn-add-invite').disabled = false;
+}
+
+async function removeInvite(email) {
+  if (!confirm(`Remover convite de ${email}?`)) return;
+  try {
+    await adminDelete('invite/' + encodeURIComponent(email));
+    await Promise.all([loadInvites(), loadOverview()]);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// ── XSS helper ────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Auto-login from session ───────────────────────────
+const savedKey = sessionStorage.getItem('meridian_admin_key');
+if (savedKey) {
+  _adminKey = savedKey;
+  adminGet('overview')
+    .then(() => showApp())
+    .catch(() => { sessionStorage.removeItem('meridian_admin_key'); _adminKey = ''; });
+}
+</script>
+</body>
+</html>

@@ -22,6 +22,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "admin.html",
+      "use": "@vercel/static"
+    },
+    {
       "src": "css/**",
       "use": "@vercel/static"
     },
@@ -37,6 +41,7 @@
     { "src": "/js/(.*)",  "dest": "/js/$1"  },
     { "src": "/dashboard",       "dest": "/dashboard.html" },
     { "src": "/primeiro-acesso", "dest": "/primeiro-acesso.html" },
+    { "src": "/admin",           "dest": "/admin.html" },
     { "src": "/",                "dest": "/index.html" }
   ]
 }
