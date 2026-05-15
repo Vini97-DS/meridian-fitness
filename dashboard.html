@@ -485,12 +485,12 @@ canvas{background:transparent!important}
         <h1 id="dash-user-h1">— <em>Personal Trainer</em></h1>
       </div>
     </div>
-    <div class="header-sub">10 anos de carreira · Online + Presencial · Dashboard de Gestão & Resultados</div>
+    <div class="header-sub" id="dash-user-bio">10 anos de carreira · Online + Presencial · Dashboard de Gestão &amp; Resultados</div>
   </div>
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
     <div class="header-meta">
       <div class="meta-pill">Alunos Ativos <span><span id="kpi-alunos-val">0</span></span></div>
-      <div class="meta-pill">MRR <span>R$ 89.400</span></div>
+      <div class="meta-pill">MRR <span id="top-bar-mrr">R$0</span></div>
       <div class="meta-pill">Atualizado <span>Mai 2026</span></div>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
@@ -1175,7 +1175,7 @@ canvas{background:transparent!important}
           </div>
           <div class="v-field">
             <label class="v-label">Canal de origem</label>
-            <select class="v-select" id="cfg-aluno-canal">
+            <select class="v-select" id="cfg-aluno-canal" onchange="toggleIndicacaoField(this)">
               <option value="instagram">Instagram</option>
               <option value="indicacao">Indicação</option>
               <option value="youtube">YouTube</option>
@@ -1184,6 +1184,10 @@ canvas{background:transparent!important}
               <option value="presencial">Presencial</option>
               <option value="outro">Outro</option>
             </select>
+          </div>
+          <div class="v-field" id="cfg-indicacao-field" style="display:none">
+            <label class="v-label">Quem indicou?</label>
+            <input class="v-input" id="cfg-aluno-indicacao" type="text" placeholder="Nome do aluno ou pessoa que indicou" />
           </div>
           <div class="v-field">
             <label class="v-label">Objetivo</label>

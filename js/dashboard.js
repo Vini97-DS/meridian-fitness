@@ -191,14 +191,18 @@ async function loadDashboard() {
   }
 
   // Header
-  const name     = session.name || 'Personal';
-  const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const name        = session.name || 'Personal';
+  const initials    = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const especialidade = session.especialidade || '';
+  const bio           = session.bio || '10 anos de carreira · Online + Presencial · Dashboard de Gestão & Resultados';
   const h1 = document.getElementById('dash-user-h1');
   if (h1) h1.innerHTML = name + ' — <em>Personal Trainer</em>';
   const nameEl   = document.getElementById('dash-user-name');
   const avatarEl = document.getElementById('dash-user-avatar');
-  if (nameEl)   nameEl.textContent = name;
+  const bioEl    = document.getElementById('dash-user-bio');
+  if (nameEl)   nameEl.textContent   = name;
   if (avatarEl) avatarEl.textContent = initials;
+  if (bioEl)    bioEl.textContent    = bio;
 
   // Init gráficos vazios enquanto carrega
   initBICharts(null);
@@ -243,6 +247,7 @@ async function loadDashboard() {
   }
 
   renderSalesTable([]);
+  if (personalId) loadSalesTable(personalId);
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
 }
 
@@ -259,10 +264,15 @@ function updateKPICards(m) {
   set('kpi-alunos-sub', alunos > 0 ? alunos + ' alunos ativos' : 'Nenhum aluno ainda');
   set('kpi-ticket-sub', ticket > 0 ? 'Ticket médio atual' : 'Sem assinaturas ativas');
 
-  // Header pills
+  // Header pills + top bar
   const pills = document.querySelectorAll('.meta-pill span');
   if (pills[0]) pills[0].textContent = alunos;
   if (pills[1]) pills[1].textContent = fmtBRL(mrr);
+  // Top right scorecards
+  const topAlunos = document.getElementById('top-bar-alunos');
+  const topMrr    = document.getElementById('top-bar-mrr');
+  if (topAlunos) topAlunos.textContent = alunos;
+  if (topMrr)    topMrr.textContent    = fmtBRL(mrr);
 
   // Outros KPIs — zerados até ter dados
   set('kpi-renovacao-val', m?.renewal_rate ? m.renewal_rate + '%' : '—');
@@ -604,6 +614,12 @@ function updateStudent() {
   if (!sel?.value) return;
   const s = students[sel.value];
   if (!s) return;
+
+  // Load checkins once per student
+  if (!s._checkinsLoaded) {
+    s._checkinsLoaded = true;
+    loadStudentCheckins(sel.value);
+  }
 
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('studentAvatar',  s.avatar);
@@ -1306,18 +1322,95 @@ async function encerrarContrato(studentId,name){
   } catch(err){alert('Erro: '+err.message);}
 }
 function salvarPerfil(){
-  const nome=document.getElementById('cfg-nome').value.trim();
-  const okEl=document.getElementById('cfg-perfil-ok');
+  const nome  = document.getElementById('cfg-nome').value.trim();
+  const bio   = document.getElementById('cfg-bio')?.value.trim() || '';
+  const esp   = document.getElementById('cfg-especialidade')?.value.trim() || '';
+  const okEl  = document.getElementById('cfg-perfil-ok');
   if(!nome) return;
   const session=JSON.parse(localStorage.getItem('mf_user')||'null');
-  if(session){session.name=nome;localStorage.setItem('mf_user',JSON.stringify(session));}
-  const h1=document.getElementById('dash-user-h1');
-  if(h1) h1.innerHTML=nome+' — <em>Personal Trainer</em>';
-  const nameEl=document.getElementById('dash-user-name');
-  if(nameEl) nameEl.textContent=nome;
+  if(session){
+    session.name = nome;
+    session.bio  = bio || session.bio;
+    session.especialidade = esp || session.especialidade;
+    localStorage.setItem('mf_user', JSON.stringify(session));
+  }
+  const h1 = document.getElementById('dash-user-h1');
+  if(h1) h1.innerHTML = nome+' — <em>Personal Trainer</em>';
+  const nameEl = document.getElementById('dash-user-name');
+  if(nameEl) nameEl.textContent = nome;
+  const bioEl  = document.getElementById('dash-user-bio');
+  if(bioEl && bio) bioEl.textContent = bio;
   okEl.style.display='block';
   setTimeout(()=>okEl.style.display='none',2500);
 }
 
 // ── INIT ─────────────────────────────────────────────────
+
+
+function toggleIndicacaoField(sel) {
+  const field = document.getElementById('cfg-indicacao-field');
+  if (field) field.style.display = sel.value === 'indicacao' ? 'block' : 'none';
+}
+
+// ── GERAR LINK DE FORMULÁRIO ─────────────────────────────
+async function gerarLinkFormulario(tipo) {
+  const sel        = document.getElementById('studentSelect');
+  const studentId  = sel?.value;
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session?.personal_id || session?.id;
+  if (!studentId) { alert('Selecione um aluno primeiro.'); return; }
+  const labels = { semanal:'Semanal', mensal:'Mensal', semestral:'Semestral' };
+  const btn = document.getElementById('btn-gerar-link-' + tipo);
+  if (btn) { btn.disabled=true; btn.textContent='Gerando...'; }
+  try {
+    const res = await api('/form/generate', { method:'POST', body:JSON.stringify({
+      student_id: studentId, personal_id: personalId, type: tipo
+    })});
+    const url = window.location.origin + '/form/' + res.token;
+    await navigator.clipboard.writeText(url).catch(()=>{});
+    const resultEl = document.getElementById('form-link-result');
+    const urlEl    = document.getElementById('form-link-url');
+    if (urlEl)    urlEl.textContent    = url;
+    if (resultEl) resultEl.style.display = 'block';
+  } catch(err) { alert('Erro ao gerar link: ' + err.message); }
+  if (btn) { btn.disabled=false; btn.textContent='Gerar Link ' + (labels[tipo]||tipo); }
+}
+
+function copyFormLink() {
+  const url = document.getElementById('form-link-url')?.textContent;
+  navigator.clipboard.writeText(url||'').catch(()=>{});
+  const btn = document.getElementById('btn-copy-form-link');
+  if (btn) { btn.textContent='✓ Copiado!'; setTimeout(()=>btn.textContent='Copiar Link',2000); }
+}
+
+// ── SALES TABLE FROM SUBSCRIPTIONS ───────────────────────
+async function loadSalesTable(personalId) {
+  const data = await api('/students/' + personalId).catch(()=>null);
+  if (!data?.length) { renderSalesTable([]); return; }
+  // Build sales rows from student subscriptions
+  const rows = data.map(s => ({
+    created_at: s.starts_at,
+    name:       s.name,
+    plan_name:  s.plan_name,
+    channel:    s.channel,
+    price_paid: s.price_paid,
+    status:     s.status || 'active',
+  }));
+  renderSalesTable(rows);
+  // Update mix chart with plan distribution
+  updateMixChart(data);
+}
+
+function updateMixChart(students) {
+  if (!charts['vMixChart'] || !students?.length) return;
+  const planCount = {};
+  students.forEach(s => {
+    const k = s.plan_name || 'Outro';
+    planCount[k] = (planCount[k]||0) + 1;
+  });
+  charts['vMixChart'].data.labels   = Object.keys(planCount);
+  charts['vMixChart'].data.datasets[0].data = Object.values(planCount);
+  charts['vMixChart'].update();
+}
+
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
