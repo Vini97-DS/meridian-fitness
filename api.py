@@ -295,7 +295,23 @@ class StudentCreate(BaseModel):
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    return query(conn, "SELECT * FROM v_active_students WHERE personal_id = %s ORDER BY days_to_expire ASC", (personal_id,))
+    return query(conn, """
+        SELECT DISTINCT ON (s.id)
+            s.id, s.name, s.phone, s.email, s.goal, s.channel,
+            s.weight_initial, s.weight_current, s.bf_initial, s.bf_current,
+            s.created_at AS student_since,
+            sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at, sub.status,
+            p.name AS plan_name, p.duration_months,
+            (sub.expires_at - CURRENT_DATE) AS days_to_expire,
+            COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2 WHERE s2.student_id=s.id),0) AS ltv_total,
+            GREATEST((SELECT COUNT(*) FROM subscriptions s3 WHERE s3.student_id=s.id)-1,0) AS renewals_count
+        FROM students s
+        JOIN subscriptions sub ON sub.student_id = s.id
+        JOIN plans p ON p.id = sub.plan_id
+        WHERE s.personal_id = %s
+          AND COALESCE(s.status,'active') != 'cancelled'
+        ORDER BY s.id, sub.starts_at DESC
+    """, (personal_id,))
 
 @app.post("/api/students")
 def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
