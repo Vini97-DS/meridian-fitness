@@ -463,3 +463,86 @@ def cancel_student(student_id: str, conn=Depends(get_db), _=Depends(get_current_
     execute(conn, "UPDATE subscriptions SET status='cancelled', updated_at=NOW() WHERE student_id=%s AND status='active'", (student_id,))
     execute(conn, "UPDATE students SET status='cancelled', updated_at=NOW() WHERE id=%s", (student_id,))
     return {"ok": True, "student_id": student_id}
+# ═══════════════════════════════════════════════════════════════
+#  FORMULÁRIO PÚBLICO POR TOKEN
+# ═══════════════════════════════════════════════════════════════
+import secrets
+
+@app.post("/api/form/generate")
+def generate_form_token(data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
+    student_id  = data.get("student_id")
+    personal_id = data.get("personal_id")
+    form_type   = data.get("type", "semanal")
+    if not student_id or not personal_id:
+        raise HTTPException(400, "student_id e personal_id obrigatorios")
+    token = secrets.token_urlsafe(16)
+    execute(conn, """
+        INSERT INTO form_tokens (token, student_id, personal_id, form_type)
+        VALUES (%s, %s, %s, %s)
+    """, (token, student_id, personal_id, form_type))
+    return {"token": token, "url": f"/form/{token}"}
+
+@app.get("/api/form/{token}")
+def get_form(token: str, conn=Depends(get_db)):
+    rows = query(conn, """
+        SELECT ft.token, ft.form_type,
+               ft.student_id::text, ft.personal_id::text,
+               s.name AS student_name, s.goal,
+               p.name AS personal_name,
+               (SELECT (sub.expires_at - CURRENT_DATE)
+                FROM subscriptions sub
+                WHERE sub.student_id = ft.student_id
+                  AND sub.status = 'active'
+                ORDER BY sub.starts_at DESC LIMIT 1
+               ) AS days_to_expire
+        FROM form_tokens ft
+        JOIN students  s ON s.id = ft.student_id
+        JOIN personals p ON p.id = ft.personal_id
+        WHERE ft.token = %s
+          AND ft.expires_at > NOW()
+          AND ft.used = false
+    """, (token,))
+    if not rows:
+        raise HTTPException(404, "Link invalido ou expirado")
+    row = dict(rows[0])
+    if row.get('days_to_expire') is not None:
+        row['days_to_expire'] = int(row['days_to_expire'])
+    return row
+
+@app.post("/api/form/{token}")
+def submit_form(token: str, data: dict, conn=Depends(get_db)):
+    rows = query(conn, """
+        SELECT * FROM form_tokens
+        WHERE token = %s AND expires_at > NOW() AND used = false
+    """, (token,))
+    if not rows:
+        raise HTTPException(404, "Link invalido ou expirado")
+    ft = rows[0]
+    execute(conn, """
+        INSERT INTO checkins (student_id, personal_id, type,
+            training_feedback, trainings_done, had_pain, pain_description,
+            nutrition_notes, mood_score, energy_score, weight_reported,
+            general_notes, responded_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+    """, (
+        str(ft["student_id"]), str(ft["personal_id"]),
+        data.get("form_type", ft.get("form_type","semanal")),
+        data.get("training_feedback"),
+        data.get("trainings_done"),
+        data.get("had_pain", False),
+        data.get("pain_description"),
+        data.get("nutrition_notes"),
+        data.get("mood_score"),
+        data.get("energy_score"),
+        data.get("weight_reported"),
+        data.get("general_notes"),
+    ))
+    if data.get("weight_reported"):
+        execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
+                (data["weight_reported"], str(ft["student_id"])))
+    execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
+    return {"ok": True}
+
+@app.get("/form/{token}")
+def serve_form(token: str):
+    return FileResponse("form.html")
