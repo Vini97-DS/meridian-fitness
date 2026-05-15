@@ -406,6 +406,149 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <button class="submit-btn" onclick="submitTrimestral()">Enviar Avaliação Trimestral</button>
       </div>
     </div>
+
+    <!-- ══ SEMESTRAL ══ -->
+    <div id="form-semestral" style="display:none">
+      <div class="form-card">
+        <div class="section-title">Avaliação Semestral — Treino & Resultados</div>
+
+        <div class="field">
+          <div class="field-label">Frequência média de treinos/semana <span class="req">*</span></div>
+          <div class="scale" id="se-scale-freq">
+            <button class="scale-btn" data-val="0">0</button>
+            <button class="scale-btn" data-val="1">1</button>
+            <button class="scale-btn" data-val="2">2</button>
+            <button class="scale-btn" data-val="3">3</button>
+            <button class="scale-btn" data-val="4">4</button>
+            <button class="scale-btn" data-val="5">5</button>
+            <button class="scale-btn" data-val="6">6+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Intensidade média dos treinos <span class="req">*</span></div>
+          <div class="scale" id="se-scale-intensidade">
+            <button class="scale-btn" data-val="1">1<br><span style="font-size:12px">😴</span></button>
+            <button class="scale-btn" data-val="2">2<br><span style="font-size:12px">🚶</span></button>
+            <button class="scale-btn" data-val="3">3<br><span style="font-size:12px">🏃</span></button>
+            <button class="scale-btn" data-val="4">4<br><span style="font-size:12px">💪</span></button>
+            <button class="scale-btn" data-val="5">5<br><span style="font-size:12px">🔥</span></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Dor ou lesão no período?</div>
+          <textarea class="field-input" id="se-dor" rows="2" placeholder="Descreva qualquer dor ou lesão..."></textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Aderência alimentar <span class="req">*</span></div>
+          <div class="scale" id="se-scale-alim">
+            <button class="scale-btn" data-val="1">1<br><span style="font-size:12px">❌</span></button>
+            <button class="scale-btn" data-val="2">2<br><span style="font-size:12px">😬</span></button>
+            <button class="scale-btn" data-val="3">3<br><span style="font-size:12px">😐</span></button>
+            <button class="scale-btn" data-val="4">4<br><span style="font-size:12px">😊</span></button>
+            <button class="scale-btn" data-val="5">5<br><span style="font-size:12px">✅</span></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Humor & Disposição <span class="req">*</span></div>
+          <div class="scale" id="se-scale-humor">
+            <button class="scale-btn" data-val="1">1<br><span style="font-size:12px">😞</span></button>
+            <button class="scale-btn" data-val="2">2<br><span style="font-size:12px">😐</span></button>
+            <button class="scale-btn" data-val="3">3<br><span style="font-size:12px">🙂</span></button>
+            <button class="scale-btn" data-val="4">4<br><span style="font-size:12px">😊</span></button>
+            <button class="scale-btn" data-val="5">5<br><span style="font-size:12px">🔥</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="section-title">Composição Corporal & Medidas</div>
+
+        <div class="field">
+          <div class="field-label">Peso atual (kg) <span class="req">*</span></div>
+          <input type="number" class="field-input" id="se-peso" placeholder="Ex: 72.5" step="0.1" style="height:42px">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="field">
+            <div class="field-label">Cintura (cm)</div>
+            <input type="number" class="field-input" id="se-cintura" placeholder="Ex: 80" style="height:42px">
+          </div>
+          <div class="field">
+            <div class="field-label">Quadril (cm)</div>
+            <input type="number" class="field-input" id="se-quadril" placeholder="Ex: 95" style="height:42px">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Fotos de progresso <span class="req">*</span></div>
+          <div class="photo-grid">
+            <div class="photo-upload" onclick="document.getElementById('se-foto-frente').click()">
+              <input type="file" id="se-foto-frente" accept="image/*" onchange="previewPhoto(this,'se-prev-frente')">
+              <img id="se-prev-frente" class="photo-preview">
+              <div class="photo-icon">📷</div>
+              <div class="photo-label">Frontal</div>
+            </div>
+            <div class="photo-upload" onclick="document.getElementById('se-foto-costas').click()">
+              <input type="file" id="se-foto-costas" accept="image/*" onchange="previewPhoto(this,'se-prev-costas')">
+              <img id="se-prev-costas" class="photo-preview">
+              <div class="photo-icon">📷</div>
+              <div class="photo-label">Costas</div>
+            </div>
+            <div class="photo-upload" onclick="document.getElementById('se-foto-esq').click()">
+              <input type="file" id="se-foto-esq" accept="image/*" onchange="previewPhoto(this,'se-prev-esq')">
+              <img id="se-prev-esq" class="photo-preview">
+              <div class="photo-icon">📷</div>
+              <div class="photo-label">Lado Esquerdo</div>
+            </div>
+            <div class="photo-upload" onclick="document.getElementById('se-foto-dir').click()">
+              <input type="file" id="se-foto-dir" accept="image/*" onchange="previewPhoto(this,'se-prev-dir')">
+              <img id="se-prev-dir" class="photo-preview">
+              <div class="photo-icon">📷</div>
+              <div class="photo-label">Lado Direito</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="section-title">Avaliação Semestral & Feedback</div>
+
+        <div class="field">
+          <div class="field-label">Satisfação geral com os 6 meses (1-5) <span class="req">*</span></div>
+          <div class="scale" id="se-scale-satisfacao">
+            <button class="scale-btn" data-val="1">1<br><span style="font-size:12px">😞</span></button>
+            <button class="scale-btn" data-val="2">2<br><span style="font-size:12px">😐</span></button>
+            <button class="scale-btn" data-val="3">3<br><span style="font-size:12px">🙂</span></button>
+            <button class="scale-btn" data-val="4">4<br><span style="font-size:12px">😊</span></button>
+            <button class="scale-btn" data-val="5">5<br><span style="font-size:12px">🌟</span></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Principais resultados nos 6 meses <span class="req">*</span></div>
+          <textarea class="field-input" id="se-resultados" rows="3" placeholder="O que melhorou? Estética, força, saúde, disposição..."></textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Pontos a melhorar no próximo semestre</div>
+          <textarea class="field-input" id="se-melhorar" rows="2" placeholder="Treino, alimentação, rotina, hábitos..."></textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Observações gerais (opcional)</div>
+          <textarea class="field-input" id="se-obs" rows="3" placeholder="Qualquer outra informação relevante..."></textarea>
+        </div>
+
+        <div class="divider"></div>
+        <div id="se-error" style="display:none;margin-bottom:16px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+        <button class="submit-btn" onclick="submitSemestral()">Enviar Avaliação Semestral</button>
+      </div>
+    </div>
+
   </div>
 
   <div id="success-card" class="success-card">
@@ -466,7 +609,7 @@ async function loadForm() {
     document.getElementById('student-name').textContent  = formData.student_name || '—';
     document.getElementById('personal-name').textContent = formData.personal_name || '—';
 
-    const types = { semanal:'SEMANAL', mensal:'MENSAL', trimestral:'TRIMESTRAL' };
+    const types = { semanal:'SEMANAL', mensal:'MENSAL', trimestral:'TRIMESTRAL', semestral:'SEMESTRAL' };
     document.getElementById('form-type-badge').textContent = types[formData.form_type] || 'SEMANAL';
 
     // Show correct form
@@ -657,6 +800,63 @@ async function submitTrimestral() {
   } catch(err) {
     showError('t-error', err.message);
     btn.disabled = false; btn.textContent = 'Enviar Avaliação Trimestral';
+  }
+}
+
+// ── Semestral ─────────────────────────────────────────────
+async function submitSemestral() {
+  const freq        = getScale('se-scale-freq');
+  const intensidade = getScale('se-scale-intensidade');
+  const alim        = getScale('se-scale-alim');
+  const humor       = getScale('se-scale-humor');
+  const satisfacao  = getScale('se-scale-satisfacao');
+  const peso        = getVal('se-peso');
+  const resultados  = getVal('se-resultados');
+  const errEl       = document.getElementById('se-error');
+  errEl.style.display = 'none';
+
+  if (!freq)       { showError('se-error','Selecione a frequência.'); return; }
+  if (!intensidade){ showError('se-error','Selecione a intensidade.'); return; }
+  if (!alim)       { showError('se-error','Selecione a aderência alimentar.'); return; }
+  if (!humor)      { showError('se-error','Selecione o humor.'); return; }
+  if (!satisfacao) { showError('se-error','Selecione a satisfação.'); return; }
+  if (!peso)       { showError('se-error','Informe o peso atual.'); return; }
+  if (!resultados) { showError('se-error','Descreva os principais resultados.'); return; }
+
+  const btn = document.querySelector('#form-semestral .submit-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+
+  try {
+    const [frente, costas, esq, dir] = await Promise.all([
+      photoToBase64('se-foto-frente'),
+      photoToBase64('se-foto-costas'),
+      photoToBase64('se-foto-esq'),
+      photoToBase64('se-foto-dir'),
+    ]);
+
+    await postForm({
+      form_type:         'semestral',
+      trainings_done:    parseInt(freq),
+      intensity_score:   parseInt(intensidade),
+      nutrition_score:   parseInt(alim),
+      mood_score:        parseInt(humor),
+      energy_score:      parseInt(humor),
+      satisfaction_score:parseInt(satisfacao),
+      had_pain:          !!getVal('se-dor'),
+      pain_description:  getVal('se-dor'),
+      weight_reported:   parseFloat(peso),
+      waist_cm:          parseFloat(getVal('se-cintura')) || null,
+      hip_cm:            parseFloat(getVal('se-quadril')) || null,
+      results_text:      resultados,
+      improvement_text:  getVal('se-melhorar'),
+      general_notes:     getVal('se-obs'),
+      training_feedback: 'Semestral · ' + resultados.substring(0,80),
+      photos:            { frente, costas, esq, dir },
+    });
+    showSuccess();
+  } catch(err) {
+    showError('se-error', err.message);
+    btn.disabled = false; btn.textContent = 'Enviar Avaliação Semestral';
   }
 }
 

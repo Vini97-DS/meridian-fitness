@@ -153,10 +153,8 @@ function initFirstAccess() {
   if (getToken()) { window.location.href = '/dashboard'; return; }
 
   document.getElementById('s1-btn')?.addEventListener('click', step1Next);
-  ['s1-name','s1-email'].forEach(id =>
-    document.getElementById(id)
-      ?.addEventListener('keydown', e => { if (e.key === 'Enter') step1Next(); })
-  );
+  document.getElementById('s1-email')
+    ?.addEventListener('keydown', e => { if (e.key === 'Enter') step1Next(); });
 
   document.getElementById('toggle-s2')
     ?.addEventListener('click', () => toggleEye('s2-pass', 'toggle-s2'));
@@ -165,7 +163,7 @@ function initFirstAccess() {
   document.getElementById('s2-pass')
     ?.addEventListener('input', e => checkStrength(e.target.value));
   document.getElementById('s2-btn')?.addEventListener('click', step2Next);
-  ['s2-pass','s2-pass2'].forEach(id =>
+  ['s2-name','s2-pass','s2-pass2'].forEach(id =>
     document.getElementById(id)
       ?.addEventListener('keydown', e => { if (e.key === 'Enter') step2Next(); })
   );
@@ -174,22 +172,29 @@ function initFirstAccess() {
     ?.addEventListener('click', () => { window.location.href = '/dashboard'; });
 }
 
-function step1Next() {
-  const name  = document.getElementById('s1-name')?.value.trim() || '';
+async function step1Next() {
   const email = document.getElementById('s1-email')?.value.trim().toLowerCase() || '';
   hideError('s1-error');
-  if (!name)                         { showError('s1-error', 'Informe seu nome completo.'); return; }
-  if (!email || !email.includes('@')) { showError('s1-error', 'Informe um e-mail valido.');  return; }
-  window._faName  = name;
-  window._faEmail = email;
-  goToStep(2);
+  if (!email || !email.includes('@')) { showError('s1-error', 'Informe um e-mail válido.'); return; }
+
+  setLoading('s1-btn', true, 'Verificando...');
+  try {
+    await apiCall('/auth/check-invite?email=' + encodeURIComponent(email));
+    window._faEmail = email;
+    goToStep(2);
+  } catch(err) {
+    showError('s1-error', err.message);
+  }
+  setLoading('s1-btn', false);
 }
 
 async function step2Next() {
+  const name  = document.getElementById('s2-name')?.value.trim() || '';
   const pass  = document.getElementById('s2-pass')?.value  || '';
   const pass2 = document.getElementById('s2-pass2')?.value || '';
   hideError('s2-error');
 
+  if (!name) { showError('s2-error', 'Informe seu nome completo.'); return; }
   const c = checkStrength(pass);
   if (!c.len || !c.upper || !c.num || !c.special) {
     showError('s2-error', 'A senha nao atende todos os requisitos.'); return;
@@ -202,7 +207,7 @@ async function step2Next() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: window._faName, email: window._faEmail, password: pass }),
+      body: JSON.stringify({ name, email: window._faEmail, password: pass }),
     });
     const data = await res.json();
 

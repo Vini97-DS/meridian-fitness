@@ -122,9 +122,17 @@ def create_users_table():
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS invites (
+                    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    email      TEXT UNIQUE NOT NULL,
+                    used       BOOLEAN DEFAULT false,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
             conn.commit()
         conn.close()
-        print("Tabela users OK")
+        print("Tabelas users + invites OK")
     except Exception as e:
         print(f"Erro startup (nao critico): {e}")
 
@@ -140,8 +148,33 @@ class LoginData(BaseModel):
     email:    str
     password: str
 
+@app.get("/api/auth/check-invite")
+def check_invite(email: str, conn=Depends(get_db)):
+    rows = query(conn, "SELECT id, used FROM invites WHERE email = %s", (email.lower().strip(),))
+    if not rows:
+        raise HTTPException(404, "E-mail nao encontrado. Solicite um convite ao administrador.")
+    if rows[0]["used"]:
+        raise HTTPException(400, "Este convite ja foi utilizado.")
+    return {"ok": True}
+
+@app.post("/api/admin/invite")
+def add_invite(data: dict, conn=Depends(get_db)):
+    admin_key = os.getenv("ADMIN_KEY", "meridian-admin-2024")
+    if data.get("admin_key") != admin_key:
+        raise HTTPException(403, "Chave admin invalida")
+    email = data.get("email", "").lower().strip()
+    if not email or "@" not in email:
+        raise HTTPException(400, "E-mail invalido")
+    execute(conn, "INSERT INTO invites (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email,))
+    return {"ok": True, "email": email}
+
 @app.post("/api/auth/register")
 def register(data: RegisterData, conn=Depends(get_db)):
+    invite = query(conn, "SELECT id, used FROM invites WHERE email = %s", (data.email.lower().strip(),))
+    if not invite:
+        raise HTTPException(400, "E-mail nao autorizado. Solicite um convite.")
+    if invite[0]["used"]:
+        raise HTTPException(400, "Este convite ja foi utilizado.")
     existing = query(conn, "SELECT id FROM users WHERE email = %s", (data.email.lower(),))
     if existing:
         raise HTTPException(status_code=400, detail="Email ja cadastrado")
@@ -153,6 +186,7 @@ def register(data: RegisterData, conn=Depends(get_db)):
         VALUES (%s, %s, %s)
         RETURNING id, name, email
     """, (data.name.strip(), data.email.lower().strip(), hashed))
+    execute(conn, "UPDATE invites SET used=true WHERE email=%s", (data.email.lower().strip(),))
     token = create_token(str(user["id"]), user["email"], user["name"])
     return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
 
@@ -564,12 +598,13 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
     if not rows:
         raise HTTPException(404, "Link invalido ou expirado")
     ft = rows[0]
-    execute(conn, """
+    checkin = execute(conn, """
         INSERT INTO checkins (student_id, personal_id, type,
             training_feedback, trainings_done, had_pain, pain_description,
             nutrition_notes, mood_score, energy_score, weight_reported,
             general_notes, responded_at)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        RETURNING id
     """, (
         str(ft["student_id"]), str(ft["personal_id"]),
         data.get("form_type", ft.get("form_type","semanal")),
@@ -583,9 +618,19 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         data.get("weight_reported"),
         data.get("general_notes"),
     ))
+    checkin_id = checkin.get("id")
     if data.get("weight_reported"):
         execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
                 (data["weight_reported"], str(ft["student_id"])))
+    angle_map = {"frente": "frontal", "costas": "costas", "esq": "esquerdo", "dir": "direito"}
+    for key, b64 in (data.get("photos") or {}).items():
+        if b64:
+            angle = angle_map.get(key, key)
+            execute(conn, """
+                INSERT INTO progress_photos (student_id, checkin_id, cloudinary_id, url, angle, taken_at)
+                VALUES (%s, %s, %s, %s, %s, NOW()::date)
+            """, (str(ft["student_id"]), str(checkin_id) if checkin_id else None,
+                  "form-upload", "data:image/jpeg;base64," + b64, angle))
     execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
     return {"ok": True}
 

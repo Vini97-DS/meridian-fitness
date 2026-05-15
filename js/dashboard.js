@@ -17,6 +17,59 @@ Chart.defaults.color = SILV;
 Chart.defaults.font.family = 'DM Mono, monospace';
 Chart.defaults.maintainAspectRatio = false;
 
+// ── PHOTO CAROUSEL ──────────────────────────────────────
+let _carouselIdx = 0;
+let _carouselPhotos = []; // [{angle, label, photo}]
+const _carouselAngles = [
+  { key:'frontal',   label:'FRONTAL'   },
+  { key:'costas',    label:'COSTAS'    },
+  { key:'esquerdo',  label:'ESQUERDO'  },
+  { key:'direito',   label:'DIREITO'   },
+];
+
+function renderCarouselFrame() {
+  const el = document.getElementById('photo-compare');
+  if (!el || !_carouselPhotos.length) return;
+  const cur = _carouselPhotos[_carouselIdx];
+  const hasPhoto = cur.photo?.url;
+  const imgHtml = hasPhoto
+    ? `<img src="${cur.photo.url}" style="width:100%;height:260px;object-fit:cover;display:block;" />`
+    : `<div class="photo-placeholder"><div class="photo-icon">📷</div><div class="photo-date">SEM FOTO</div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">Nenhuma foto registrada</div></div>`;
+  const thumbs = _carouselPhotos.map((p, i) => {
+    const active = i === _carouselIdx ? 'rgba(201,168,76,0.5)' : 'rgba(168,178,189,0.15)';
+    const inner = p.photo?.url
+      ? `<img src="${p.photo.url}" style="width:100%;height:100%;object-fit:cover" />`
+      : `<span style="font-size:11px;opacity:0.3">📷</span>`;
+    return `<div onclick="goToPhoto(${i})" style="width:56px;height:38px;border:1px solid ${active};cursor:pointer;overflow:hidden;transition:border-color 0.2s;display:flex;align-items:center;justify-content:center">${inner}</div>`;
+  }).join('');
+  const btnStyle = `background:rgba(168,178,189,0.08);border:1px solid rgba(168,178,189,0.15);color:var(--silver);padding:8px 14px;cursor:pointer;font-size:14px;transition:all 0.2s;flex-shrink:0`;
+  el.innerHTML = `
+    <div style="display:flex;align-items:stretch;gap:10px">
+      <button style="${btnStyle}" onclick="prevPhoto()">←</button>
+      <div style="flex:1">
+        ${imgHtml}
+        <div class="photo-footer">
+          <span class="photo-footer-label">${cur.label}</span>
+          <span class="photo-footer-val">${_carouselIdx + 1} / ${_carouselPhotos.length}</span>
+        </div>
+      </div>
+      <button style="${btnStyle}" onclick="nextPhoto()">→</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">${thumbs}</div>`;
+}
+function prevPhoto() {
+  _carouselIdx = (_carouselIdx - 1 + _carouselPhotos.length) % _carouselPhotos.length;
+  renderCarouselFrame();
+}
+function nextPhoto() {
+  _carouselIdx = (_carouselIdx + 1) % _carouselPhotos.length;
+  renderCarouselFrame();
+}
+function goToPhoto(idx) {
+  _carouselIdx = idx;
+  renderCarouselFrame();
+}
+
 // ── CHART REGISTRY ──────────────────────────────────────
 const charts = {};
 function mkChart(id, config) {
@@ -678,6 +731,18 @@ async function loadStudentCheckins(studentId) {
         </div>
       </div>`).join('');
   }
+
+  // Fetch and render real photos
+  api('/photos/' + studentId).then(photos => {
+    if (!photos?.length) return;
+    const byAngle = {};
+    photos.forEach(p => {
+      if (!byAngle[p.angle] || p.taken_at > byAngle[p.angle].taken_at) byAngle[p.angle] = p;
+    });
+    _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: byAngle[a.key] || null }));
+    _carouselIdx = 0;
+    renderCarouselFrame();
+  }).catch(() => {});
 }
 
 function updateStudent() {
@@ -696,22 +761,10 @@ function updateStudent() {
   set('studentLTV',     s.ltv);
   set('sk1',s.sk1); set('sk2',s.sk2); set('sk3',s.sk3); set('sk4',s.sk4);
 
-  // Fotos
-  const photoEl = document.getElementById('photo-compare');
-  if (photoEl && s.photos) {
-    photoEl.innerHTML = s.photos.map(p=>`
-      <div class="photo-card">
-        <div class="photo-placeholder" style="${p.highlight?'border:1px solid rgba(74,222,128,0.2)':''}">
-          <div class="photo-icon">📷</div>
-          <div class="photo-date">${p.date}</div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);text-align:center;z-index:1;padding:0 20px">${p.desc}</div>
-        </div>
-        <div class="photo-footer">
-          <span class="photo-footer-label">${p.label}</span>
-          <span class="photo-footer-val">${p.val}</span>
-        </div>
-      </div>`).join('');
-  }
+  // Fotos — carousel placeholder (real photos loaded by loadStudentCheckins)
+  _carouselIdx = 0;
+  _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: null }));
+  renderCarouselFrame();
 
   // Timeline
   const tlEl = document.getElementById('student-timeline');
