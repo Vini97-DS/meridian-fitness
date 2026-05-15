@@ -199,6 +199,17 @@ body::before{content:'';position:fixed;inset:0;
 
 /* ── PHOTO COMPARISON ── */
 .photo-compare{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:8px}
+/* ── BEFORE / AFTER GRID ── */
+.ba-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.ba-angle-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);letter-spacing:.08em;text-transform:uppercase;text-align:center;margin-bottom:6px}
+.ba-slot{position:relative;border:1px solid rgba(168,178,189,.08);overflow:hidden;margin-bottom:4px}
+.ba-slot img{width:100%;height:110px;object-fit:cover;display:block}
+.ba-slot-empty{width:100%;height:110px;background:var(--navy3);display:flex;align-items:center;justify-content:center;opacity:.5;font-size:1.4rem}
+.ba-tag{position:absolute;top:5px;left:5px;font-family:'DM Mono',monospace;font-size:8px;padding:2px 6px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase;pointer-events:none}
+.ba-tag.inicio{background:rgba(0,0,0,.65);color:#94a3b8}
+.ba-tag.agora{background:rgba(201,168,76,.75);color:#0a0a0f}
+.ba-date{padding:3px 8px;background:var(--navy3);font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);text-align:center}
+.ba-section-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px;opacity:.6}
 .photo-card{border:1px solid rgba(168,178,189,0.08);overflow:hidden;transition:all 0.2s}
 .photo-card:hover{border-color:rgba(201,168,76,0.2)}
 .photo-placeholder{width:100%;height:260px;background:linear-gradient(160deg,var(--navy3) 0%,rgba(201,168,76,0.04) 100%);
@@ -966,10 +977,12 @@ canvas{background:transparent!important}
       <div class="panel-header">
         <div>
           <div class="panel-title">Evolução Corporal — Comparativo Fotográfico</div>
-          <div class="panel-sub">Registro de progresso · antes → durante → atual</div>
+          <div class="panel-sub">Início vs Agora · 4 ângulos</div>
         </div>
         <div class="panel-badge green">PROGRESSO VISUAL</div>
       </div>
+      <div class="ba-grid" id="photo-ba-grid"></div>
+      <div class="ba-section-label">HISTÓRICO · NAVEGAÇÃO POR ÂNGULO</div>
       <div class="photo-compare" id="photo-compare"></div>
       <!-- Barra de progresso corporal -->
       <div id="student-stats" style="margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px"></div>

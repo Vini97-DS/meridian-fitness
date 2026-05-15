@@ -523,7 +523,18 @@ class PhotoCreate(BaseModel):
 
 @app.get("/api/photos/{student_id}")
 def get_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    return query(conn, "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at DESC", (student_id,))
+    photos = query(conn,
+        "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at ASC",
+        (student_id,))
+    angles = ["frontal", "costas", "esquerdo", "direito"]
+    comparison = {}
+    for angle in angles:
+        by_angle = [p for p in photos if p.get("angle") == angle]
+        comparison[angle] = {
+            "first":  dict(by_angle[0])  if by_angle else None,
+            "latest": dict(by_angle[-1]) if by_angle else None,
+        }
+    return {"comparison": comparison, "all": photos}
 
 @app.post("/api/photos")
 def save_photo(data: PhotoCreate, conn=Depends(get_db), _=Depends(get_current_user)):

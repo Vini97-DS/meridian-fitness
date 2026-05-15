@@ -17,9 +17,10 @@ Chart.defaults.color = SILV;
 Chart.defaults.font.family = 'DM Mono, monospace';
 Chart.defaults.maintainAspectRatio = false;
 
-// ── PHOTO CAROUSEL ──────────────────────────────────────
+// ── PHOTO CAROUSEL + COMPARISON ─────────────────────────
 let _carouselIdx = 0;
 let _carouselPhotos = []; // [{angle, label, photo}]
+let _comparisonByAngle = {}; // { frontal: {first, latest}, ... }
 const _carouselAngles = [
   { key:'frontal',   label:'FRONTAL'   },
   { key:'costas',    label:'COSTAS'    },
@@ -68,6 +69,46 @@ function nextPhoto() {
 function goToPhoto(idx) {
   _carouselIdx = idx;
   renderCarouselFrame();
+}
+
+function renderComparisonGrid() {
+  const el = document.getElementById('photo-ba-grid');
+  if (!el) return;
+
+  function fmtD(taken_at) {
+    if (!taken_at) return '—';
+    return new Date(taken_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+  }
+
+  function slot(photo, tag, tagClass) {
+    if (photo?.url) {
+      return `<div class="ba-slot">
+        <img src="${photo.url}" />
+        <div class="ba-tag ${tagClass}">${tag}</div>
+        <div class="ba-date">${fmtD(photo.taken_at)}</div>
+      </div>`;
+    }
+    return `<div class="ba-slot">
+      <div class="ba-slot-empty">📷</div>
+      <div class="ba-tag ${tagClass}">${tag}</div>
+      <div class="ba-date">—</div>
+    </div>`;
+  }
+
+  el.innerHTML = _carouselAngles.map(a => {
+    const pair   = _comparisonByAngle[a.key] || {};
+    const first  = pair.first  || null;
+    const latest = pair.latest || null;
+    // Only one photo: latest === first — show as INÍCIO only
+    const samePhoto = first && latest && first.id === latest.id;
+    return `<div>
+      <div class="ba-angle-label">${a.label}</div>
+      ${slot(first, 'INÍCIO', 'inicio')}
+      ${samePhoto
+        ? `<div class="ba-slot"><div class="ba-slot-empty" style="font-size:.9rem;opacity:.35">AGUARDANDO<br>NOVO ENV.</div><div class="ba-date">—</div></div>`
+        : slot(latest, 'AGORA', 'agora')}
+    </div>`;
+  }).join('');
 }
 
 // ── CHART REGISTRY ──────────────────────────────────────
@@ -733,15 +774,23 @@ async function loadStudentCheckins(studentId) {
   }
 
   // Fetch and render real photos
-  api('/photos/' + studentId).then(photos => {
-    if (!photos?.length) return;
+  api('/photos/' + studentId).then(resp => {
+    const comparison = resp?.comparison || {};
+    const allPhotos  = resp?.all || [];
+    if (!allPhotos.length && !Object.keys(comparison).length) return;
+
+    // Carousel: latest photo per angle
     const byAngle = {};
-    photos.forEach(p => {
+    allPhotos.forEach(p => {
       if (!byAngle[p.angle] || p.taken_at > byAngle[p.angle].taken_at) byAngle[p.angle] = p;
     });
     _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: byAngle[a.key] || null }));
     _carouselIdx = 0;
     renderCarouselFrame();
+
+    // Before/after comparison grid
+    _comparisonByAngle = comparison;
+    renderComparisonGrid();
   }).catch(() => {});
 }
 
@@ -761,10 +810,12 @@ function updateStudent() {
   set('studentLTV',     s.ltv);
   set('sk1',s.sk1); set('sk2',s.sk2); set('sk3',s.sk3); set('sk4',s.sk4);
 
-  // Fotos — carousel placeholder (real photos loaded by loadStudentCheckins)
+  // Fotos — placeholders (reais carregados por loadStudentCheckins)
   _carouselIdx = 0;
   _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: null }));
+  _comparisonByAngle = {};
   renderCarouselFrame();
+  renderComparisonGrid();
 
   // Timeline
   const tlEl = document.getElementById('student-timeline');
