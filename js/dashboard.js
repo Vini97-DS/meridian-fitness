@@ -814,6 +814,12 @@ async function loadStudentCheckins(studentId) {
     _comparisonByAngle = comparison;
     renderComparisonGrid();
   }).catch(() => {});
+
+  // Busca fotos de progresso (formulários)
+  const photos = await api('/students/' + studentId + '/photos').catch(() => []);
+  if (photos?.length) {
+    renderPhotoCarousel(studentId, photos);
+  }
 }
 
 function updateStudent() {
@@ -916,6 +922,64 @@ function updateStudent() {
 
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
   if (acompChartsDone) setTimeout(initAcompCharts, 50);
+}
+
+function renderPhotoCarousel(studentId, photos) {
+  const container = document.getElementById('photo-compare');
+  if (!container || !photos?.length) return;
+
+  const primeiro = photos[0];
+  const anterior = photos.length > 1 ? photos[photos.length - 2] : null;
+  const atual    = photos[photos.length - 1];
+  const isTrimestral = atual.form_type === 'trimestral';
+
+  const cards = isTrimestral
+    ? [
+        { foto: primeiro, label: 'INÍCIO', sub: fmtPhotoDate(primeiro.created_at), highlight: false, badge: false },
+        { foto: atual,    label: 'ATUAL',  sub: fmtPhotoDate(atual.created_at),    highlight: true,  badge: true  },
+      ]
+    : anterior
+    ? [
+        { foto: primeiro, label: 'INÍCIO',                         sub: fmtPhotoDate(primeiro.created_at), highlight: false },
+        { foto: anterior, label: fmtPhotoDate(anterior.created_at), sub: fmtPhotoWeight(anterior),         highlight: false },
+        { foto: atual,    label: 'ATUAL',                          sub: fmtPhotoDate(atual.created_at),    highlight: true  },
+      ]
+    : [
+        { foto: primeiro, label: 'INÍCIO', sub: fmtPhotoWeight(primeiro), highlight: false },
+        { foto: atual,    label: 'ATUAL',  sub: fmtPhotoWeight(atual),    highlight: true  },
+      ];
+
+  container.innerHTML = cards.map(card => {
+    const img = card.foto.photo_frontal
+      ? `<img src="${card.foto.photo_frontal}" style="width:100%;height:100%;object-fit:cover" alt="${card.label}">`
+      : `<div class="photo-icon">📷</div>`;
+    const borderStyle = card.highlight
+      ? isTrimestral
+        ? 'border:2px solid var(--gold)'
+        : 'border:1px solid rgba(74,222,128,0.3)'
+      : '';
+    return `
+      <div class="photo-card">
+        <div class="photo-placeholder" style="${borderStyle};position:relative;overflow:hidden">
+          ${card.badge ? '<div style="position:absolute;top:8px;right:8px;background:var(--gold);color:var(--navy);font-family:DM Mono,monospace;font-size:7px;padding:3px 8px;font-weight:700;z-index:2">✨ TRANSFORMAÇÃO</div>' : ''}
+          ${img}
+          <div class="photo-date">${card.label}</div>
+        </div>
+        <div class="photo-footer" style="${card.highlight && isTrimestral ? 'background:rgba(201,168,76,0.06)' : ''}">
+          <span class="photo-footer-label">${card.label}</span>
+          <span class="photo-footer-val" style="${card.highlight ? 'color:var(--green)' : ''}">${card.sub}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function fmtPhotoDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+}
+
+function fmtPhotoWeight(photo) {
+  return photo?.weight_at_time ? photo.weight_at_time + ' kg' : '—';
 }
 
 // ── CHURN LIST — do banco ────────────────────────────────
@@ -1381,9 +1445,28 @@ async function cadastrarAluno() {
   try {
     const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null})});
     await api('/subscriptions',{method:'POST',body:JSON.stringify({student_id:aluno.id,personal_id:personalId,plan_id:planId,price_paid:plano?.price_brl||0,starts_at:inicio,expires_at:fim,payment_method:pgto,status:'active'})});
+    // Salvar foto inicial se fornecida
+    const fotoInput = document.getElementById('cfg-aluno-foto-inicial');
+    if (fotoInput?.files[0]) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const b64 = e.target.result.split(',')[1];
+        await api('/students/' + aluno.id + '/photos', {
+          method: 'POST',
+          body: JSON.stringify({
+            form_type:     'inicial',
+            photo_frontal: 'data:image/jpeg;base64,' + b64,
+            student_id:    aluno.id,
+            personal_id:   personalId,
+          })
+        }).catch(() => {});
+      };
+      reader.readAsDataURL(fotoInput.files[0]);
+    }
     okEl.textContent='✓ '+nome+' cadastrado! Ativo até '+new Date(fim).toLocaleDateString('pt-BR');
     okEl.style.display='block';
     ['cfg-aluno-nome','cfg-aluno-phone','cfg-aluno-email','cfg-aluno-peso','cfg-aluno-bf','cfg-aluno-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const fotoEl=document.getElementById('cfg-aluno-foto-inicial'); if(fotoEl) fotoEl.value='';
     const alunos=await api('/students/'+personalId).catch(()=>[]);
     renderAlunosList(alunos);
     setTimeout(()=>loadDashboard(),1500);

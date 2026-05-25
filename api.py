@@ -411,7 +411,18 @@ class PhotoCreate(BaseModel):
 
 @app.get("/api/photos/{student_id}")
 def get_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    return query(conn, "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at DESC", (student_id,))
+    photos = query(conn,
+        "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at ASC",
+        (student_id,))
+    angles = ["frontal", "costas", "esquerdo", "direito"]
+    comparison = {}
+    for angle in angles:
+        by_angle = [p for p in photos if p.get("angle") == angle]
+        comparison[angle] = {
+            "first":  dict(by_angle[0])  if by_angle else None,
+            "latest": dict(by_angle[-1]) if by_angle else None,
+        }
+    return {"comparison": comparison, "all": photos}
 
 @app.post("/api/photos")
 def save_photo(data: PhotoCreate, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -468,6 +479,9 @@ class SubscriptionCreate(BaseModel):
 
 @app.post("/api/subscriptions")
 def create_subscription(data: SubscriptionCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    execute(conn,
+        "UPDATE subscriptions SET status='renewed' WHERE student_id=%s AND status='active'",
+        (data.student_id,))
     return execute(conn, """
         INSERT INTO subscriptions (student_id, personal_id, plan_id, price_paid,
           starts_at, expires_at, payment_method, status)
