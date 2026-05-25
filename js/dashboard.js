@@ -795,31 +795,9 @@ async function loadStudentCheckins(studentId) {
       </div>`).join('');
   }
 
-  // Fetch and render real photos
-  api('/photos/' + studentId).then(resp => {
-    const comparison = resp?.comparison || {};
-    const allPhotos  = resp?.all || [];
-    if (!allPhotos.length && !Object.keys(comparison).length) return;
-
-    // Carousel: latest photo per angle
-    const byAngle = {};
-    allPhotos.forEach(p => {
-      if (!byAngle[p.angle] || p.taken_at > byAngle[p.angle].taken_at) byAngle[p.angle] = p;
-    });
-    _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: byAngle[a.key] || null }));
-    _carouselIdx = 0;
-    renderCarouselFrame();
-
-    // Before/after comparison grid
-    _comparisonByAngle = comparison;
-    renderComparisonGrid();
-  }).catch(() => {});
-
-  // Busca fotos de progresso (formulários)
+  // Busca fotos de progresso (formulários + foto inicial)
   const photos = await api('/students/' + studentId + '/photos').catch(() => []);
-  if (photos?.length) {
-    renderPhotoCarousel(studentId, photos);
-  }
+  renderPhotoCarousel(studentId, photos || []);
 }
 
 function updateStudent() {

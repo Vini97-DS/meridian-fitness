@@ -625,11 +625,15 @@ def serve_form(token: str):
 @app.get("/api/students/{student_id}/photos")
 def get_student_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     return query(conn, """
-        SELECT id, form_type, weight_at_time, created_at,
+        SELECT id, form_type,
+               weight_at_time,
+               COALESCE(created_at, taken_at) AS created_at,
                photo_frontal, photo_costas, photo_esq, photo_dir
         FROM progress_photos
         WHERE student_id = %s
-        ORDER BY created_at ASC
+          AND (photo_frontal IS NOT NULL OR photo_costas IS NOT NULL
+               OR photo_esq IS NOT NULL OR photo_dir IS NOT NULL)
+        ORDER BY COALESCE(created_at, taken_at) ASC NULLS LAST
     """, (student_id,))
 
 @app.post("/api/students/{student_id}/photos")
