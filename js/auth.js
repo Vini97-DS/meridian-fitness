@@ -192,6 +192,7 @@ async function step2Next() {
   const name  = document.getElementById('s2-name')?.value.trim() || '';
   const pass  = document.getElementById('s2-pass')?.value  || '';
   const pass2 = document.getElementById('s2-pass2')?.value || '';
+  const role  = document.querySelector('input[name="role"]:checked')?.value || 'personal';
   hideError('s2-error');
 
   if (!name) { showError('s2-error', 'Informe seu nome completo.'); return; }
@@ -207,7 +208,7 @@ async function step2Next() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email: window._faEmail, password: pass }),
+      body: JSON.stringify({ name, email: window._faEmail, password: pass, role }),
     });
     const data = await res.json();
 

@@ -63,6 +63,20 @@
         <div class="alert alert-error" id="s2-error" style="display:none"></div>
 
         <div class="field">
+          <label class="field-label">Perfil profissional</label>
+          <div style="display:flex;gap:12px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--silver)">
+              <input type="radio" id="role-personal" name="role" value="personal" checked style="accent-color:var(--gold)">
+              Personal Trainer
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--silver)">
+              <input type="radio" id="role-nutritionist" name="role" value="nutritionist" style="accent-color:var(--gold)">
+              Nutricionista
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
           <label class="field-label" for="s2-name">Nome completo</label>
           <input class="field-input" id="s2-name" type="text"
             placeholder="Seu nome completo" autocomplete="name" />
