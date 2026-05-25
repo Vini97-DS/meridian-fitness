@@ -123,6 +123,20 @@ def create_users_table():
                 )
             """)
             conn.commit()
+        # Add personals columns if missing (safe: IF NOT EXISTS)
+        for col_sql in [
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS whatsapp TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS instagram TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS site TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS cidade TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT 'Brasil'",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS moeda TEXT DEFAULT 'BRL'",
+        ]:
+            try:
+                cur.execute(col_sql)
+                conn.commit()
+            except Exception:
+                conn.rollback()
         conn.close()
         print("Tabela users OK")
     except Exception as e:
@@ -135,6 +149,7 @@ class RegisterData(BaseModel):
     name:     str
     email:    str
     password: str
+    role:     Optional[str] = "personal"
 
 class LoginData(BaseModel):
     email:    str
@@ -149,28 +164,30 @@ def register(data: RegisterData, conn=Depends(get_db)):
         raise HTTPException(status_code=400, detail="Senha deve ter minimo 8 caracteres")
     hashed = hash_password(data.password)
     user   = execute(conn, """
-        INSERT INTO users (name, email, password)
-        VALUES (%s, %s, %s)
-        RETURNING id, name, email
-    """, (data.name.strip(), data.email.lower().strip(), hashed))
+        INSERT INTO users (name, email, password, role)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, name, email, role
+    """, (data.name.strip(), data.email.lower().strip(), hashed, data.role or 'personal'))
     token = create_token(str(user["id"]), user["email"], user["name"])
-    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
+    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"], "role": user.get("role","personal")}}
 
 @app.post("/api/auth/login")
 def login(data: LoginData, conn=Depends(get_db)):
-    rows = query(conn, "SELECT id, name, email, password FROM users WHERE email = %s", (data.email.lower(),))
+    rows = query(conn, "SELECT id, name, email, password, role FROM users WHERE email = %s", (data.email.lower(),))
     if not rows:
         raise HTTPException(status_code=401, detail="Email ou senha incorretos")
     user = rows[0]
     if not check_password(data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Email ou senha incorretos")
     token = create_token(str(user["id"]), user["email"], user["name"])
-    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
+    return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"], "role": user.get("role","personal")}}
 
 @app.get("/api/auth/me")
 def me(current_user=Depends(get_current_user), conn=Depends(get_db)):
     """Retorna usuario + personal_id para o dashboard."""
     user_id = current_user.get("sub")
+    user_row = query(conn, "SELECT role FROM users WHERE id = %s", (user_id,))
+    role = user_row[0]["role"] if user_row else "personal"
     personal = query(conn, "SELECT id FROM personals WHERE clerk_user_id = %s", (user_id,))
     if not personal:
         result = execute(conn,
@@ -180,7 +197,7 @@ def me(current_user=Depends(get_current_user), conn=Depends(get_db)):
         personal_id = str(result.get("id", user_id))
     else:
         personal_id = str(personal[0]["id"])
-    return {**current_user, "personal_id": personal_id}
+    return {**current_user, "personal_id": personal_id, "role": role}
 
 # ═══════════════════════════════════════════════════════════════
 #  HEALTH
@@ -194,7 +211,8 @@ def health(conn=Depends(get_db)):
 #  METRICAS BI
 # ═══════════════════════════════════════════════════════════════
 @app.get("/api/metrics/{personal_id}")
-def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Depends(get_current_user)):
+    period = max(7, min(int(period), 1095))
     mrr = query(conn, """
         SELECT COUNT(*) AS active_students,
                COALESCE(SUM(price_paid),0) AS mrr,
@@ -211,11 +229,11 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         FROM subscriptions WHERE personal_id = %s AND status = 'active'
           AND expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
     """, (personal_id,))
-    mrr_history = query(conn, """
+    mrr_history = query(conn, f"""
         SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
                SUM(price_paid) AS mrr
         FROM subscriptions WHERE personal_id = %s
-          AND starts_at >= NOW() - INTERVAL '12 months'
+          AND starts_at >= NOW() - INTERVAL '{period} days'
         GROUP BY DATE_TRUNC('month', starts_at)
         ORDER BY DATE_TRUNC('month', starts_at)
     """, (personal_id,))
@@ -279,6 +297,51 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
     }
 
 # ═══════════════════════════════════════════════════════════════
+#  INSIGHTS + GEO
+# ═══════════════════════════════════════════════════════════════
+@app.get("/api/insights/{personal_id}")
+def get_insights(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    gender  = query(conn,
+        "SELECT gender, COUNT(*) AS c FROM students WHERE personal_id=%s AND gender IS NOT NULL "
+        "GROUP BY gender ORDER BY c DESC LIMIT 1", (personal_id,))
+    age = query(conn,
+        "SELECT CASE "
+        "  WHEN EXTRACT(YEAR FROM AGE(birth_date)) < 25 THEN '18-24' "
+        "  WHEN EXTRACT(YEAR FROM AGE(birth_date)) < 35 THEN '25-34' "
+        "  WHEN EXTRACT(YEAR FROM AGE(birth_date)) < 45 THEN '35-44' "
+        "  ELSE '45+' END AS faixa, COUNT(*) AS c "
+        "FROM students WHERE personal_id=%s AND birth_date IS NOT NULL "
+        "GROUP BY faixa ORDER BY c DESC LIMIT 1", (personal_id,))
+    goal    = query(conn,
+        "SELECT goal, COUNT(*) AS c FROM students WHERE personal_id=%s AND goal IS NOT NULL "
+        "GROUP BY goal ORDER BY c DESC LIMIT 1", (personal_id,))
+    plan    = query(conn,
+        "SELECT p.name, COUNT(*) AS c FROM subscriptions sub JOIN plans p ON p.id=sub.plan_id "
+        "WHERE sub.personal_id=%s GROUP BY p.name ORDER BY c DESC LIMIT 1", (personal_id,))
+    channel = query(conn,
+        "SELECT channel, COUNT(*) AS c FROM students WHERE personal_id=%s AND channel IS NOT NULL "
+        "GROUP BY channel ORDER BY c DESC LIMIT 1", (personal_id,))
+    peak    = query(conn,
+        "SELECT EXTRACT(HOUR FROM responded_at) AS hora, COUNT(*) AS c "
+        "FROM checkins WHERE personal_id=%s AND responded_at IS NOT NULL "
+        "GROUP BY hora ORDER BY c DESC LIMIT 1", (personal_id,))
+    return {
+        "genero_dominante":   gender[0]["gender"]  if gender  else "—",
+        "faixa_etaria_top":   age[0]["faixa"]       if age     else "—",
+        "objetivo_principal": goal[0]["goal"]       if goal    else "—",
+        "plano_preferido":    plan[0]["name"]       if plan    else "—",
+        "canal_principal":    channel[0]["channel"] if channel else "—",
+        "pico_horario":       int(peak[0]["hora"])  if peak    else None,
+    }
+
+@app.get("/api/geo/{personal_id}")
+def get_geo(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn,
+        "SELECT state, COUNT(*) AS total FROM students "
+        "WHERE personal_id=%s AND state IS NOT NULL "
+        "GROUP BY state ORDER BY total DESC", (personal_id,))
+
+# ═══════════════════════════════════════════════════════════════
 #  ALUNOS
 # ═══════════════════════════════════════════════════════════════
 class StudentCreate(BaseModel):
@@ -320,6 +383,36 @@ def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_curr
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name, phone, created_at
     """, (data.personal_id, data.name, data.phone, data.email, data.goal, data.channel,
           data.weight_initial, data.height_cm, data.bf_initial, data.notes))
+
+# ═══════════════════════════════════════════════════════════════
+#  PERSONALS — PATCH PERFIL
+# ═══════════════════════════════════════════════════════════════
+class PersonalUpdate(BaseModel):
+    name:          Optional[str] = None
+    bio:           Optional[str] = None
+    especialidade: Optional[str] = None
+    whatsapp:      Optional[str] = None
+    instagram:     Optional[str] = None
+    site:          Optional[str] = None
+    cidade:        Optional[str] = None
+    pais:          Optional[str] = None
+    moeda:         Optional[str] = None
+
+@app.patch("/api/personals/{personal_id}")
+def update_personal(personal_id: str, data: PersonalUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
+    fields, values = [], []
+    if data.name          is not None: fields.append("name = %s");          values.append(data.name)
+    if data.bio           is not None: fields.append("bio = %s");           values.append(data.bio)
+    if data.especialidade is not None: fields.append("especialidade = %s"); values.append(data.especialidade)
+    if data.whatsapp      is not None: fields.append("whatsapp = %s");      values.append(data.whatsapp)
+    if data.instagram     is not None: fields.append("instagram = %s");     values.append(data.instagram)
+    if data.site          is not None: fields.append("site = %s");          values.append(data.site)
+    if data.cidade        is not None: fields.append("cidade = %s");        values.append(data.cidade)
+    if data.pais          is not None: fields.append("pais = %s");          values.append(data.pais)
+    if data.moeda         is not None: fields.append("moeda = %s");         values.append(data.moeda)
+    if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
+    values.append(personal_id)
+    return execute(conn, f"UPDATE personals SET {', '.join(fields)} WHERE id=%s RETURNING id, name", values)
 
 # ═══════════════════════════════════════════════════════════════
 #  LEADS
