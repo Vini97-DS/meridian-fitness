@@ -1317,6 +1317,31 @@ canvas{background:transparent!important}
             <label class="v-label">% Gordura inicial</label>
             <input class="v-input" id="cfg-aluno-bf" type="number" placeholder="Ex: 28.5" step="0.1" />
           </div>
+          <div class="v-field">
+            <label class="v-label">Gênero</label>
+            <select class="v-select" id="cfg-aluno-genero">
+              <option value="">Não informado</option>
+              <option value="masculino">Masculino</option>
+              <option value="feminino">Feminino</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Data de Nascimento</label>
+            <input class="v-input" id="cfg-aluno-nascimento" type="date" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">País</label>
+            <input class="v-input" id="cfg-aluno-pais" type="text" placeholder="Ex: Brasil" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Estado (UF)</label>
+            <input class="v-input" id="cfg-aluno-estado" type="text" placeholder="Ex: SP" maxlength="2" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Cidade</label>
+            <input class="v-input" id="cfg-aluno-cidade-aluno" type="text" placeholder="Ex: São Paulo" />
+          </div>
           <div class="v-field" style="grid-column:1/-1">
             <label class="v-label">Observações</label>
             <textarea class="v-input" id="cfg-aluno-obs" rows="2" placeholder="Histórico médico, restrições, objetivos específicos..."></textarea>

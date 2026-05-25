@@ -382,6 +382,16 @@ async function loadDashboard() {
 
   renderSalesTable([]);
   if (personalId) loadSalesTable(personalId);
+  if (personalId) {
+    api('/sales/metrics/' + personalId).then(sm => {
+      if (!sm) return;
+      const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+      set('v-kpi-vendas',     sm.vendas_mes || '0');
+      set('v-kpi-receita',    fmtBRL(sm.receita_mes || 0));
+      set('v-kpi-fechamento', (sm.taxa_fechamento || 0) + '%');
+      set('v-kpi-leads',      sm.total_leads || '0');
+    }).catch(() => {});
+  }
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
 }
 
@@ -1015,12 +1025,9 @@ function renderPhotoCarousel(studentId, photos) {
 
     const nav = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <button onclick="carrosselPose(-1)" style="background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver);font-family:'DM Mono',monospace;font-size:10px;padding:6px 14px;cursor:pointer">← Anterior</button>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold)">${label} · ${poseIdx+1} de 4</div>
-        <button onclick="carrosselPose(1)" style="background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver);font-family:'DM Mono',monospace;font-size:10px;padding:6px 14px;cursor:pointer">Próxima →</button>
-      </div>
-      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:16px">
-        ${posesLabels.map((l,i) => `<button onclick="carrosselIr(${i})" style="font-family:'DM Mono',monospace;font-size:7px;padding:3px 10px;background:${i===poseIdx?'rgba(201,168,76,0.15)':'transparent'};border:1px solid ${i===poseIdx?'var(--gold)':'rgba(168,178,189,0.12)'};color:${i===poseIdx?'var(--gold)':'var(--dim)'};cursor:pointer;letter-spacing:0.08em">${l.toUpperCase()}</button>`).join('')}
+        <button onclick="carrosselPose(-1)" style="background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver);font-family:'DM Mono',monospace;font-size:11px;padding:6px 16px;cursor:pointer">←</button>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold)">${label} · ${poseIdx+1}/4</div>
+        <button onclick="carrosselPose(1)" style="background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver);font-family:'DM Mono',monospace;font-size:11px;padding:6px 16px;cursor:pointer">→</button>
       </div>`;
 
     container.innerHTML = nav + `<div style="display:flex;gap:16px">${cardHTML(primeiro,'INÍCIO',false)}${cardHTML(atual,'ATUAL',true)}</div>`;
@@ -1571,7 +1578,12 @@ async function cadastrarAluno() {
   const btn=document.querySelector('#cfg-aluno-form button.vbtn-green');
   if(btn){btn.disabled=true;btn.textContent='Cadastrando...';}
   try {
-    const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null})});
+    const genero    = document.getElementById('cfg-aluno-genero')?.value || null;
+    const nascimento= document.getElementById('cfg-aluno-nascimento')?.value || null;
+    const paisAluno = document.getElementById('cfg-aluno-pais')?.value || null;
+    const estadoAluno=document.getElementById('cfg-aluno-estado')?.value || null;
+    const cidadeAluno=document.getElementById('cfg-aluno-cidade-aluno')?.value || null;
+    const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null,gender:genero||null,birth_date:nascimento||null,country:paisAluno||null,state:estadoAluno||null,city:cidadeAluno||null})});
     await api('/subscriptions',{method:'POST',body:JSON.stringify({student_id:aluno.id,personal_id:personalId,plan_id:planId,price_paid:plano?.price_brl||0,starts_at:inicio,expires_at:fim,payment_method:pgto,status:'active'})});
     // Salvar fotos iniciais (4 poses)
     async function fotoParaBase64(inputId) {

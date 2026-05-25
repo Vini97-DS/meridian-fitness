@@ -131,6 +131,11 @@ def create_users_table():
             "ALTER TABLE personals ADD COLUMN IF NOT EXISTS cidade TEXT",
             "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT 'Brasil'",
             "ALTER TABLE personals ADD COLUMN IF NOT EXISTS moeda TEXT DEFAULT 'BRL'",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS birth_date DATE",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Brasil'",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS state TEXT",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS city TEXT",
         ]:
             try:
                 cur.execute(col_sql)
@@ -341,6 +346,32 @@ def get_geo(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user))
         "WHERE personal_id=%s AND state IS NOT NULL "
         "GROUP BY state ORDER BY total DESC", (personal_id,))
 
+@app.get("/api/sales/metrics/{personal_id}")
+def get_sales_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    current_month = query(conn, """
+        SELECT COUNT(*) AS vendas_mes,
+               COALESCE(SUM(price_paid), 0) AS receita_mes
+        FROM subscriptions
+        WHERE personal_id = %s
+          AND DATE_TRUNC('month', starts_at) = DATE_TRUNC('month', CURRENT_DATE)
+          AND status IN ('active', 'renewed')
+    """, (personal_id,))
+    pipeline = query(conn, """
+        SELECT COUNT(*) AS total_leads,
+               COUNT(*) FILTER (WHERE status='proposta') AS propostas
+        FROM leads WHERE personal_id = %s
+    """, (personal_id,))
+    cm = current_month[0] if current_month else {}
+    pl = pipeline[0] if pipeline else {}
+    total_leads = int(pl.get('total_leads') or 0)
+    propostas   = int(pl.get('propostas') or 0)
+    return {
+        "vendas_mes":      int(cm.get('vendas_mes') or 0),
+        "receita_mes":     float(cm.get('receita_mes') or 0),
+        "taxa_fechamento": round(propostas / total_leads * 100) if total_leads > 0 else 0,
+        "total_leads":     total_leads,
+    }
+
 # ═══════════════════════════════════════════════════════════════
 #  ALUNOS
 # ═══════════════════════════════════════════════════════════════
@@ -355,6 +386,11 @@ class StudentCreate(BaseModel):
     height_cm:      Optional[int]   = None
     bf_initial:     Optional[float] = None
     notes:          Optional[str]   = None
+    gender:         Optional[str]   = None
+    birth_date:     Optional[date]  = None
+    country:        Optional[str]   = None
+    state:          Optional[str]   = None
+    city:           Optional[str]   = None
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -379,10 +415,14 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
 @app.post("/api/students")
 def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     return execute(conn, """
-        INSERT INTO students (personal_id, name, phone, email, goal, channel, weight_initial, height_cm, bf_initial, notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name, phone, created_at
-    """, (data.personal_id, data.name, data.phone, data.email, data.goal, data.channel,
-          data.weight_initial, data.height_cm, data.bf_initial, data.notes))
+        INSERT INTO students (personal_id, name, phone, email, goal, channel,
+          weight_initial, height_cm, bf_initial, notes, gender, birth_date, country, state, city)
+        VALUES (%s,%s,%s,%s,%s::student_goal,%s::acquisition_channel,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        RETURNING id, name, phone, created_at
+    """, (data.personal_id, data.name, data.phone, data.email,
+          (data.goal or 'outro').lower(), (data.channel or 'outro').lower(),
+          data.weight_initial, data.height_cm, data.bf_initial, data.notes,
+          data.gender, data.birth_date, data.country, data.state, data.city))
 
 # ═══════════════════════════════════════════════════════════════
 #  PERSONALS — PATCH PERFIL
@@ -449,8 +489,12 @@ def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user
 def create_lead(data: LeadCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     return execute(conn, """
         INSERT INTO leads (personal_id, name, phone, email, channel, goal, plan_id, notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name, phone, status, created_at
-    """, (data.personal_id, data.name, data.phone, data.email, data.channel, data.goal, data.plan_id, data.notes))
+        VALUES (%s,%s,%s,%s,%s::acquisition_channel,%s::student_goal,%s,%s)
+        RETURNING id, name, phone, status, created_at
+    """, (data.personal_id, data.name, data.phone, data.email,
+          (data.channel or 'outro').lower(),
+          (data.goal or 'outro').lower(),
+          data.plan_id, data.notes))
 
 @app.patch("/api/leads/{lead_id}")
 def update_lead(lead_id: str, data: LeadUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -590,16 +634,16 @@ class SubscriptionCreate(BaseModel):
 def create_subscription(data: SubscriptionCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     try:
         execute(conn,
-            "UPDATE subscriptions SET status='expired' WHERE student_id=%s AND status='active'",
+            "UPDATE subscriptions SET status='renewed' WHERE student_id=%s AND status='active'",
             (data.student_id,))
     except Exception:
         conn.rollback()
     return execute(conn, """
         INSERT INTO subscriptions (student_id, personal_id, plan_id, price_paid,
-          starts_at, expires_at, status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id, student_id, expires_at, status
+          starts_at, expires_at, payment_method, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, student_id, expires_at, status
     """, (data.student_id, data.personal_id, data.plan_id, data.price_paid,
-          data.starts_at, data.expires_at, data.status))
+          data.starts_at, data.expires_at, data.payment_method, data.status))
 
 # ═══════════════════════════════════════════════════════════════
 #  ENCERRAR CONTRATO
@@ -609,6 +653,28 @@ def cancel_student(student_id: str, conn=Depends(get_db), _=Depends(get_current_
     execute(conn, "UPDATE subscriptions SET status='cancelled', updated_at=NOW() WHERE student_id=%s AND status='active'", (student_id,))
     execute(conn, "UPDATE students SET status='cancelled', updated_at=NOW() WHERE id=%s", (student_id,))
     return {"ok": True, "student_id": student_id}
+# ═══════════════════════════════════════════════════════════════
+#  ADMIN
+# ═══════════════════════════════════════════════════════════════
+ADMIN_KEY = os.getenv("ADMIN_KEY", "meridian-admin-dev")
+
+def _check_admin_key(admin_key: str):
+    if admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Admin key inválida")
+
+@app.get("/api/admin/overview")
+def admin_overview(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    row = query(conn, """
+        SELECT
+            (SELECT COUNT(*) FROM personals)                                                  AS total_personais,
+            (SELECT COUNT(*) FROM students)                                                   AS total_students,
+            (SELECT COALESCE(SUM(price_paid),0) FROM subscriptions WHERE status='active')     AS mrr_total,
+            (SELECT COUNT(*) FROM checkins)                                                   AS total_checkins,
+            (SELECT COUNT(*) FROM invites WHERE used = false)                                 AS invites_pending
+    """)
+    return row[0] if row else {}
+
 # ═══════════════════════════════════════════════════════════════
 #  FORMULÁRIO PÚBLICO POR TOKEN
 # ═══════════════════════════════════════════════════════════════
