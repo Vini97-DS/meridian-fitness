@@ -605,3 +605,30 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
 @app.get("/form/{token}")
 def serve_form(token: str):
     return FileResponse("form.html")
+
+@app.get("/api/students/{student_id}/photos")
+def get_student_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, """
+        SELECT id, form_type, weight_at_time, created_at,
+               photo_frontal, photo_costas, photo_esq, photo_dir
+        FROM progress_photos
+        WHERE student_id = %s
+        ORDER BY created_at ASC
+    """, (student_id,))
+
+@app.post("/api/students/{student_id}/photos")
+def save_student_photo(student_id: str, data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
+    return execute(conn, """
+        INSERT INTO progress_photos
+          (student_id, personal_id, form_type, photo_frontal, photo_costas, photo_esq, photo_dir)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, form_type, created_at
+    """, (
+        student_id,
+        data.get("personal_id"),
+        data.get("form_type", "inicial"),
+        data.get("photo_frontal"),
+        data.get("photo_costas"),
+        data.get("photo_esq"),
+        data.get("photo_dir"),
+    ))
