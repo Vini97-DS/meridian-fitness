@@ -1242,12 +1242,28 @@ canvas{background:transparent!important}
             <textarea class="v-input" id="cfg-aluno-obs" rows="2" placeholder="Histórico médico, restrições, objetivos específicos..."></textarea>
           </div>
           <div class="v-field" style="grid-column:1/-1">
-            <label class="v-label">Foto inicial (opcional)</label>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">
-              Foto frontal de referência — será o ponto de partida do comparativo
+            <label class="v-label">Fotos iniciais (opcional)</label>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:10px">
+              Fotos de referência — serão o ponto de partida do comparativo de evolução
             </div>
-            <input type="file" id="cfg-aluno-foto-inicial" accept="image/*"
-              style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);background:var(--navy);border:1px solid rgba(168,178,189,0.12);padding:8px;width:100%;cursor:pointer">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Frontal</div>
+                <input type="file" id="cfg-foto-frontal" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Costas</div>
+                <input type="file" id="cfg-foto-costas" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Lado Esquerdo</div>
+                <input type="file" id="cfg-foto-esq" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+              </div>
+              <div>
+                <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Lado Direito</div>
+                <input type="file" id="cfg-foto-dir" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+              </div>
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:14px">
