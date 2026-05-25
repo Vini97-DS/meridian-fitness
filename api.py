@@ -160,6 +160,17 @@ class LoginData(BaseModel):
     email:    str
     password: str
 
+@app.get("/api/auth/check-invite")
+def check_invite(email: str, conn=Depends(get_db)):
+    rows = query(conn,
+        "SELECT id, used FROM invites WHERE email = %s",
+        (email.lower().strip(),))
+    if not rows:
+        raise HTTPException(404, "E-mail não encontrado. Solicite um convite ao administrador.")
+    if rows[0]["used"]:
+        raise HTTPException(400, "Este convite já foi utilizado.")
+    return {"ok": True}
+
 @app.post("/api/auth/register")
 def register(data: RegisterData, conn=Depends(get_db)):
     existing = query(conn, "SELECT id FROM users WHERE email = %s", (data.email.lower(),))
