@@ -573,6 +573,7 @@ canvas{background:transparent!important}
 <!-- ══════════════════ NAV TABS ══════════════════ -->
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="switchTab('bi',this)">BI & Negócio</button>
+  <button class="nav-tab" onclick="switchTab('resumo',this)">⚡ Resumo</button>
   <button class="nav-tab" onclick="switchTab('vendas',this)">Vendas</button>
   <button class="nav-tab" onclick="switchTab('acompanhamento',this)">Acompanhamento de Alunos</button>
   <button class="nav-tab" onclick="switchTab('config',this)">⚙ Configurações</button>
@@ -582,6 +583,22 @@ canvas{background:transparent!important}
 <!-- ════════════ TAB 1: BI & NEGÓCIO ════════════ -->
 <!-- ══════════════════════════════════════════════ -->
 <div class="section active" id="tab-bi">
+
+  <!-- Filtros de período -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+    <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.1em;text-transform:uppercase">Período:</span>
+    <button class="scale-btn" data-period="7"   style="padding:6px 14px;font-size:9px" onclick="setBIPeriod(this,7)">7d</button>
+    <button class="scale-btn active" data-period="30"  style="padding:6px 14px;font-size:9px" onclick="setBIPeriod(this,30)">30d</button>
+    <button class="scale-btn" data-period="90"  style="padding:6px 14px;font-size:9px" onclick="setBIPeriod(this,90)">Trimestre</button>
+    <button class="scale-btn" data-period="180" style="padding:6px 14px;font-size:9px" onclick="setBIPeriod(this,180)">Semestre</button>
+    <button class="scale-btn" data-period="365" style="padding:6px 14px;font-size:9px" onclick="setBIPeriod(this,365)">Ano</button>
+  </div>
+
+  <!-- Sumário Executivo -->
+  <div style="margin-bottom:20px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">Perfil da Base de Alunos</div>
+    <div id="executive-summary" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px"></div>
+  </div>
 
   <!-- ML Forecast placeholder -->
   <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.1);padding:16px 24px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
@@ -781,6 +798,23 @@ canvas{background:transparent!important}
       <div class="kpi-value" id="v-kpi-tempo">—</div>
       <div class="kpi-sub">1º contato → pagamento</div>
     </div>
+  </div>
+
+  <!-- Filtros de Canal e Período -->
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;padding:14px 16px;background:rgba(168,178,189,0.02);border:1px solid rgba(168,178,189,0.06)">
+    <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.1em;text-transform:uppercase">FILTRAR:</span>
+    <select id="filtro-canal" onchange="filtrarKanban()" class="v-select" style="width:auto;padding:6px 12px;font-size:10px;height:34px">
+      <option value="">Todos os canais</option>
+      <option value="instagram">Instagram</option>
+      <option value="indicacao">Indicação</option>
+      <option value="youtube">YouTube</option>
+      <option value="google">Google</option>
+      <option value="tiktok">TikTok</option>
+    </select>
+    <input type="date" id="filtro-data-de" class="v-input" style="width:auto;height:34px;font-size:10px" title="De">
+    <input type="date" id="filtro-data-ate" class="v-input" style="width:auto;height:34px;font-size:10px" title="Até">
+    <button class="vbtn vbtn-blue" onclick="filtrarKanban()" style="height:34px;padding:0 14px">Aplicar</button>
+    <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim);height:34px;padding:0 14px" onclick="limparFiltros()">Limpar</button>
   </div>
 
   <!-- Lead form + Kanban -->
@@ -1102,6 +1136,52 @@ canvas{background:transparent!important}
           <label class="v-label">Bio / Apresentação</label>
           <textarea class="v-input" id="cfg-bio" rows="2" placeholder="Ex: 10 anos de experiência · Especialista em emagrecimento e hipertrofia..."></textarea>
         </div>
+        <div class="v-field">
+          <label class="v-label">Instagram</label>
+          <input class="v-input" id="cfg-instagram" type="text" placeholder="@seu_instagram" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Site / Link</label>
+          <input class="v-input" id="cfg-site" type="text" placeholder="https://seusite.com" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Cidade</label>
+          <input class="v-input" id="cfg-cidade" type="text" placeholder="São Paulo" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">País</label>
+          <select class="v-select" id="cfg-pais">
+            <option value="Brasil">Brasil</option>
+            <option value="Portugal">Portugal</option>
+            <option value="EUA">EUA</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div class="v-field">
+          <label class="v-label">Moeda</label>
+          <select class="v-select" id="cfg-moeda">
+            <option value="BRL">BRL — Real</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+          </select>
+        </div>
+        <div class="v-field">
+          <label class="v-label">Formas de pagamento</label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-pix" value="pix" style="accent-color:var(--gold)"> Pix</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-cartao" value="cartao" style="accent-color:var(--gold)"> Cartão</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-boleto" value="boleto" style="accent-color:var(--gold)"> Boleto</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-stripe" value="stripe" style="accent-color:var(--gold)"> Stripe</label>
+          </div>
+        </div>
+        <div class="v-field">
+          <label class="v-label">Canais de atendimento</label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-online" value="online" style="accent-color:var(--gold)"> Online</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-presencial" value="presencial" style="accent-color:var(--gold)"> Presencial</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-hibrido" value="hibrido" style="accent-color:var(--gold)"> Híbrido</label>
+          </div>
+        </div>
       </div>
       <div id="cfg-perfil-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Perfil salvo com sucesso</div>
     </div>
@@ -1283,6 +1363,69 @@ canvas{background:transparent!important}
 
 </div>
 <!-- fim tab-config -->
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- ════════════════ TAB: RESUMO EXECUTIVO ═══════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="section" id="tab-resumo">
+
+  <!-- Alertas Prioritários -->
+  <div style="margin-bottom:20px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--red);margin-bottom:12px">Alertas Prioritários</div>
+    <div id="resumo-alertas" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.2);padding:16px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">RENOVAÇÕES EM 7 DIAS</div>
+        <div id="resumo-renovacoes-count" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--red)">—</div>
+        <div id="resumo-renovacoes-val" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);margin-top:4px">—</div>
+      </div>
+      <div style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);padding:16px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">LEADS QUENTES SEM CONTATO (3+ DIAS)</div>
+        <div id="resumo-leads-quentes" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--amber)">—</div>
+        <div id="resumo-leads-quentes-names" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:4px">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ação Recomendada -->
+  <div style="margin-bottom:20px;background:rgba(201,168,76,0.04);border:1px solid rgba(201,168,76,0.2);padding:20px 24px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">Ação Recomendada</div>
+    <div id="resumo-acao" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--silver);line-height:1.6">Carregando dados...</div>
+    <button class="vbtn vbtn-gold" style="margin-top:14px" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
+  </div>
+
+  <!-- Comparativo de Períodos -->
+  <div style="margin-bottom:20px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">Comparativo — Este Mês vs Anterior</div>
+    <div id="resumo-comparativo" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
+  </div>
+
+  <!-- Top 3 Oportunidades -->
+  <div class="grid g2" style="margin-bottom:20px">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Top 3 Oportunidades</div>
+          <div class="panel-sub">Leads mais quentes no pipeline</div>
+        </div>
+        <div class="panel-badge warn">PIPELINE</div>
+      </div>
+      <div id="resumo-top-leads" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Formulários — Esta Semana</div>
+          <div class="panel-sub">Taxa de resposta dos alunos</div>
+        </div>
+        <div class="panel-badge blue">ENGAJAMENTO</div>
+      </div>
+      <div id="resumo-forms" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+</div>
+<!-- fim tab-resumo -->
 
 
 
