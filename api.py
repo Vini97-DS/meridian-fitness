@@ -122,17 +122,9 @@ def create_users_table():
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS invites (
-                    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    email      TEXT UNIQUE NOT NULL,
-                    used       BOOLEAN DEFAULT false,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
             conn.commit()
         conn.close()
-        print("Tabelas users + invites OK")
+        print("Tabela users OK")
     except Exception as e:
         print(f"Erro startup (nao critico): {e}")
 
@@ -148,85 +140,8 @@ class LoginData(BaseModel):
     email:    str
     password: str
 
-@app.get("/api/auth/check-invite")
-def check_invite(email: str, conn=Depends(get_db)):
-    rows = query(conn, "SELECT id, used FROM invites WHERE email = %s", (email.lower().strip(),))
-    if not rows:
-        raise HTTPException(404, "E-mail nao encontrado. Solicite um convite ao administrador.")
-    if rows[0]["used"]:
-        raise HTTPException(400, "Este convite ja foi utilizado.")
-    return {"ok": True}
-
-def _check_admin_key(key: str):
-    expected = os.getenv("ADMIN_KEY", "meridian-admin-2024")
-    if key != expected:
-        raise HTTPException(403, "Chave admin invalida")
-
-@app.post("/api/admin/invite")
-def add_invite(data: dict, conn=Depends(get_db)):
-    _check_admin_key(data.get("admin_key", ""))
-    email = data.get("email", "").lower().strip()
-    if not email or "@" not in email:
-        raise HTTPException(400, "E-mail invalido")
-    execute(conn, "INSERT INTO invites (email) VALUES (%s) ON CONFLICT (email) DO NOTHING", (email,))
-    return {"ok": True, "email": email}
-
-@app.get("/api/admin/overview")
-def admin_overview(admin_key: str, conn=Depends(get_db)):
-    _check_admin_key(admin_key)
-    row = query(conn, """
-        SELECT
-            (SELECT COUNT(*) FROM personals)                                      AS total_personais,
-            (SELECT COUNT(*) FROM students)                                       AS total_students,
-            (SELECT COALESCE(SUM(price_paid),0) FROM subscriptions WHERE status='active') AS mrr_total,
-            (SELECT COUNT(*) FROM checkins)                                       AS total_checkins,
-            (SELECT COUNT(*) FROM invites WHERE used = false)                     AS invites_pending
-    """)
-    return row[0]
-
-@app.get("/api/admin/personais")
-def admin_personais(admin_key: str, conn=Depends(get_db)):
-    _check_admin_key(admin_key)
-    rows = query(conn, """
-        SELECT
-            p.id                                                            AS personal_id,
-            u.name,
-            u.email,
-            u.created_at,
-            COUNT(DISTINCT s.id)                                            AS total_students,
-            COUNT(DISTINCT s.id) FILTER (WHERE sub.status = 'active')      AS active_students,
-            COALESCE(SUM(sub.price_paid) FILTER (WHERE sub.status='active'), 0) AS mrr,
-            COUNT(DISTINCT sub.id)                                          AS total_subs,
-            COUNT(DISTINCT c.id)                                            AS total_checkins
-        FROM personals p
-        JOIN users u ON u.id::text = p.clerk_user_id
-        LEFT JOIN students s ON s.personal_id = p.id
-        LEFT JOIN subscriptions sub ON sub.student_id = s.id
-        LEFT JOIN checkins c ON c.student_id = s.id
-        GROUP BY p.id, u.name, u.email, u.created_at
-        ORDER BY mrr DESC
-    """)
-    return rows
-
-@app.get("/api/admin/invites")
-def admin_invites(admin_key: str, conn=Depends(get_db)):
-    _check_admin_key(admin_key)
-    rows = query(conn, "SELECT email, used, created_at FROM invites ORDER BY created_at DESC")
-    return rows
-
-@app.delete("/api/admin/invite/{email}")
-def delete_invite(email: str, admin_key: str, conn=Depends(get_db)):
-    _check_admin_key(admin_key)
-    execute(conn, "DELETE FROM invites WHERE email = %s AND used = false", (email.lower().strip(),))
-    return {"ok": True}
-
 @app.post("/api/auth/register")
 def register(data: RegisterData, conn=Depends(get_db)):
-    invite = query(conn, "SELECT id, used FROM invites WHERE email = %s", (data.email.lower().strip(),))
-    if not invite:
-        raise HTTPException(400, "E-mail nao autorizado. Solicite um convite.")
-    if invite[0]["used"]:
-        raise HTTPException(400, "Este convite ja foi utilizado.")
     existing = query(conn, "SELECT id FROM users WHERE email = %s", (data.email.lower(),))
     if existing:
         raise HTTPException(status_code=400, detail="Email ja cadastrado")
@@ -238,7 +153,6 @@ def register(data: RegisterData, conn=Depends(get_db)):
         VALUES (%s, %s, %s)
         RETURNING id, name, email
     """, (data.name.strip(), data.email.lower().strip(), hashed))
-    execute(conn, "UPDATE invites SET used=true WHERE email=%s", (data.email.lower().strip(),))
     token = create_token(str(user["id"]), user["email"], user["name"])
     return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]}}
 
@@ -321,15 +235,6 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         "GROUP BY p.name, p.duration_months ORDER BY p.duration_months",
         (personal_id,))
 
-    # Receita e alunos por canal (para ROI chart)
-    revenue_by_channel = query(conn,
-        "SELECT s.channel, COALESCE(SUM(sub.price_paid),0) AS revenue, "
-        "COUNT(DISTINCT sub.student_id) AS students "
-        "FROM subscriptions sub JOIN students s ON s.id = sub.student_id "
-        "WHERE sub.personal_id = %s AND s.channel IS NOT NULL "
-        "GROUP BY s.channel ORDER BY revenue DESC",
-        (personal_id,))
-
     # Novos alunos por mês
     student_flow = query(conn,
         "SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month, "
@@ -367,11 +272,10 @@ def get_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_us
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
                             "value": float((e7[0] if e7 else {}).get("value") or 0)},
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
-        "mrr_history":          mrr_history,
-        "student_flow":         student_flow,
-        "channels":             channels,
-        "renewal_by_plan":      renewal_by_plan,
-        "revenue_by_channel":   revenue_by_channel,
+        "mrr_history":     mrr_history,
+        "student_flow":    student_flow,
+        "channels":        channels,
+        "renewal_by_plan": renewal_by_plan,
     }
 
 # ═══════════════════════════════════════════════════════════════
@@ -391,23 +295,7 @@ class StudentCreate(BaseModel):
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    return query(conn, """
-        SELECT DISTINCT ON (s.id)
-            s.id, s.name, s.phone, s.email, s.goal, s.channel,
-            s.weight_initial, s.weight_current, s.bf_initial, s.bf_current,
-            s.created_at AS student_since,
-            sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at, sub.status,
-            p.name AS plan_name, p.duration_months,
-            (sub.expires_at - CURRENT_DATE) AS days_to_expire,
-            COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2 WHERE s2.student_id=s.id),0) AS ltv_total,
-            GREATEST((SELECT COUNT(*) FROM subscriptions s3 WHERE s3.student_id=s.id)-1,0) AS renewals_count
-        FROM students s
-        JOIN subscriptions sub ON sub.student_id = s.id
-        JOIN plans p ON p.id = sub.plan_id
-        WHERE s.personal_id = %s
-          AND COALESCE(s.status,'active') != 'cancelled'
-        ORDER BY s.id, sub.starts_at DESC
-    """, (personal_id,))
+    return query(conn, "SELECT * FROM v_active_students WHERE personal_id = %s ORDER BY days_to_expire ASC", (personal_id,))
 
 @app.post("/api/students")
 def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -523,18 +411,7 @@ class PhotoCreate(BaseModel):
 
 @app.get("/api/photos/{student_id}")
 def get_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
-    photos = query(conn,
-        "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at ASC",
-        (student_id,))
-    angles = ["frontal", "costas", "esquerdo", "direito"]
-    comparison = {}
-    for angle in angles:
-        by_angle = [p for p in photos if p.get("angle") == angle]
-        comparison[angle] = {
-            "first":  dict(by_angle[0])  if by_angle else None,
-            "latest": dict(by_angle[-1]) if by_angle else None,
-        }
-    return {"comparison": comparison, "all": photos}
+    return query(conn, "SELECT * FROM progress_photos WHERE student_id=%s ORDER BY taken_at DESC", (student_id,))
 
 @app.post("/api/photos")
 def save_photo(data: PhotoCreate, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -661,13 +538,12 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
     if not rows:
         raise HTTPException(404, "Link invalido ou expirado")
     ft = rows[0]
-    checkin = execute(conn, """
+    execute(conn, """
         INSERT INTO checkins (student_id, personal_id, type,
             training_feedback, trainings_done, had_pain, pain_description,
             nutrition_notes, mood_score, energy_score, weight_reported,
             general_notes, responded_at)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
-        RETURNING id
     """, (
         str(ft["student_id"]), str(ft["personal_id"]),
         data.get("form_type", ft.get("form_type","semanal")),
@@ -681,19 +557,34 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         data.get("weight_reported"),
         data.get("general_notes"),
     ))
-    checkin_id = checkin.get("id")
+    # Pega id do checkin inserido
+    checkin_rows = query(conn,
+        "SELECT id FROM checkins WHERE student_id=%s ORDER BY created_at DESC LIMIT 1",
+        (str(ft["student_id"]),))
+    checkin_id = str(checkin_rows[0]["id"]) if checkin_rows else None
+
     if data.get("weight_reported"):
         execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
                 (data["weight_reported"], str(ft["student_id"])))
-    angle_map = {"frente": "frontal", "costas": "costas", "esq": "esquerdo", "dir": "direito"}
-    for key, b64 in (data.get("photos") or {}).items():
-        if b64:
-            angle = angle_map.get(key, key)
-            execute(conn, """
-                INSERT INTO progress_photos (student_id, checkin_id, cloudinary_id, url, angle, taken_at)
-                VALUES (%s, %s, %s, %s, %s, NOW()::date)
-            """, (str(ft["student_id"]), str(checkin_id) if checkin_id else None,
-                  "form-upload", "data:image/jpeg;base64," + b64, angle))
+
+    # Salvar fotos base64
+    photos = data.get("photos") or {}
+    if any(v for v in photos.values() if v):
+        execute(conn, """
+            INSERT INTO progress_photos
+              (student_id, checkin_id, form_type,
+               photo_frontal, photo_costas, photo_esq, photo_dir)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            str(ft["student_id"]),
+            checkin_id,
+            data.get("form_type", ft.get("form_type", "mensal")),
+            ("data:image/jpeg;base64," + photos["frente"]) if photos.get("frente") else None,
+            ("data:image/jpeg;base64," + photos["costas"]) if photos.get("costas") else None,
+            ("data:image/jpeg;base64," + photos["esq"])    if photos.get("esq")    else None,
+            ("data:image/jpeg;base64," + photos["dir"])    if photos.get("dir")    else None,
+        ))
+
     execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
     return {"ok": True}
 
