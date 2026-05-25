@@ -133,6 +133,12 @@ function renderComparisonGrid() {
   }).join('');
 }
 
+// ── MÓDULO DE ESTADO ─────────────────────────────────────
+let _lastMetrics  = null;
+let _lastStudents = null;
+let _personalId   = null;
+let _biPeriod     = 30;
+
 // ── CHART REGISTRY ──────────────────────────────────────
 const charts = {};
 function mkChart(id, config) {
@@ -225,6 +231,9 @@ function switchTab(tab, btn) {
     window._configInited = true;
     initConfig();
   }
+  if (tab === 'resumo') {
+    loadResumoTab();
+  }
   setTimeout(() => {
     try { Object.values(charts).forEach(ch => ch && ch.resize()); } catch {}
   }, 150);
@@ -302,15 +311,19 @@ async function loadDashboard() {
     if (me?.personal_id) {
       personalId = me.personal_id;
       session.personal_id = personalId;
+      if (me.role) session.role = me.role;
       localStorage.setItem('mf_user', JSON.stringify(session));
     }
   }
+  _personalId = personalId;
 
   // Header
   const name     = session.name || 'Personal';
+  const role     = session.role || 'personal';
   const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const h1 = document.getElementById('dash-user-h1');
-  if (h1) h1.innerHTML = name + ' — <em>Personal Trainer</em>';
+  const roleLabel = role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
+  if (h1) h1.innerHTML = name + ' — <em>' + roleLabel + '</em>';
   const nameEl   = document.getElementById('dash-user-name');
   const avatarEl = document.getElementById('dash-user-avatar');
   if (nameEl)   nameEl.textContent   = name;
@@ -323,12 +336,16 @@ async function loadDashboard() {
   initVendasCharts(null);
 
   // Load tudo em paralelo
-  const [metrics, studentsData, leadsData, plansData] = await Promise.all([
-    api('/metrics/' + personalId).catch(() => null),
+  const [metrics, studentsData, leadsData, plansData, insights] = await Promise.all([
+    api('/metrics/' + personalId + '?period=' + _biPeriod).catch(() => null),
     api('/students/' + personalId).catch(() => null),
     api('/leads/'    + personalId).catch(() => null),
     api('/plans/'    + personalId).catch(() => null),
+    api('/insights/' + personalId).catch(() => null),
   ]);
+
+  _lastMetrics  = metrics;
+  _lastStudents = studentsData;
 
   // KPIs e alertas
   updateKPICards(metrics);
@@ -336,6 +353,9 @@ async function loadDashboard() {
 
   // Gráficos com dados reais
   initBICharts(metrics);
+
+  // Sumário executivo
+  if (insights) renderInsights(insights);
 
   // Alunos
   if (studentsData?.length) {
@@ -543,6 +563,44 @@ function initBICharts(m) {
         } }
     });
   } else { mkEmptyChart('roiChart', empty); }
+}
+
+// ── SUMÁRIO EXECUTIVO ────────────────────────────────────
+function renderInsights(ins) {
+  const el = document.getElementById('executive-summary');
+  if (!el) return;
+  const pico = ins.pico_horario !== null && ins.pico_horario !== undefined
+    ? ins.pico_horario + 'h–' + (ins.pico_horario + 2) + 'h'
+    : '—';
+  const items = [
+    { icon:'👤', label:'Gênero Dominante',   val: ins.genero_dominante   || '—' },
+    { icon:'📅', label:'Faixa Etária Top',   val: ins.faixa_etaria_top   || '—' },
+    { icon:'🎯', label:'Objetivo Principal', val: ins.objetivo_principal || '—' },
+    { icon:'📋', label:'Plano Preferido',    val: ins.plano_preferido    || '—' },
+    { icon:'📣', label:'Canal Principal',    val: ins.canal_principal    || '—' },
+    { icon:'⏰', label:'Pico de Atividade',  val: pico },
+  ];
+  el.innerHTML = items.map(i => `
+    <div style="background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:18px 12px;text-align:center">
+      <div style="font-size:1.4rem;margin-bottom:7px">${i.icon}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:5px">${i.label}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--white)">${i.val}</div>
+    </div>`).join('');
+}
+
+// ── PERÍODO DO BI ─────────────────────────────────────────
+function setBIPeriod(btn, days) {
+  document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _biPeriod = days;
+  if (_personalId) {
+    api('/metrics/' + _personalId + '?period=' + days).then(m => {
+      _lastMetrics = m;
+      updateKPICards(m);
+      updateAlertBar(m);
+      initBICharts(m);
+    }).catch(() => {});
+  }
 }
 
 // ── VENDAS CHARTS ────────────────────────────────────────
@@ -1043,19 +1101,26 @@ function loadLeadsFromAPI(pipeline) {
   Object.keys(kStatus).forEach(k => delete kStatus[k]);
   Object.entries(pipeline).forEach(([status, leads]) => {
     leads.forEach(l => {
+      const indicadoPor = l.notes?.match(/Indicado por: (.+)/)?.[1];
+      const sub = indicadoPor
+        ? 'Indicação de ' + indicadoPor
+        : capitalize(l.channel||'instagram') + ' · ' + capitalize(l.goal||'emagrecimento');
       const card = {
-        id:    l.id,
-        name:  l.name,
-        sub:   capitalize(l.channel||'instagram') + ' · ' + capitalize(l.goal||'emagrecimento'),
-        val:   l.plan_name ? l.plan_name + ' · R$'+Math.round(l.price_brl||0) : '',
-        days:  calcDays(l.created_at),
-        phone: l.phone || '',
-        email: l.email || '',
-        canal: capitalize(l.channel||'instagram'),
-        dp:    daysSince(l.created_at),
-        ok:    status==='fechado',
-        lost:  status==='perdido',
-        hot:   status==='proposta',
+        id:          l.id,
+        name:        l.name,
+        sub,
+        val:         l.plan_name ? l.plan_name + ' · R$'+Math.round(l.price_brl||0) : '',
+        days:        calcDays(l.created_at),
+        phone:       l.phone || '',
+        email:       l.email || '',
+        canal:       capitalize(l.channel||'instagram'),
+        notes:       l.notes || '',
+        dp:          daysSince(l.created_at),
+        ok:          status==='fechado',
+        lost:        status==='perdido',
+        hot:         status==='proposta',
+        isIndicacao: (l.channel||'').toLowerCase() === 'indicacao',
+        created_at:  l.created_at,
       };
       KDATA[status] = KDATA[status] || [];
       KDATA[status].push(card);
@@ -1065,20 +1130,47 @@ function loadLeadsFromAPI(pipeline) {
   renderKanban();
 }
 
-function renderKanban() {
+function renderKanban(overrideData) {
+  const data  = overrideData || KDATA;
   const board = document.getElementById('v-kanban-board');
   if (!board) return;
   board.innerHTML = KCOLS.map(col => {
-    const cards = KDATA[col.key] || [];
+    const cards = data[col.key] || [];
     return '<div class="v-kcol"><div class="v-kcol-head"><span class="v-kcol-title">'+col.label+'</span><span class="v-kcount" style="background:'+col.color+'22;color:'+col.color+'">'+cards.length+'</span></div>'
       + cards.map(c=>'<div class="v-kcard" style="'+(c.hot?'border-color:rgba(251,191,36,0.25)':c.ok?'border-color:rgba(74,222,128,0.2)':c.lost?'opacity:0.6;border-color:rgba(248,113,113,0.18)':'')+'cursor:pointer" onclick="openCtxMenu(event,\''+c.id+'\',\''+col.key+'\')">'
         +'<div class="v-kcard-name">'+c.name+'</div>'
         +'<div class="v-kcard-detail">'+c.sub+'</div>'
+        +(c.isIndicacao ? '<div style="font-size:7px;padding:2px 6px;background:rgba(167,139,250,0.15);color:var(--purple);border:1px solid rgba(167,139,250,0.2);display:inline-block;margin-top:3px">INDICAÇÃO</div>' : '')
         +(c.val?'<div class="v-kcard-val" style="'+(c.ok?'color:var(--green)':c.lost?'color:var(--red)':'')+'">'+c.val+'</div>':'')
         +(c.days?'<div class="v-kcard-days">'+c.days+'</div>':'')
         +'</div>').join('')
       + '</div>';
   }).join('');
+}
+
+function filtrarKanban() {
+  const canal   = document.getElementById('filtro-canal')?.value || '';
+  const dataDe  = document.getElementById('filtro-data-de')?.value;
+  const dataAte = document.getElementById('filtro-data-ate')?.value;
+  if (!canal && !dataDe && !dataAte) { renderKanban(); return; }
+  const filtered = {};
+  Object.entries(KDATA).forEach(([status, cards]) => {
+    filtered[status] = cards.filter(c => {
+      if (canal && (c.canal||'').toLowerCase() !== canal) return false;
+      if (dataDe && c.created_at && new Date(c.created_at) < new Date(dataDe)) return false;
+      if (dataAte && c.created_at && new Date(c.created_at) > new Date(dataAte + 'T23:59:59')) return false;
+      return true;
+    });
+  });
+  renderKanban(filtered);
+}
+
+function limparFiltros() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('filtro-canal', '');
+  set('filtro-data-de', '');
+  set('filtro-data-ate', '');
+  renderKanban();
 }
 
 // ── CONTEXT MENU ─────────────────────────────────────────
@@ -1117,9 +1209,38 @@ function ctxSave() {
   if (ctxId) {
     kNotes[ctxId] = document.getElementById('ctx-notes-input')?.value;
     const newStatus = document.querySelector('.ctx-sbtn.cur')?.dataset.s;
-    if (newStatus) updateLeadInAPI(ctxId, newStatus, kNotes[ctxId]).catch(()=>{});
+    if (newStatus) {
+      updateLeadInAPI(ctxId, newStatus, kNotes[ctxId]).catch(()=>{});
+      if (newStatus === 'fechado') {
+        const lead = Object.values(KDATA).flat().find(c => c.id === ctxId);
+        if (lead && confirm('Converter ' + lead.name + ' em aluno? Isso abrirá o formulário de cadastro pré-preenchido.')) {
+          closeCtxMenu();
+          converterLeadEmAluno(lead);
+          return;
+        }
+      }
+    }
   }
   closeCtxMenu();
+}
+
+async function converterLeadEmAluno(lead) {
+  switchTab('config', document.querySelector('[onclick*="config"]'));
+  const formEl = document.getElementById('cfg-aluno-form');
+  if (formEl && formEl.style.display === 'none') toggleCadastroAluno();
+  setTimeout(() => {
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    set('cfg-aluno-nome',  lead.name);
+    set('cfg-aluno-phone', lead.phone);
+    set('cfg-aluno-email', lead.email);
+    const canal = (lead.canal || 'instagram').toLowerCase();
+    set('cfg-aluno-canal', canal);
+    toggleIndicacaoField(document.getElementById('cfg-aluno-canal'));
+    if (lead.notes) {
+      const indicado = lead.notes.match(/Indicado por: (.+)/)?.[1];
+      if (indicado) set('cfg-aluno-indicacao', indicado);
+    }
+  }, 350);
 }
 
 // ── LEADS API ────────────────────────────────────────────
@@ -1613,25 +1734,42 @@ async function encerrarContrato(studentId,name){
     renderAlunosList(alunos); loadDashboard();
   } catch(err){alert('Erro: '+err.message);}
 }
-function salvarPerfil(){
-  const nome = document.getElementById('cfg-nome').value.trim();
-  const bio  = document.getElementById('cfg-bio')?.value.trim() || '';
-  const esp  = document.getElementById('cfg-especialidade')?.value.trim() || '';
-  const okEl = document.getElementById('cfg-perfil-ok');
+async function salvarPerfil(){
+  const nome  = document.getElementById('cfg-nome')?.value.trim();
+  const bio   = document.getElementById('cfg-bio')?.value.trim() || '';
+  const esp   = document.getElementById('cfg-especialidade')?.value.trim() || '';
+  const wh    = document.getElementById('cfg-whatsapp')?.value.trim() || '';
+  const insta = document.getElementById('cfg-instagram')?.value.trim() || '';
+  const site  = document.getElementById('cfg-site')?.value.trim() || '';
+  const cid   = document.getElementById('cfg-cidade')?.value.trim() || '';
+  const pais  = document.getElementById('cfg-pais')?.value || 'Brasil';
+  const moeda = document.getElementById('cfg-moeda')?.value || 'BRL';
+  const okEl  = document.getElementById('cfg-perfil-ok');
   if(!nome) return;
-  const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session && (session.personal_id || session.id);
   if(session) {
     session.name = nome;
-    if(bio) session.bio = bio;
-    if(esp) session.especialidade = esp;
+    if(bio)  session.bio           = bio;
+    if(esp)  session.especialidade = esp;
     localStorage.setItem('mf_user', JSON.stringify(session));
   }
   const h1 = document.getElementById('dash-user-h1');
-  if(h1) h1.innerHTML = nome + ' — <em>Personal Trainer</em>';
+  const role = session?.role || 'personal';
+  const roleLabel = role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
+  if(h1) h1.innerHTML = nome + ' — <em>' + roleLabel + '</em>';
   const nameEl = document.getElementById('dash-user-name');
   if(nameEl) nameEl.textContent = nome;
   const bioEl  = document.getElementById('dash-user-bio');
   if(bioEl && bio) bioEl.textContent = bio;
+  // Persist to API
+  if (personalId) {
+    api('/personals/' + personalId, { method:'PATCH', body:JSON.stringify({
+      name: nome, bio: bio||null, especialidade: esp||null,
+      whatsapp: wh||null, instagram: insta||null, site: site||null,
+      cidade: cid||null, pais, moeda,
+    })}).catch(()=>{});
+  }
   okEl.style.display='block';
   setTimeout(()=>okEl.style.display='none',2500);
 }
@@ -1713,6 +1851,88 @@ async function loadSalesTable(personalId) {
     } else {
       renewalEl.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhuma renovação nos próximos 30 dias</div>';
     }
+  }
+}
+
+// ── RESUMO EXECUTIVO ─────────────────────────────────────
+async function loadResumoTab() {
+  const m = _lastMetrics;
+  const s = _lastStudents || [];
+
+  // Alertas — renovações em 7 dias
+  const e7count = m?.expiring_7d?.count || 0;
+  const e7val   = m?.expiring_7d?.value || 0;
+  const countEl = document.getElementById('resumo-renovacoes-count');
+  const valEl   = document.getElementById('resumo-renovacoes-val');
+  if (countEl) countEl.textContent = e7count || '0';
+  if (valEl)   valEl.textContent   = e7count > 0 ? fmtBRL(e7val) + ' em risco' : 'Nenhuma renovação urgente';
+
+  // Leads quentes sem contato há 3+ dias (proposta há 3+ dias)
+  const quentes = (KDATA.proposta || []).filter(c => c.dp >= 3);
+  const qtEl    = document.getElementById('resumo-leads-quentes');
+  const qtNames = document.getElementById('resumo-leads-quentes-names');
+  if (qtEl)    qtEl.textContent    = quentes.length || '0';
+  if (qtNames) qtNames.textContent = quentes.length
+    ? quentes.slice(0,3).map(c=>c.name).join(', ') + (quentes.length>3?' +mais':'')
+    : 'Todos os leads foram contatados';
+
+  // Ação recomendada
+  const acaoEl = document.getElementById('resumo-acao');
+  if (acaoEl) {
+    if (e7count > 0) {
+      acaoEl.textContent = 'Você tem ' + e7count + ' renovação(ões) nos próximos 7 dias gerando ' + fmtBRL(e7val) + '. Entre em contato agora para garantir a retenção.';
+    } else if (quentes.length > 0) {
+      acaoEl.textContent = 'Você tem ' + quentes.length + ' lead(s) quente(s) sem contato há 3+ dias. Retome o contato para aumentar a taxa de fechamento.';
+    } else {
+      acaoEl.textContent = 'Nenhuma ação urgente. Continue acompanhando seus alunos e nutrindo os leads do pipeline.';
+    }
+  }
+
+  // Comparativo de períodos (usando métricas atuais como proxy)
+  const compEl = document.getElementById('resumo-comparativo');
+  if (compEl && m) {
+    const items = [
+      { label:'MRR Atual',       val: fmtBRL(m.mrr||0),          color:'var(--gold)'  },
+      { label:'Alunos Ativos',   val: (m.active_students||0)+'', color:'var(--green)' },
+      { label:'Taxa Renovação',  val: (m.renewal_rate||0)+'%',   color:'var(--blue)'  },
+      { label:'LTV Médio',       val: fmtBRL(m.avg_ltv||0),       color:'var(--amber)' },
+    ];
+    compEl.innerHTML = items.map(i => `
+      <div style="background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:18px;text-align:center">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">${i.label}</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.7rem;color:${i.color}">${i.val}</div>
+      </div>`).join('');
+  }
+
+  // Top 3 oportunidades (leads em proposta ou contato)
+  const topLeadsEl = document.getElementById('resumo-top-leads');
+  if (topLeadsEl) {
+    const oportunidades = [...(KDATA.proposta||[]), ...(KDATA.contato||[])].slice(0,3);
+    if (oportunidades.length) {
+      topLeadsEl.innerHTML = oportunidades.map(c => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(168,178,189,0.05)">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--navy3);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);border:1px solid rgba(201,168,76,0.2);flex-shrink:0">${c.name.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+          <div style="flex:1"><div style="font-size:11px;font-weight:600;color:var(--white)">${c.name}</div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:2px">${c.sub}</div></div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--amber)">${c.days}</div>
+        </div>`).join('');
+    } else {
+      topLeadsEl.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum lead quente no momento</div>';
+    }
+  }
+
+  // Formulários — alunos sem checkin na última semana
+  const formsEl = document.getElementById('resumo-forms');
+  if (formsEl) {
+    const total    = s.length;
+    const comResp  = s.filter(a => a.student_since && daysSince(a.student_since) < 365).length;
+    const pct      = total > 0 ? Math.round(comResp / total * 100) : 0;
+    formsEl.innerHTML = `
+      <div style="text-align:center;padding:20px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:3rem;color:var(--gold)">${total}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">alunos ativos</div>
+        <div style="margin-top:16px;font-family:'DM Mono',monospace;font-size:10px;color:var(--silver)">Envie formulários semanais para manter o engajamento</div>
+        <button class="vbtn vbtn-blue" style="margin-top:14px" onclick="switchTab('acompanhamento',document.querySelector('[onclick*=acompanhamento]'))">Ver Acompanhamento →</button>
+      </div>`;
   }
 }
 
