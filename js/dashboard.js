@@ -816,11 +816,8 @@ function updateStudent() {
   set('studentLTV',     s.ltv);
   set('sk1',s.sk1); set('sk2',s.sk2); set('sk3',s.sk3); set('sk4',s.sk4);
 
-  // Fotos — placeholders (reais carregados por loadStudentCheckins)
-  _carouselIdx = 0;
-  _carouselPhotos = _carouselAngles.map(a => ({ angle: a.key, label: a.label, photo: null }));
-  _comparisonByAngle = {};
-  renderCarouselFrame();
+  // Fotos — placeholder enquanto loadStudentCheckins carrega
+  renderPhotoCarousel(sel.value, []);
 
   // Timeline
   const tlEl = document.getElementById('student-timeline');
@@ -909,13 +906,19 @@ const posesKeys   = ['photo_frontal', 'photo_costas', 'photo_esq', 'photo_dir'];
 function renderPhotoCarousel(studentId, photos) {
   const container = document.getElementById('photo-compare');
   if (!container) return;
-  if (!photos?.length) {
+
+  // Exclude old Cloudinary records — only keep rows with at least one base64 photo
+  const validPhotos = (photos || []).filter(p =>
+    posesKeys.some(k => p[k] && p[k].startsWith('data:'))
+  );
+
+  if (!validPhotos.length) {
     container.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:40px;text-align:center">Sem fotos cadastradas ainda</div>';
     return;
   }
 
-  const primeiro = photos[0];
-  const atual    = photos[photos.length - 1];
+  const primeiro = validPhotos[0];
+  const atual    = validPhotos[validPhotos.length - 1];
   const isTrimestral = atual.form_type === 'trimestral';
   carrosselPoseAtual = 0;
 

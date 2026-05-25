@@ -495,15 +495,18 @@ class SubscriptionCreate(BaseModel):
 
 @app.post("/api/subscriptions")
 def create_subscription(data: SubscriptionCreate, conn=Depends(get_db), _=Depends(get_current_user)):
-    execute(conn,
-        "UPDATE subscriptions SET status='renewed' WHERE student_id=%s AND status='active'",
-        (data.student_id,))
+    try:
+        execute(conn,
+            "UPDATE subscriptions SET status='expired' WHERE student_id=%s AND status='active'",
+            (data.student_id,))
+    except Exception:
+        conn.rollback()
     return execute(conn, """
         INSERT INTO subscriptions (student_id, personal_id, plan_id, price_paid,
-          starts_at, expires_at, payment_method, status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, student_id, expires_at, status
+          starts_at, expires_at, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id, student_id, expires_at, status
     """, (data.student_id, data.personal_id, data.plan_id, data.price_paid,
-          data.starts_at, data.expires_at, data.payment_method, data.status))
+          data.starts_at, data.expires_at, data.status))
 
 # ═══════════════════════════════════════════════════════════════
 #  ENCERRAR CONTRATO
