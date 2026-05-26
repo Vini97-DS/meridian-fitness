@@ -274,6 +274,17 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         "GROUP BY p.name, p.duration_months ORDER BY p.duration_months",
         (personal_id,))
 
+    # Receita por canal
+    revenue_by_channel = query(conn,
+        "SELECT s.channel, "
+        "COALESCE(SUM(sub.price_paid), 0) AS revenue, "
+        "COUNT(DISTINCT sub.student_id) AS students "
+        "FROM subscriptions sub "
+        "JOIN students s ON s.id = sub.student_id "
+        "WHERE sub.personal_id = %s AND s.channel IS NOT NULL "
+        "GROUP BY s.channel ORDER BY revenue DESC",
+        (personal_id,))
+
     # Novos alunos por mês
     student_flow = query(conn,
         "SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month, "
@@ -313,8 +324,9 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
         "mrr_history":     mrr_history,
         "student_flow":    student_flow,
-        "channels":        channels,
-        "renewal_by_plan": renewal_by_plan,
+        "channels":            channels,
+        "renewal_by_plan":     renewal_by_plan,
+        "revenue_by_channel":  revenue_by_channel,
     }
 
 # ═══════════════════════════════════════════════════════════════

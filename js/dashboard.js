@@ -663,28 +663,52 @@ function initBICharts(m) {
     });
   } else { mkEmptyChart('socialChart', empty); }
 
-  // roiChart — Receita + Alunos por Canal (barras agrupadas, eixo duplo)
+  // roiChart — Receita por Canal (barras coloridas) + linha de alunos (eixo duplo)
   if (m?.revenue_by_channel?.length) {
+    const _roiColors = [GOLD, GREEN, BLUE, AMBER, PURPLE, RED];
+    const _roiLabels = m.revenue_by_channel.map(r => capitalize(r.channel));
     mkChart('roiChart', {
       type: 'bar',
       data: {
-        labels: m.revenue_by_channel.map(r => capitalize(r.channel)),
+        labels: _roiLabels,
         datasets: [
-          { label: 'Receita (R$)', data: m.revenue_by_channel.map(r => parseFloat(r.revenue) || 0),
-            backgroundColor: GOLD + '66', borderColor: GOLD, borderWidth: 1.5, borderRadius: 3, yAxisID: 'y' },
-          { label: 'Alunos', data: m.revenue_by_channel.map(r => parseInt(r.students) || 0),
-            backgroundColor: PURPLE + '66', borderColor: PURPLE, borderWidth: 1.5, borderRadius: 3, yAxisID: 'y2' },
+          {
+            label: 'Receita (R$)',
+            data: m.revenue_by_channel.map(r => parseFloat(r.revenue) || 0),
+            backgroundColor: _roiColors.map(c => c + '55'),
+            borderColor: _roiColors,
+            borderWidth: 1.5, borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Alunos',
+            data: m.revenue_by_channel.map(r => parseInt(r.students) || 0),
+            type: 'line',
+            borderColor: SILV + '88',
+            borderDash: [4, 3], borderWidth: 1.5,
+            pointRadius: 4, pointBackgroundColor: SILV,
+            fill: false,
+            yAxisID: 'y2',
+          }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } }, tooltip: { ...tt } },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } },
+          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label === 'Receita (R$)'
+            ? 'Receita: R$ ' + ctx.parsed.y.toLocaleString('pt-BR')
+            : 'Alunos: ' + ctx.parsed.y } }
+        },
         scales: {
           x:  { grid: { display: false }, ticks: { color: SILV, font: { size: 9 } } },
-          y:  { grid, ticks: { color: SILV, callback: v => 'R$' + (v >= 1000 ? (v/1000).toFixed(0)+'K' : v) }, position: 'left' },
-          y2: { grid: { display: false }, ticks: { color: PURPLE, font: { size: 8 } }, position: 'right' }
-        } }
+          y:  { grid, ticks: { color: GOLD, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } },
+          y2: { position: 'right', grid: { display: false }, ticks: { color: SILV } }
+        }
+      }
     });
-  } else { mkEmptyChart('roiChart', empty); }
+  } else { mkEmptyChart('roiChart', 'Sem dados de canal ainda'); }
 }
 
 // ── SUMÁRIO EXECUTIVO ────────────────────────────────────
