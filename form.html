@@ -59,6 +59,14 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .error-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--red)}
 .loading{text-align:center;padding:60px 20px}
 .loading-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:0.1em}
+@media(max-width:480px){
+  .container{padding:24px 14px 60px}
+  .photo-grid{grid-template-columns:1fr}
+  .scale{gap:6px}
+  .scale-btn{min-width:38px;height:38px}
+  .hero-name{font-size:1.7rem}
+  .form-card{padding:20px 16px}
+}
 </style>
 </head>
 <body>
