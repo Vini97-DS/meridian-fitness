@@ -566,7 +566,14 @@ canvas{background:transparent!important}
     <div class="kpi-label">LTV Médio</div>
     <div class="kpi-value"><span id="kpi-ltv-val">—</span></div>
     <div class="kpi-sub" id="kpi-ltv-sub">—</div>
-    
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Meta Mensal</div>
+    <div class="kpi-value" id="kpi-meta-val">—</div>
+    <div class="kpi-sub" id="kpi-meta-sub">Configure nas ⚙ Configurações</div>
+    <div class="engagement-bar" style="margin-top:8px">
+      <div class="engagement-fill" id="kpi-meta-bar" style="width:0%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div>
+    </div>
   </div>
 </div>
 
@@ -1187,6 +1194,66 @@ canvas{background:transparent!important}
     </div>
   </div>
 
+  <!-- ── PAGAMENTO ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Configurações de Pagamento</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Meios de Pagamento</div>
+          <div class="panel-sub">Configure seu link de pagamento e chave PIX — usado nos links de venda</div>
+        </div>
+        <button class="vbtn vbtn-gold" onclick="salvarPagamento()">Salvar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
+        <div class="v-field" style="grid-column:1/-1">
+          <label class="v-label">Link de Pagamento Principal</label>
+          <input class="v-input" id="cfg-payment-link" type="url" placeholder="Ex: https://mpago.la/abc123 ou https://buy.stripe.com/abc" />
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">Mercado Pago, Stripe, PagSeguro, PayPal — qualquer link funciona</div>
+        </div>
+        <div class="v-field">
+          <label class="v-label">Chave PIX</label>
+          <input class="v-input" id="cfg-pix-key" type="text" placeholder="CPF, email, telefone ou chave aleatória" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Instrução de Pagamento</label>
+          <input class="v-input" id="cfg-payment-instruction" type="text" placeholder="Ex: Envie o comprovante no WhatsApp após pagar" />
+        </div>
+      </div>
+      <div id="cfg-payment-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Configurações de pagamento salvas</div>
+    </div>
+  </div>
+
+  <!-- ── META DE FATURAMENTO ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Meta de Faturamento</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Meta Anual</div>
+          <div class="panel-sub">Define a meta e o dashboard mostra seu progresso mensal automaticamente</div>
+        </div>
+        <button class="vbtn vbtn-gold" onclick="salvarMeta()">Salvar Meta</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px;align-items:end">
+        <div class="v-field">
+          <label class="v-label">Meta Anual (R$)</label>
+          <input class="v-input" id="cfg-meta-anual" type="number" placeholder="Ex: 200000" step="1000" min="0" />
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">Meta mensal calculada automaticamente: <span id="cfg-meta-mensal-calc">—</span></div>
+        </div>
+        <div style="padding-bottom:4px">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">Progresso atual</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--gold)" id="cfg-meta-progresso">—</div>
+          <div class="engagement-bar" style="margin-top:8px">
+            <div class="engagement-fill" id="cfg-meta-bar" style="width:0%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px" id="cfg-meta-pct">0% da meta anual</div>
+        </div>
+      </div>
+      <div id="cfg-meta-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Meta salva com sucesso</div>
+    </div>
+  </div>
+
   <!-- ── PLANOS ── -->
   <div style="margin-bottom:28px">
     <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Planos de Assinatura</div>
@@ -1345,6 +1412,10 @@ canvas{background:transparent!important}
           <div class="v-field" style="grid-column:1/-1">
             <label class="v-label">Observações</label>
             <textarea class="v-input" id="cfg-aluno-obs" rows="2" placeholder="Histórico médico, restrições, objetivos específicos..."></textarea>
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Restrições Alimentares</label>
+            <textarea class="v-input" id="cfg-aluno-restricao" rows="2" placeholder="Intolerâncias, alergias, preferências alimentares, dietas específicas..."></textarea>
           </div>
           <div class="v-field" style="grid-column:1/-1">
             <label class="v-label">Fotos iniciais (opcional)</label>

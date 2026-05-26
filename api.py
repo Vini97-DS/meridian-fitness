@@ -136,6 +136,11 @@ def create_users_table():
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Brasil'",
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS state TEXT",
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS city TEXT",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS dietary_restrictions TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_link TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pix_key TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_instruction TEXT",
+            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(12,2)",
         ]:
             try:
                 cur.execute(col_sql)
@@ -397,11 +402,12 @@ class StudentCreate(BaseModel):
     height_cm:      Optional[int]   = None
     bf_initial:     Optional[float] = None
     notes:          Optional[str]   = None
-    gender:         Optional[str]   = None
-    birth_date:     Optional[date]  = None
-    country:        Optional[str]   = None
-    state:          Optional[str]   = None
-    city:           Optional[str]   = None
+    gender:                Optional[str]   = None
+    birth_date:            Optional[date]  = None
+    country:               Optional[str]   = None
+    state:                 Optional[str]   = None
+    city:                  Optional[str]   = None
+    dietary_restrictions:  Optional[str]   = None
 
 @app.get("/api/students/{personal_id}")
 def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
@@ -427,43 +433,43 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
 def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     return execute(conn, """
         INSERT INTO students (personal_id, name, phone, email, goal, channel,
-          weight_initial, height_cm, bf_initial, notes, gender, birth_date, country, state, city)
-        VALUES (%s,%s,%s,%s,%s::student_goal,%s::acquisition_channel,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+          weight_initial, height_cm, bf_initial, notes, gender, birth_date, country, state, city,
+          dietary_restrictions)
+        VALUES (%s,%s,%s,%s,%s::student_goal,%s::acquisition_channel,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING id, name, phone, created_at
     """, (data.personal_id, data.name, data.phone, data.email,
           (data.goal or 'outro').lower(), (data.channel or 'outro').lower(),
           data.weight_initial, data.height_cm, data.bf_initial, data.notes,
-          data.gender, data.birth_date, data.country, data.state, data.city))
+          data.gender, data.birth_date, data.country, data.state, data.city,
+          data.dietary_restrictions))
 
 # ═══════════════════════════════════════════════════════════════
 #  PERSONALS — PATCH PERFIL
 # ═══════════════════════════════════════════════════════════════
-class PersonalUpdate(BaseModel):
-    name:          Optional[str] = None
-    bio:           Optional[str] = None
-    especialidade: Optional[str] = None
-    whatsapp:      Optional[str] = None
-    instagram:     Optional[str] = None
-    site:          Optional[str] = None
-    cidade:        Optional[str] = None
-    pais:          Optional[str] = None
-    moeda:         Optional[str] = None
-
 @app.patch("/api/personals/{personal_id}")
-def update_personal(personal_id: str, data: PersonalUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
+def update_personal(personal_id: str, data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
+    allowed = ['name','bio','especialidade','whatsapp','instagram','site',
+               'cidade','pais','moeda','payment_link','pix_key',
+               'payment_instruction','meta_anual',
+               'canais_atendimento','formas_pagamento']
     fields, values = [], []
-    if data.name          is not None: fields.append("name = %s");          values.append(data.name)
-    if data.bio           is not None: fields.append("bio = %s");           values.append(data.bio)
-    if data.especialidade is not None: fields.append("especialidade = %s"); values.append(data.especialidade)
-    if data.whatsapp      is not None: fields.append("whatsapp = %s");      values.append(data.whatsapp)
-    if data.instagram     is not None: fields.append("instagram = %s");     values.append(data.instagram)
-    if data.site          is not None: fields.append("site = %s");          values.append(data.site)
-    if data.cidade        is not None: fields.append("cidade = %s");        values.append(data.cidade)
-    if data.pais          is not None: fields.append("pais = %s");          values.append(data.pais)
-    if data.moeda         is not None: fields.append("moeda = %s");         values.append(data.moeda)
-    if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
+    for k in allowed:
+        if k in data and data[k] is not None:
+            fields.append(f"{k} = %s")
+            values.append(data[k])
+    if not fields:
+        raise HTTPException(400, "Nenhum campo para atualizar")
     values.append(personal_id)
-    return execute(conn, f"UPDATE personals SET {', '.join(fields)} WHERE id=%s RETURNING id, name", values)
+    return execute(conn,
+        f"UPDATE personals SET {', '.join(fields)} WHERE id=%s RETURNING id",
+        values)
+
+@app.get("/api/personals/{personal_id}")
+def get_personal(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    rows = query(conn, "SELECT * FROM personals WHERE id=%s", (personal_id,))
+    if not rows:
+        raise HTTPException(404, "Personal não encontrado")
+    return rows[0]
 
 # ═══════════════════════════════════════════════════════════════
 #  LEADS

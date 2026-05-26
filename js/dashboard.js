@@ -435,6 +435,26 @@ function updateKPICards(m) {
   set('kpi-renovacao-val', m?.renewal_rate ? m.renewal_rate + '%' : '—');
   set('kpi-churn-val',     m?.churn_rate   ? m.churn_rate   + '%' : '—');
   set('kpi-ltv-val',       m?.avg_ltv      ? fmtBRL(m.avg_ltv)   : '—');
+
+  // Meta mensal
+  const session3   = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const metaAnual  = parseFloat(session3?.meta_anual) || 0;
+  const metaMensal = metaAnual / 12;
+  const mrrAtual   = m?.mrr || 0;
+  if (metaMensal > 0) {
+    const pct = Math.min(100, Math.round(mrrAtual / metaMensal * 100));
+    set('kpi-meta-val', fmtBRL(metaMensal));
+    set('kpi-meta-sub', pct + '% atingido · ' + fmtBRL(mrrAtual) + ' de ' + fmtBRL(metaMensal));
+    const bar = document.getElementById('kpi-meta-bar');
+    if (bar) bar.style.width = pct + '%';
+    // Progresso na aba config
+    const prog = document.getElementById('cfg-meta-progresso');
+    const pctEl = document.getElementById('cfg-meta-pct');
+    const cfgBar = document.getElementById('cfg-meta-bar');
+    if (prog)   prog.textContent   = fmtBRL(mrrAtual) + ' / ' + fmtBRL(metaMensal) + '/mês';
+    if (pctEl)  pctEl.textContent  = pct + '% da meta mensal (' + Math.round(mrrAtual/metaAnual*100) + '% da meta anual)';
+    if (cfgBar) cfgBar.style.width = pct + '%';
+  }
 }
 
 // ── ALERT BAR ────────────────────────────────────────────
@@ -1319,12 +1339,38 @@ async function vSaveLead() {
 }
 
 async function vGerarLink() {
-  const name = document.getElementById('v-lead-name')?.value.trim()||'prospect';
-  const slug = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
-  const ref  = Math.random().toString(36).substr(2,8).toUpperCase();
-  const url  = window.location.origin+'/plano-'+vSelectedPlan.dur+'?ref='+ref+'&lead='+slug;
-  document.getElementById('v-generated-link').textContent = url;
+  const session     = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const paymentLink = session?.payment_link || '';
+  const pixKey      = session?.pix_key || '';
+  const instruction = session?.payment_instruction || '';
+  const planPrice   = vSelectedPlan.price || '0';
+  const planDur     = vSelectedPlan.dur   || '';
+  const leadName    = document.getElementById('v-lead-name')?.value.trim() || 'Cliente';
+
+  let msg = `Olá ${leadName}!\n\n`;
+  msg += `Segue o link para contratar o *Plano ${planDur}* — *R$${planPrice}*:\n\n`;
+  if (paymentLink) msg += `🔗 ${paymentLink}\n\n`;
+  if (pixKey)      msg += `💳 PIX: ${pixKey}\n\n`;
+  if (instruction) msg += `📌 ${instruction}\n\n`;
+  msg += `Qualquer dúvida estou aqui!`;
+
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(msg);
+
+  document.getElementById('v-generated-link').textContent = paymentLink || 'Configure seu link de pagamento nas Configurações';
   document.getElementById('v-link-result').style.display = 'block';
+
+  const existing = document.getElementById('v-whatsapp-btn');
+  if (!existing) {
+    const btn = document.createElement('a');
+    btn.id        = 'v-whatsapp-btn';
+    btn.href      = whatsappUrl;
+    btn.target    = '_blank';
+    btn.textContent = '📲 Abrir no WhatsApp';
+    btn.style.cssText = "display:inline-block;margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;padding:6px 14px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:var(--green);text-decoration:none;cursor:pointer";
+    document.getElementById('v-link-result').appendChild(btn);
+  } else {
+    existing.href = whatsappUrl;
+  }
 }
 function vCopyLink() {
   const url = document.getElementById('v-generated-link')?.textContent;
@@ -1435,9 +1481,10 @@ async function initConfig() {
   const personalId = session.personal_id||session.id;
   const nomeEl     = document.getElementById('cfg-nome');
   if (nomeEl) nomeEl.value = session.name||'';
-  const [planos, alunos] = await Promise.all([
+  const [planos, alunos, personalData] = await Promise.all([
     api('/plans/'+personalId+'?all=true').catch(()=>[]),
     api('/students/'+personalId).catch(()=>[]),
+    api('/personals/'+personalId).catch(()=>null),
   ]);
   cfgPlanos = planos||[];
   renderPlanosList(cfgPlanos);
@@ -1445,6 +1492,29 @@ async function initConfig() {
   populatePlanoSelect(cfgPlanos);
   const inicioEl = document.getElementById('cfg-aluno-inicio');
   if (inicioEl) inicioEl.value = new Date().toISOString().split('T')[0];
+
+  // Carrega configurações de pagamento e meta
+  if (personalData) {
+    const setVal = (id, val) => { const el=document.getElementById(id); if(el && val != null) el.value=val; };
+    setVal('cfg-payment-link',        personalData.payment_link);
+    setVal('cfg-pix-key',             personalData.pix_key);
+    setVal('cfg-payment-instruction', personalData.payment_instruction);
+
+    if (personalData.meta_anual) {
+      setVal('cfg-meta-anual', personalData.meta_anual);
+      atualizarDisplayMeta(personalData.meta_anual);
+    }
+
+    // Persiste na sessão para uso no link de vendas e no BI
+    const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
+    if (s2) {
+      s2.meta_anual    = personalData.meta_anual;
+      s2.payment_link  = personalData.payment_link;
+      s2.pix_key       = personalData.pix_key;
+      s2.payment_instruction = personalData.payment_instruction;
+      localStorage.setItem('mf_user', JSON.stringify(s2));
+    }
+  }
 }
 
 function renderPlanosList(planos) {
@@ -1583,7 +1653,8 @@ async function cadastrarAluno() {
     const paisAluno = document.getElementById('cfg-aluno-pais')?.value || null;
     const estadoAluno=document.getElementById('cfg-aluno-estado')?.value || null;
     const cidadeAluno=document.getElementById('cfg-aluno-cidade-aluno')?.value || null;
-    const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null,gender:genero||null,birth_date:nascimento||null,country:paisAluno||null,state:estadoAluno||null,city:cidadeAluno||null})});
+    const restricao  =document.getElementById('cfg-aluno-restricao')?.value.trim() || null;
+    const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null,gender:genero||null,birth_date:nascimento||null,country:paisAluno||null,state:estadoAluno||null,city:cidadeAluno||null,dietary_restrictions:restricao})});
     await api('/subscriptions',{method:'POST',body:JSON.stringify({student_id:aluno.id,personal_id:personalId,plan_id:planId,price_paid:plano?.price_brl||0,starts_at:inicio,expires_at:fim,payment_method:pgto,status:'active'})});
     // Salvar fotos iniciais (4 poses)
     async function fotoParaBase64(inputId) {
@@ -1785,6 +1856,56 @@ async function salvarPerfil(){
   okEl.style.display='block';
   setTimeout(()=>okEl.style.display='none',2500);
 }
+
+// ── SALVAR PAGAMENTO ──────────────────────────────────────
+async function salvarPagamento() {
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session?.personal_id || session?.id;
+  const okEl       = document.getElementById('cfg-payment-ok');
+  const payload = {
+    payment_link:        document.getElementById('cfg-payment-link')?.value.trim() || null,
+    pix_key:             document.getElementById('cfg-pix-key')?.value.trim()      || null,
+    payment_instruction: document.getElementById('cfg-payment-instruction')?.value.trim() || null,
+  };
+  try {
+    await api('/personals/' + personalId, { method:'PATCH', body:JSON.stringify(payload) });
+    const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
+    if (s2) { Object.assign(s2, payload); localStorage.setItem('mf_user', JSON.stringify(s2)); }
+    okEl.style.display = 'block';
+    setTimeout(() => okEl.style.display = 'none', 3000);
+  } catch(err) { alert('Erro ao salvar: ' + err.message); }
+}
+
+// ── SALVAR META ───────────────────────────────────────────
+async function salvarMeta() {
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session?.personal_id || session?.id;
+  const metaAnual  = parseFloat(document.getElementById('cfg-meta-anual')?.value) || 0;
+  const okEl       = document.getElementById('cfg-meta-ok');
+  if (!metaAnual || metaAnual <= 0) { alert('Informe uma meta válida.'); return; }
+  try {
+    await api('/personals/' + personalId, { method:'PATCH', body:JSON.stringify({ meta_anual: metaAnual }) });
+    const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
+    if (s2) { s2.meta_anual = metaAnual; localStorage.setItem('mf_user', JSON.stringify(s2)); }
+    atualizarDisplayMeta(metaAnual);
+    if (_lastMetrics) updateKPICards(_lastMetrics);
+    okEl.style.display = 'block';
+    setTimeout(() => okEl.style.display = 'none', 3000);
+  } catch(err) { alert('Erro ao salvar meta: ' + err.message); }
+}
+
+function atualizarDisplayMeta(metaAnual) {
+  const metaMensal = metaAnual / 12;
+  const calcEl = document.getElementById('cfg-meta-mensal-calc');
+  if (calcEl) calcEl.textContent = 'R$ ' + Math.round(metaMensal).toLocaleString('pt-BR') + '/mês';
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'cfg-meta-anual') {
+    const val = parseFloat(e.target.value) || 0;
+    if (val > 0) atualizarDisplayMeta(val);
+  }
+});
 
 // ── INIT ─────────────────────────────────────────────────
 
