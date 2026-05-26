@@ -861,16 +861,28 @@ canvas{background:transparent!important}
             <option>Google</option><option>Outro</option>
           </select>
         </div>
+        <div class="v-field">
+          <label class="v-label">Forma de Pagamento Preferida</label>
+          <select class="v-select" id="v-lead-payment">
+            <option value="">Selecione...</option>
+            <option value="pix">PIX</option>
+            <option value="cartao">Cartão de Crédito</option>
+            <option value="boleto">Boleto</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
       </div>
 
       <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
         <button class="vbtn vbtn-green" id="v-save-btn" onclick="vSaveLead()">+ Cadastrar Lead</button>
         <button class="vbtn vbtn-blue" onclick="vGerarLink()">🔗 Gerar Link de Pagamento</button>
+        <button class="vbtn" style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:var(--green)" onclick="vEnviarWhatsApp()">📲 Enviar no WhatsApp</button>
       </div>
 
       <div id="v-link-result" style="display:none;margin-top:14px;padding:12px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px">Link gerado</div>
         <div id="v-generated-link" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);word-break:break-all"></div>
+        <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">Forma de pagamento detectada: <span id="v-msg-preview" style="color:var(--gold)">—</span></div>
         <button id="v-copy-btn" onclick="vCopyLink()" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;padding:6px 14px;background:transparent;border:1px solid rgba(74,222,128,0.3);color:var(--green);cursor:pointer">Copiar</button>
       </div>
     </div>

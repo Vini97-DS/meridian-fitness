@@ -351,6 +351,18 @@ async function loadDashboard() {
   updateKPICards(metrics);
   updateAlertBar(metrics);
 
+  // Carrega meta do personal se não estiver na sessão
+  if (!session.meta_anual) {
+    const personalData = await api('/personals/' + personalId).catch(() => null);
+    if (personalData?.meta_anual) {
+      session.meta_anual           = personalData.meta_anual;
+      session.payment_link         = personalData.payment_link;
+      session.pix_key              = personalData.pix_key;
+      session.payment_instruction  = personalData.payment_instruction;
+      localStorage.setItem('mf_user', JSON.stringify(session));
+    }
+  }
+
   // Gráficos com dados reais
   initBICharts(metrics);
 
@@ -537,9 +549,89 @@ function initBICharts(m) {
     });
   } else { mkEmptyChart('renewalChart', empty); }
 
-  // Sazonalidade e meta — justificados: precisam de histórico longo e metas cadastradas
+  // Sazonalidade — precisa de histórico longo
   mkEmptyChart('seasonChart', 'Sem dados · histórico de 12+ meses necessário');
-  mkEmptyChart('metaChart',   'Sem dados · metas de MRR não configuradas');
+
+  // Meta vs Realizado
+  const _metaSess   = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const _metaAnual  = parseFloat(_metaSess?.meta_anual) || 0;
+  const _metaMensal = _metaAnual / 12;
+  if (_metaMensal > 0 && m?.mrr_history?.length) {
+    mkChart('metaChart', {
+      type: 'bar',
+      data: {
+        labels: m.mrr_history.map(r => r.month),
+        datasets: [
+          {
+            label: 'MRR Realizado',
+            data: m.mrr_history.map(r => parseFloat(r.mrr) || 0),
+            backgroundColor: m.mrr_history.map(r =>
+              parseFloat(r.mrr) >= _metaMensal ? 'rgba(74,222,128,0.5)' : 'rgba(201,168,76,0.5)'
+            ),
+            borderColor: m.mrr_history.map(r =>
+              parseFloat(r.mrr) >= _metaMensal ? GREEN : GOLD
+            ),
+            borderWidth: 1.5, borderRadius: 3,
+          },
+          {
+            label: 'Meta Mensal',
+            data: m.mrr_history.map(() => Math.round(_metaMensal)),
+            type: 'line',
+            borderColor: 'rgba(248,113,113,0.7)',
+            borderDash: [5, 4], borderWidth: 2, pointRadius: 0, fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } },
+          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label + ': R$ ' + ctx.parsed.y.toLocaleString('pt-BR') } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: SILV, font: { size: 8 } } },
+          y: { grid, ticks: { color: SILV, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } }
+        }
+      }
+    });
+  } else if (_metaMensal > 0) {
+    const _mrr = m?.mrr || 0;
+    mkChart('metaChart', {
+      type: 'bar',
+      data: {
+        labels: ['Este mês'],
+        datasets: [
+          {
+            label: 'MRR Atual',
+            data: [_mrr],
+            backgroundColor: _mrr >= _metaMensal ? 'rgba(74,222,128,0.5)' : 'rgba(201,168,76,0.5)',
+            borderColor: _mrr >= _metaMensal ? GREEN : GOLD,
+            borderWidth: 1.5, borderRadius: 4,
+          },
+          {
+            label: 'Meta',
+            data: [_metaMensal],
+            backgroundColor: 'rgba(248,113,113,0.15)',
+            borderColor: 'rgba(248,113,113,0.6)',
+            borderWidth: 1.5, borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } },
+          tooltip: { ...tt }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: SILV } },
+          y: { grid, ticks: { color: SILV, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } }
+        }
+      }
+    });
+  } else {
+    mkEmptyChart('metaChart', 'Configure sua meta em ⚙ Configurações para ver este gráfico');
+  }
 
   // rpsChart — Mix de Planos (doughnut por duração)
   if (m?.renewal_by_plan?.length) {
@@ -1359,6 +1451,19 @@ async function vGerarLink() {
   document.getElementById('v-generated-link').textContent = paymentLink || 'Configure seu link de pagamento nas Configurações';
   document.getElementById('v-link-result').style.display = 'block';
 
+  // Preview da forma de pagamento detectada
+  const payMethod = document.getElementById('v-lead-payment')?.value || '';
+  const previewEl = document.getElementById('v-msg-preview');
+  if (previewEl) {
+    if (payMethod === 'pix' && session?.pix_key) {
+      previewEl.textContent = 'PIX: ' + session.pix_key;
+    } else if (session?.payment_link) {
+      previewEl.textContent = session.payment_link;
+    } else {
+      previewEl.textContent = 'Configure seu link/PIX nas ⚙ Configurações';
+    }
+  }
+
   const existing = document.getElementById('v-whatsapp-btn');
   if (!existing) {
     const btn = document.createElement('a');
@@ -1855,6 +1960,47 @@ async function salvarPerfil(){
   }
   okEl.style.display='block';
   setTimeout(()=>okEl.style.display='none',2500);
+}
+
+// ── WHATSAPP INTELIGENTE ──────────────────────────────────
+function vEnviarWhatsApp() {
+  const session     = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const paymentLink = session?.payment_link        || '';
+  const pixKey      = session?.pix_key             || '';
+  const instruction = session?.payment_instruction || '';
+
+  const leadName  = document.getElementById('v-lead-name')?.value.trim()  || 'Cliente';
+  const leadPhone = document.getElementById('v-lead-phone')?.value.trim() || '';
+  const payMethod = document.getElementById('v-lead-payment')?.value      || '';
+  const planPrice = vSelectedPlan.price || '0';
+  const planName  = document.querySelector('.plan-card-v.sel')
+    ?.querySelector('[style*="font-size:9px"]')?.textContent
+    || 'Plano ' + (vSelectedPlan.dur || '');
+
+  let msg = `Olá ${leadName}! 😊\n\n`;
+  msg += `Tudo certo para você começar com o *${planName}* — *R$ ${planPrice}*!\n\n`;
+
+  if (payMethod === 'pix' && pixKey) {
+    msg += `💳 *Pagamento via PIX:*\nChave: \`${pixKey}\`\n\nApós o pagamento, me envie o comprovante aqui! ✅\n`;
+  } else if ((payMethod === 'cartao' || payMethod === '') && paymentLink) {
+    msg += `💳 *Link de pagamento:*\n${paymentLink}\n\nÉ só clicar no link e concluir o pagamento! ✅\n`;
+  } else if (payMethod === 'boleto') {
+    msg += `📄 *Pagamento via Boleto:*\n`;
+    if (paymentLink) msg += `${paymentLink}\n\n`;
+    msg += `Após o pagamento o boleto compensa em até 1 dia útil. ✅\n`;
+  } else {
+    if (paymentLink) msg += `🔗 Link de pagamento:\n${paymentLink}\n\n`;
+    if (pixKey)      msg += `💳 PIX: ${pixKey}\n\n`;
+  }
+
+  if (instruction) msg += `\n📌 ${instruction}`;
+
+  const phone = leadPhone.replace(/\D/g, '');
+  const waUrl = phone
+    ? `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`
+    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+  window.open(waUrl, '_blank');
 }
 
 // ── SALVAR PAGAMENTO ──────────────────────────────────────
