@@ -138,6 +138,8 @@ let _lastMetrics  = null;
 let _lastStudents = null;
 let _personalId   = null;
 let _biPeriod     = 30;
+let _salesPeriod    = 30;
+let _lastSalesData  = null;
 
 // ── CHART REGISTRY ──────────────────────────────────────
 const charts = {};
@@ -1644,25 +1646,26 @@ function vCopyLink() {
 }
 
 // ── SALES TABLE — vazia até ter dados ───────────────────
-function renderSalesTable(data) {
+function renderSalesTable(data, emptyMsg) {
   const el = document.getElementById('v-sales-body');
   if (!el) return;
   if (!data?.length) {
-    el.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:20px;font-family:\'DM Mono\',monospace;font-size:10px">Nenhuma venda registrada ainda</td></tr>';
+    el.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:20px;font-family:\'DM Mono\',monospace;font-size:10px">'+(emptyMsg||'Nenhuma venda registrada ainda')+'</td></tr>';
     return;
   }
   const SC = {
-    pago:     'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)',
-    pendente: 'background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)',
-    cancelled:'background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2)',
+    ativo:          'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)',
+    vence_em_breve: 'background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)',
+    vencido:        'background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2)',
   };
+  const SL = { ativo:'ATIVO', vence_em_breve:'VENCE EM BREVE', vencido:'VENCIDO' };
   el.innerHTML = data.map(s=>`<tr>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${new Date(s.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.name||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.plan_name||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${capitalize(s.channel||'—')}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);text-align:right;padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">R$${Math.round(s.price_paid||0)}</td>
-    <td style="padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)"><span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;${SC[s.status]||SC.pago}">${(s.status||'pago').toUpperCase()}</span></td>
+    <td style="padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)"><span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;${SC[s.statusKey]||SC.ativo}">${SL[s.statusKey]||SL.ativo}</span></td>
   </tr>`).join('');
 }
 
@@ -2260,18 +2263,50 @@ function updateExpiringCard(expiring) {
     : 'Nenhum plano vencendo nos próximos 30 dias';
 }
 
+function subStatusKey(daysToExpire) {
+  if (daysToExpire === null || daysToExpire === undefined) return 'ativo';
+  if (daysToExpire < 0)  return 'vencido';
+  if (daysToExpire <= 7) return 'vence_em_breve';
+  return 'ativo';
+}
+
+function buildSalesRows(data, days) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return data
+    .filter(s => !s.starts_at || new Date(s.starts_at) >= cutoff)
+    .map(s => ({
+      created_at: s.starts_at,
+      name:       s.name,
+      plan_name:  s.plan_name,
+      channel:    s.channel,
+      price_paid: s.price_paid,
+      statusKey:  subStatusKey(s.days_to_expire),
+    }));
+}
+
+function updateSalesPeriodLabel(days) {
+  const el = document.getElementById('v-sales-period-label');
+  if (!el) return;
+  el.textContent = days >= 9999 ? 'Todas as transações registradas' : `Últimas transações — últimos ${days} dias`;
+}
+
+function setSalesPeriod(btn, days) {
+  document.querySelectorAll('#v-sales-period [data-period]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _salesPeriod = days;
+  updateSalesPeriodLabel(days);
+  const rows = buildSalesRows(_lastSalesData || [], days);
+  renderSalesTable(rows, (_lastSalesData||[]).length ? 'Nenhuma venda nesse período' : undefined);
+}
+
 async function loadSalesTable(personalId) {
   const data = await api('/students/' + personalId).catch(()=>null);
+  _lastSalesData = data || [];
   if (!data?.length) { renderSalesTable([]); updateExpiringCard([]); return; }
-  const rows = data.map(s => ({
-    created_at: s.starts_at,
-    name:       s.name,
-    plan_name:  s.plan_name,
-    channel:    s.channel,
-    price_paid: s.price_paid,
-    status:     s.status || 'active',
-  }));
-  renderSalesTable(rows);
+  updateSalesPeriodLabel(_salesPeriod);
+  const rows = buildSalesRows(data, _salesPeriod);
+  renderSalesTable(rows, 'Nenhuma venda nesse período');
   // Mix chart — construído com os planos vendidos de verdade
   const planCount = {};
   data.forEach(s => { const k=s.plan_name||'Outro'; planCount[k]=(planCount[k]||0)+1; });

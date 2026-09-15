@@ -78,6 +78,7 @@ body::before{content:'';position:fixed;inset:0;
 .col3{grid-column:span 3}
 .col4{grid-column:span 4}
 .g-sales-hist{grid-template-columns:3fr 2fr}
+.g-lead-pipe{grid-template-columns:1fr 2fr}
 
 /* ── PANELS ── */
 .panel{background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:24px 28px;transition:border-color 0.2s}
@@ -317,6 +318,7 @@ body::before{content:'';position:fixed;inset:0;
   .vkpi-row{grid-template-columns:repeat(3,1fr)}
   .v-kanban{grid-template-columns:repeat(2,1fr)!important}
   .g-sales-hist{grid-template-columns:1fr}
+  .g-lead-pipe{grid-template-columns:1fr}
 }
 @media(max-width:700px){
   .g2,.g3,.g4{grid-template-columns:1fr}
@@ -330,6 +332,7 @@ body::before{content:'';position:fixed;inset:0;
   .profile-grid{grid-template-columns:1fr 1fr}
   .ba-grid{grid-template-columns:1fr 1fr}
   .g-sales-hist{grid-template-columns:1fr}
+  .g-lead-pipe{grid-template-columns:1fr}
   .header,.section,.footer,.alert-bar{padding-left:16px;padding-right:16px}
   .nav-tabs{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
   .nav-tab{flex-shrink:0;padding:13px 14px}
@@ -380,6 +383,7 @@ body::before{content:'';position:fixed;inset:0;
 
 /* ══ VENDAS TAB ══ */
 .plans-grid-v{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+#v-plan-selector{grid-template-columns:repeat(2,1fr)}
 .plan-card-v{border:1px solid rgba(168,178,189,0.08);padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
 .plan-card-v::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
 .plan-card-v.p1::before{background:var(--red)}.plan-card-v.p3::before{background:var(--amber)}.plan-card-v.p6::before{background:var(--gold)}.plan-card-v.p12::before{background:var(--green)}
@@ -888,7 +892,7 @@ canvas{background:transparent!important}
   </div>
 
   <!-- Lead form + Kanban -->
-  <div class="grid g2" style="margin-bottom:20px">
+  <div class="grid g-lead-pipe" style="margin-bottom:20px">
 
     <!-- Novo Lead -->
     <div class="panel">
@@ -968,10 +972,18 @@ canvas{background:transparent!important}
   <div class="panel" style="margin-bottom:20px">
     <div class="panel-header">
       <div>
-        <div class="panel-title">Histórico de Vendas — Mai/26</div>
-        <div class="panel-sub">Últimas transações registradas</div>
+        <div class="panel-title">Histórico de Vendas</div>
+        <div class="panel-sub" id="v-sales-period-label">Últimas transações registradas</div>
       </div>
       <div class="panel-badge">HISTÓRICO</div>
+    </div>
+    <div id="v-sales-period" style="display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap;align-items:center">
+      <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:0.1em;text-transform:uppercase">Período:</span>
+      <button class="scale-btn active" data-period="30"  style="width:auto;height:auto;padding:6px 14px;font-size:9px;white-space:nowrap" onclick="setSalesPeriod(this,30)">30d</button>
+      <button class="scale-btn" data-period="90"  style="width:auto;height:auto;padding:6px 14px;font-size:9px;white-space:nowrap" onclick="setSalesPeriod(this,90)">Trimestre</button>
+      <button class="scale-btn" data-period="180" style="width:auto;height:auto;padding:6px 14px;font-size:9px;white-space:nowrap" onclick="setSalesPeriod(this,180)">Semestre</button>
+      <button class="scale-btn" data-period="365" style="width:auto;height:auto;padding:6px 14px;font-size:9px;white-space:nowrap" onclick="setSalesPeriod(this,365)">Ano</button>
+      <button class="scale-btn" data-period="9999" style="width:auto;height:auto;padding:6px 14px;font-size:9px;white-space:nowrap" onclick="setSalesPeriod(this,9999)">Tudo</button>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-top:8px">
       <thead>
