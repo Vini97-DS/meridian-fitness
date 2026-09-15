@@ -163,6 +163,7 @@ body {
 .field-wrap { position: relative; }
 .field-input {
   width: 100%;
+  min-height: 44px;
   background: rgba(7,17,29,0.75);
   border: 1px solid rgba(168,181,196,0.14);
   color: var(--white);
@@ -183,8 +184,10 @@ body {
 }
 .field-input::placeholder { color: var(--dim); }
 .field-eye {
-  position: absolute; right: 13px; top: 50%;
+  position: absolute; right: 0; top: 50%;
   transform: translateY(-50%);
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--dim); font-size: 14px;
   user-select: none; transition: color 0.2s;
 }
@@ -256,7 +259,8 @@ body {
 
 /* ── BUTTONS ── */
 .btn-primary {
-  display: block; width: 100%; padding: 14px;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 44px; padding: 14px;
   background: rgba(201,168,76,0.1);
   border: 1px solid var(--gold);
   color: var(--gold);
