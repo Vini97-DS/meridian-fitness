@@ -36,19 +36,22 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .scale-btn{min-width:44px;height:44px;padding:0 8px;background:transparent;border:1px solid rgba(168,178,189,0.12);color:var(--silver);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
 .scale-btn:hover{border-color:rgba(201,168,76,0.3);color:var(--gold)}
 .scale-btn.active{background:rgba(201,168,76,0.1);border-color:var(--gold);color:var(--gold)}
+/* Frequência (0-7 / 0-6+) tem itens demais pra uma linha só sem sobrar órfão — grade fixa 4 colunas */
+#s-scale-freq,#m-scale-freq,#t-scale-freq{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+#s-scale-freq .scale-btn,#m-scale-freq .scale-btn,#t-scale-freq .scale-btn{min-width:0;width:100%}
 .divider{height:1px;background:rgba(168,178,189,0.06);margin:24px 0}
 .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
 .photo-upload{border:1px dashed rgba(168,178,189,0.2);padding:20px;text-align:center;cursor:pointer;transition:border-color 0.2s;background:var(--navy)}
 .photo-upload:hover{border-color:rgba(201,168,76,0.4)}
 .photo-upload input{display:none}
 .photo-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-top:8px}
-.photo-preview{width:100%;height:120px;object-fit:cover;display:none}
+.photo-preview{width:100%;aspect-ratio:3/4;object-fit:contain;display:none;background:rgba(0,0,0,0.15)}
 .photo-icon{font-size:1.5rem;opacity:0.4}
 .renewal-banner{background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);padding:20px;margin-bottom:20px}
 .renewal-title{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
 .renewal-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);line-height:1.6}
 .renewal-days{font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--amber);margin:8px 0}
-.submit-btn{width:100%;padding:14px;background:var(--gold);color:var(--navy);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;border:none;cursor:pointer;transition:opacity 0.2s;font-weight:600}
+.submit-btn{width:100%;min-height:44px;padding:14px;background:var(--gold);color:var(--navy);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;border:none;cursor:pointer;transition:opacity 0.2s;font-weight:600;display:flex;align-items:center;justify-content:center}
 .submit-btn:hover{opacity:0.85}
 .submit-btn:disabled{opacity:0.4;cursor:not-allowed}
 .success-card{text-align:center;padding:60px 20px;display:none}
@@ -63,7 +66,6 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   .container{padding:24px 14px 60px}
   .photo-grid{grid-template-columns:1fr}
   .scale{gap:6px}
-  .scale-btn{min-width:38px;height:38px}
   .hero-name{font-size:1.7rem}
   .form-card{padding:20px 16px}
 }
