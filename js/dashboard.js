@@ -2491,6 +2491,20 @@ async function loadSalesTable(personalId) {
 }
 
 // ── RESUMO EXECUTIVO ─────────────────────────────────────
+function irParaLeadNoKanban(leadId) {
+  switchTab('vendas', document.querySelector('[onclick*="vendas"]'));
+  if (!leadId) return;
+  setTimeout(() => {
+    const card = document.querySelector('.v-kcard[onclick*="\'' + leadId + '\'"]');
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.style.transition = 'outline-color 0.3s';
+    card.style.outline = '2px solid var(--gold)';
+    card.style.outlineOffset = '2px';
+    setTimeout(() => { card.style.outline = ''; card.style.outlineOffset = ''; }, 2500);
+  }, 150);
+}
+
 async function loadResumoTab() {
   const m = _lastMetrics;
   const s = _lastStudents || [];
@@ -2513,14 +2527,28 @@ async function loadResumoTab() {
     : 'Todos os leads foram contatados';
 
   // Ação recomendada
-  const acaoEl = document.getElementById('resumo-acao');
+  const acaoEl    = document.getElementById('resumo-acao');
+  const acaoBtnEl = document.getElementById('resumo-acao-btn');
   if (acaoEl) {
     if (e7count > 0) {
       acaoEl.textContent = 'Você tem ' + e7count + ' renovação(ões) nos próximos 7 dias gerando ' + fmtBRL(e7val) + '. Entre em contato agora para garantir a retenção.';
+      if (acaoBtnEl) {
+        acaoBtnEl.textContent = 'Ver Alunos →';
+        acaoBtnEl.onclick = () => switchTab('config', document.querySelector('[onclick*="config"]'));
+      }
     } else if (quentes.length > 0) {
       acaoEl.textContent = 'Você tem ' + quentes.length + ' lead(s) quente(s) sem contato há 3+ dias. Retome o contato para aumentar a taxa de fechamento.';
+      if (acaoBtnEl) {
+        const leadId = quentes.length === 1 ? quentes[0].id : null;
+        acaoBtnEl.textContent = leadId ? 'Ver Lead →' : 'Ver no Kanban →';
+        acaoBtnEl.onclick = () => irParaLeadNoKanban(leadId);
+      }
     } else {
       acaoEl.textContent = 'Nenhuma ação urgente. Continue acompanhando seus alunos e nutrindo os leads do pipeline.';
+      if (acaoBtnEl) {
+        acaoBtnEl.textContent = 'Ver Alunos →';
+        acaoBtnEl.onclick = () => switchTab('config', document.querySelector('[onclick*="config"]'));
+      }
     }
   }
 
@@ -2559,9 +2587,7 @@ async function loadResumoTab() {
   // Formulários — alunos sem checkin na última semana
   const formsEl = document.getElementById('resumo-forms');
   if (formsEl) {
-    const total    = s.length;
-    const comResp  = s.filter(a => a.student_since && daysSince(a.student_since) < 365).length;
-    const pct      = total > 0 ? Math.round(comResp / total * 100) : 0;
+    const total    = m?.active_students || 0; // mesma contagem corrigida do KPI de BI (expires_at >= hoje, DISTINCT student_id)
     formsEl.innerHTML = `
       <div style="text-align:center;padding:20px">
         <div style="font-family:'Cormorant Garamond',serif;font-size:3rem;color:var(--gold)">${total}</div>

@@ -1590,6 +1590,7 @@ canvas{background:transparent!important}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">RENOVAÇÕES EM 7 DIAS</div>
         <div id="resumo-renovacoes-count" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--red)">—</div>
         <div id="resumo-renovacoes-val" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);margin-top:4px">—</div>
+        <button class="vbtn" style="margin-top:10px;padding:5px 12px;font-size:8px;background:transparent;border:1px solid rgba(248,113,113,0.3);color:var(--red)" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
       </div>
       <div style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);padding:16px 20px">
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">LEADS QUENTES SEM CONTATO (3+ DIAS)</div>
@@ -1603,7 +1604,7 @@ canvas{background:transparent!important}
   <div style="margin-bottom:20px;background:rgba(201,168,76,0.04);border:1px solid rgba(201,168,76,0.2);padding:20px 24px">
     <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">Ação Recomendada</div>
     <div id="resumo-acao" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--silver);line-height:1.6">Carregando dados...</div>
-    <button class="vbtn vbtn-gold" style="margin-top:14px" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
+    <button class="vbtn vbtn-gold" id="resumo-acao-btn" style="margin-top:14px" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
   </div>
 
   <!-- Comparativo de Períodos -->
