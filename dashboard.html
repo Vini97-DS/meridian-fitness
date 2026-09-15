@@ -77,8 +77,8 @@ body::before{content:'';position:fixed;inset:0;
 .col2{grid-column:span 2}
 .col3{grid-column:span 3}
 .col4{grid-column:span 4}
-.g-sales-hist{grid-template-columns:3fr 2fr}
-.g-lead-pipe{grid-template-columns:1fr 2fr}
+.g-sales-hist{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.g-lead-pipe{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
 
 /* ── PANELS ── */
 .panel{background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:24px 28px;transition:border-color 0.2s}
@@ -173,10 +173,10 @@ body::before{content:'';position:fixed;inset:0;
 .student-filter{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
 .filter-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver)}
 .student-select{background:var(--navy2);border:1px solid rgba(201,168,76,0.2);color:var(--white);
-  font-family:'DM Mono',monospace;font-size:11px;padding:8px 14px;outline:none;cursor:pointer;min-width:220px}
+  font-family:'DM Mono',monospace;font-size:11px;padding:8px 14px;min-height:44px;outline:none;cursor:pointer;min-width:220px}
 .student-select option{background:var(--navy2)}
 .filter-btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
-  padding:8px 18px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);color:var(--gold);cursor:pointer;transition:all 0.2s}
+  padding:8px 18px;min-height:44px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);color:var(--gold);cursor:pointer;transition:all 0.2s}
 .filter-btn:hover{background:rgba(201,168,76,0.15)}
 
 /* ── STUDENT PROFILE HEADER ── */
@@ -317,8 +317,8 @@ body::before{content:'';position:fixed;inset:0;
   .kpi-row{grid-template-columns:repeat(3,1fr)}
   .vkpi-row{grid-template-columns:repeat(3,1fr)}
   .v-kanban{grid-template-columns:repeat(2,1fr)!important}
-  .g-sales-hist{grid-template-columns:1fr}
-  .g-lead-pipe{grid-template-columns:1fr}
+  .g-sales-hist{grid-template-columns:minmax(0,1fr)}
+  .g-lead-pipe{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:700px){
   .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)}
@@ -331,8 +331,8 @@ body::before{content:'';position:fixed;inset:0;
   .roi-cards{grid-template-columns:1fr 1fr}
   .profile-grid{grid-template-columns:1fr 1fr}
   .ba-grid{grid-template-columns:1fr 1fr}
-  .g-sales-hist{grid-template-columns:1fr}
-  .g-lead-pipe{grid-template-columns:1fr}
+  .g-sales-hist{grid-template-columns:minmax(0,1fr)}
+  .g-lead-pipe{grid-template-columns:minmax(0,1fr)}
   .header,.section,.footer,.alert-bar{padding-left:16px;padding-right:16px}
   .nav-tabs{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
   .nav-tab{flex-shrink:0;padding:13px 14px}
@@ -346,10 +346,12 @@ body::before{content:'';position:fixed;inset:0;
   .data-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .funnel-label{width:80px;font-size:8px}
   .funnel-num{width:45px}
+  #cfg-plano-form-grid{grid-template-columns:1fr 1fr!important}
 }
 @media(max-width:480px){
   .kpi-row{grid-template-columns:1fr 1fr}
   .vkpi-row{grid-template-columns:1fr 1fr}
+  #cfg-plano-form-grid{grid-template-columns:1fr!important}
   .renew-grid{grid-template-columns:1fr}
   .profile-grid{grid-template-columns:1fr}
   .plans-grid-v{grid-template-columns:1fr}
@@ -394,7 +396,7 @@ body::before{content:'';position:fixed;inset:0;
 .plan-renov{font-family:"DM Mono",monospace;font-size:8px;padding:2px 7px;margin-top:6px;display:inline-block;border-radius:2px}
 .v-field{margin-bottom:12px}
 .v-label{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);display:block;margin-bottom:6px}
-.v-input,.v-select{width:100%;background:rgba(7,17,29,0.6);border:1px solid rgba(168,178,189,0.12);color:var(--white);font-family:"DM Mono",monospace;font-size:11px;padding:10px 13px;outline:none;transition:border-color 0.2s}
+.v-input,.v-select{width:100%;min-height:44px;background:rgba(7,17,29,0.6);border:1px solid rgba(168,178,189,0.12);color:var(--white);font-family:"DM Mono",monospace;font-size:11px;padding:10px 13px;outline:none;transition:border-color 0.2s}
 .v-input:focus,.v-select:focus{border-color:rgba(201,168,76,0.4)}
 .v-input::placeholder{color:var(--dim)}
 .v-select option{background:var(--navy2)}
@@ -403,13 +405,13 @@ body::before{content:'';position:fixed;inset:0;
 .link-copy-v{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;padding:6px 14px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);color:var(--blue);cursor:pointer;flex-shrink:0;transition:all 0.2s;white-space:nowrap}
 .link-copy-v:hover{background:rgba(96,165,250,0.16)}
 .link-copy-v.copied{color:var(--green);border-color:rgba(74,222,128,0.3)}
-.vbtn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;padding:10px 20px;cursor:pointer;transition:all 0.2s;border-radius:2px}
+.vbtn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;padding:10px 20px;cursor:pointer;transition:all 0.2s;border-radius:2px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .vbtn-green{background:rgba(74,222,128,0.1);border:1px solid var(--green);color:var(--green)}
 .vbtn-green:hover{background:rgba(74,222,128,0.2)}
 .vbtn-blue{background:rgba(96,165,250,0.1);border:1px solid var(--blue);color:var(--blue)}
 .vbtn-blue:hover{background:rgba(96,165,250,0.2)}
 .weight-toggle{display:flex;gap:4px;flex-shrink:0}
-.weight-toggle-btn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all 0.2s;border-radius:2px;background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver)}
+.weight-toggle-btn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;padding:6px 14px;min-height:44px;cursor:pointer;transition:all 0.2s;border-radius:2px;background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver);display:inline-flex;align-items:center;justify-content:center}
 .weight-toggle-btn:hover{border-color:rgba(201,168,76,0.3)}
 .weight-toggle-btn.active{background:rgba(201,168,76,0.12);border-color:var(--gold);color:var(--gold)}
 .vkpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:rgba(201,168,76,0.07);border:1px solid rgba(201,168,76,0.1);margin-bottom:24px}
@@ -1001,19 +1003,21 @@ canvas{background:transparent!important}
       <button class="scale-btn" data-period="365" style="width:auto;height:auto;min-height:44px;padding:6px 14px;font-size:9px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center" onclick="setSalesPeriod(this,365)">Ano</button>
       <button class="scale-btn" data-period="9999" style="width:auto;height:auto;min-height:44px;padding:6px 14px;font-size:9px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center" onclick="setSalesPeriod(this,9999)">Tudo</button>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-top:8px">
-      <thead>
-        <tr style="border-bottom:1px solid rgba(168,178,189,0.08)">
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Data</th>
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Aluno</th>
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Plano</th>
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Canal</th>
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:right">Valor</th>
-          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px">Status</th>
-        </tr>
-      </thead>
-      <tbody id="v-sales-body"></tbody>
-    </table>
+    <div style="overflow-x:auto;margin-top:8px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(168,178,189,0.08)">
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Data</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Aluno</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Plano</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Canal</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:right">Valor</th>
+            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px">Status</th>
+          </tr>
+        </thead>
+        <tbody id="v-sales-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Mix de planos + Conversão por canal -->
@@ -1292,18 +1296,18 @@ canvas{background:transparent!important}
         <div class="v-field">
           <label class="v-label">Formas de pagamento</label>
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-pix" value="pix" style="accent-color:var(--gold)"> Pix</label>
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-cartao" value="cartao" style="accent-color:var(--gold)"> Cartão</label>
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-boleto" value="boleto" style="accent-color:var(--gold)"> Boleto</label>
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-pgto-stripe" value="stripe" style="accent-color:var(--gold)"> Stripe</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-pgto-pix" value="pix" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Pix</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-pgto-cartao" value="cartao" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Cartão</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-pgto-boleto" value="boleto" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Boleto</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-pgto-stripe" value="stripe" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Stripe</label>
           </div>
         </div>
         <div class="v-field">
           <label class="v-label">Canais de atendimento</label>
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-online" value="online" style="accent-color:var(--gold)"> Online</label>
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-presencial" value="presencial" style="accent-color:var(--gold)"> Presencial</label>
-            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-canal-hibrido" value="hibrido" style="accent-color:var(--gold)"> Híbrido</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-canal-online" value="online" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Online</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-canal-presencial" value="presencial" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Presencial</label>
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px"><input type="checkbox" id="cfg-canal-hibrido" value="hibrido" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Híbrido</label>
           </div>
         </div>
       </div>
@@ -1391,7 +1395,7 @@ canvas{background:transparent!important}
       <!-- Form novo/editar plano -->
       <div id="cfg-plano-form" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:0.1em;margin-bottom:14px" id="cfg-plano-form-title">NOVO PLANO</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div id="cfg-plano-form-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
           <div class="v-field">
             <label class="v-label">Nome do plano *</label>
             <input class="v-input" id="cfg-plano-nome" type="text" placeholder="Ex: Plano 6 Meses" />
@@ -1590,7 +1594,7 @@ canvas{background:transparent!important}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">RENOVAÇÕES EM 7 DIAS</div>
         <div id="resumo-renovacoes-count" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--red)">—</div>
         <div id="resumo-renovacoes-val" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);margin-top:4px">—</div>
-        <button class="vbtn" style="margin-top:10px;padding:5px 12px;font-size:8px;background:transparent;border:1px solid rgba(248,113,113,0.3);color:var(--red)" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
+        <button class="vbtn" style="margin-top:10px;padding:5px 12px;min-height:44px;font-size:8px;background:transparent;border:1px solid rgba(248,113,113,0.3);color:var(--red)" onclick="switchTab('config',document.querySelector('[onclick*=config]'))">Ver Alunos →</button>
       </div>
       <div style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);padding:16px 20px">
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">LEADS QUENTES SEM CONTATO (3+ DIAS)</div>
