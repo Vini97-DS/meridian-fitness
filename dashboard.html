@@ -507,6 +507,22 @@ body::before{content:'';position:fixed;inset:0;
 .ctx-btn-cancel{background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--dim)}
 .ctx-btn-cancel:hover{border-color:rgba(168,178,189,0.35)}
 
+/* ══ MODAL CONVERSÃO LEAD → ALUNO ══ */
+.mconv-overlay{position:fixed;inset:0;z-index:1000;background:rgba(7,17,29,0.6);display:none;align-items:center;justify-content:center;padding:20px}
+.mconv-overlay.open{display:flex}
+.mconv-modal{width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;background:var(--navy2);border:1px solid rgba(201,168,76,0.2);box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:ctxIn 0.15s ease}
+[data-theme="light"] .mconv-modal{background:#fff;box-shadow:0 20px 40px rgba(0,0,0,0.15)}
+.mconv-header{padding:16px 20px;border-bottom:1px solid rgba(201,168,76,0.12);display:flex;align-items:flex-start;justify-content:space-between}
+.mconv-title{font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--white)}
+.mconv-summary{font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);margin-top:4px}
+.mconv-body{padding:16px 20px;overflow-y:auto;flex:1}
+.mconv-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mconv-more-toggle{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);background:transparent;border:1px solid rgba(201,168,76,0.25);padding:7px 12px;cursor:pointer;margin-top:16px;display:inline-flex;align-items:center;gap:6px}
+.mconv-more-toggle:hover{background:rgba(201,168,76,0.08)}
+.mconv-more-body{display:none;margin-top:14px}
+.mconv-more-body.open{display:block}
+.mconv-footer{padding:14px 20px;border-top:1px solid rgba(168,178,189,0.06);display:flex;gap:8px;justify-content:flex-end;align-items:center}
+
 
 /* ── VENDAS LAYOUT FIXES ── */
 .v-kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:start}
@@ -1665,6 +1681,111 @@ canvas{background:transparent!important}
   <div class="ctx-footer">
     <button class="ctx-btn ctx-btn-cancel" onclick="closeCtxMenu()">Cancelar</button>
     <button class="ctx-btn ctx-btn-save"   onclick="ctxSave()">Salvar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL CONVERSÃO LEAD → ALUNO ══ -->
+<div class="mconv-overlay" id="mconv-overlay" onclick="if(event.target===this) fecharModalConversao()">
+  <div class="mconv-modal">
+    <div class="mconv-header">
+      <div>
+        <div class="mconv-title">Cadastrar aluno</div>
+        <div class="mconv-summary" id="mconv-resumo">—</div>
+      </div>
+      <button class="ctx-close" onclick="fecharModalConversao()">✕</button>
+    </div>
+    <div class="mconv-body">
+      <div class="mconv-grid">
+        <div class="v-field">
+          <label class="v-label">Data de início *</label>
+          <input class="v-input" id="mconv-inicio" type="date" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Forma de pagamento</label>
+          <select class="v-select" id="mconv-pagamento">
+            <option value="pix">Pix</option>
+            <option value="cartao">Cartão</option>
+            <option value="boleto">Boleto</option>
+            <option value="dinheiro">Dinheiro</option>
+          </select>
+        </div>
+        <div class="v-field">
+          <label class="v-label">Peso inicial (kg)</label>
+          <input class="v-input" id="mconv-peso" type="number" placeholder="Ex: 85.0" step="0.1" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">% Gordura inicial</label>
+          <input class="v-input" id="mconv-bf" type="number" placeholder="Ex: 28.5" step="0.1" />
+        </div>
+      </div>
+
+      <div class="v-field" style="margin-top:14px">
+        <label class="v-label">Fotos iniciais (opcional)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Frontal</div>
+            <input type="file" id="mconv-foto-frontal" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Costas</div>
+            <input type="file" id="mconv-foto-costas" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Lado Esquerdo</div>
+            <input type="file" id="mconv-foto-esq" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Lado Direito</div>
+            <input type="file" id="mconv-foto-dir" accept="image/*" class="v-input" style="padding:6px;cursor:pointer">
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="mconv-more-toggle" onclick="document.getElementById('mconv-more').classList.toggle('open')">+ Mais dados do aluno</button>
+      <div class="mconv-more-body" id="mconv-more">
+        <div class="mconv-grid">
+          <div class="v-field">
+            <label class="v-label">Gênero</label>
+            <select class="v-select" id="mconv-genero">
+              <option value="">Não informado</option>
+              <option value="masculino">Masculino</option>
+              <option value="feminino">Feminino</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Data de nascimento</label>
+            <input class="v-input" id="mconv-nascimento" type="date" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">País</label>
+            <input class="v-input" id="mconv-pais" type="text" placeholder="Ex: Brasil" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Estado (UF)</label>
+            <input class="v-input" id="mconv-estado" type="text" placeholder="Ex: SP" maxlength="2" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Cidade</label>
+            <input class="v-input" id="mconv-cidade" type="text" placeholder="Ex: São Paulo" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Restrições alimentares</label>
+            <textarea class="v-input" id="mconv-restricao" rows="2" placeholder="Intolerâncias, alergias, preferências alimentares, dietas específicas..."></textarea>
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Observações</label>
+            <textarea class="v-input" id="mconv-obs" rows="2" placeholder="Histórico médico, restrições, objetivos específicos..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="mconv-erro" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+    </div>
+    <div class="mconv-footer">
+      <button class="ctx-btn ctx-btn-cancel" onclick="fecharModalConversao()">Cancelar</button>
+      <button class="ctx-btn ctx-btn-save" id="mconv-save-btn" onclick="salvarConversaoAluno()">Cadastrar Aluno</button>
+    </div>
   </div>
 </div>
 

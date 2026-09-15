@@ -1361,6 +1361,8 @@ function loadLeadsFromAPI(pipeline) {
         phone:       l.phone || '',
         email:       l.email || '',
         canal:       capitalize(l.channel||'instagram'),
+        channel:     l.channel || 'instagram',
+        goal:        l.goal || 'emagrecimento',
         notes:       l.notes || '',
         dp:          daysSince(l.created_at),
         ok:          status==='fechado',
@@ -1369,6 +1371,10 @@ function loadLeadsFromAPI(pipeline) {
         isIndicacao: (l.channel||'').toLowerCase() === 'indicacao',
         created_at:  l.created_at,
         aiSummary:   l.ai_summary || '',
+        planId:      l.plan_id || '',
+        planName:    l.plan_name || '',
+        planPrice:   l.price_brl || 0,
+        convertedTo: l.converted_to || null,
       };
       KDATA[status] = KDATA[status] || [];
       KDATA[status].push(card);
@@ -1489,11 +1495,14 @@ function ctxSave() {
       } else {
         updateLeadInAPI(leadId, newStatus, kNotes[leadId]).catch(()=>{});
       }
-      if (newStatus === 'fechado') {
+      // só oferece a conversão quando o status REALMENTE muda pra "fechado"
+      // (não em toda resalvagem de um card que já estava fechado) e só se
+      // esse lead ainda não foi convertido antes (evita duplicar aluno)
+      if (oldStatus !== 'fechado' && newStatus === 'fechado') {
         const lead = Object.values(KDATA).flat().find(c => c.id === leadId);
-        if (lead && confirm('Converter ' + lead.name + ' em aluno? Isso abrirá o formulário de cadastro pré-preenchido.')) {
+        if (lead && !lead.convertedTo && confirm('Cadastrar ' + lead.name + ' como aluno?')) {
           closeCtxMenu();
-          converterLeadEmAluno(lead);
+          abrirModalConversao(lead);
           return;
         }
       }
@@ -1502,23 +1511,159 @@ function ctxSave() {
   closeCtxMenu();
 }
 
-async function converterLeadEmAluno(lead) {
-  switchTab('config', document.querySelector('[onclick*="config"]'));
-  const formEl = document.getElementById('cfg-aluno-form');
-  if (formEl && formEl.style.display === 'none') toggleCadastroAluno();
-  setTimeout(() => {
-    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-    set('cfg-aluno-nome',  lead.name);
-    set('cfg-aluno-phone', lead.phone);
-    set('cfg-aluno-email', lead.email);
-    const canal = (lead.canal || 'instagram').toLowerCase();
-    set('cfg-aluno-canal', canal);
-    toggleIndicacaoField(document.getElementById('cfg-aluno-canal'));
-    if (lead.notes) {
-      const indicado = lead.notes.match(/Indicado por: (.+)/)?.[1];
-      if (indicado) set('cfg-aluno-indicacao', indicado);
+// ── MODAL CONVERSÃO LEAD → ALUNO ─────────────────────────
+let _convLead = null;
+let _convPlan = null;
+
+async function abrirModalConversao(lead) {
+  _convLead = lead;
+  _convPlan = null;
+
+  const resumoEl = document.getElementById('mconv-resumo');
+  if (resumoEl) {
+    resumoEl.textContent = lead.planName
+      ? lead.name + ' → ' + lead.planName + ' · R$' + Math.round(lead.planPrice || 0)
+      : lead.name + ' → plano não definido no lead';
+  }
+
+  // reset dos campos
+  const today = new Date().toISOString().split('T')[0];
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('mconv-inicio', today);
+  set('mconv-pagamento', 'pix');
+  set('mconv-peso', '');
+  set('mconv-bf', '');
+  set('mconv-genero', '');
+  set('mconv-nascimento', '');
+  set('mconv-pais', '');
+  set('mconv-estado', '');
+  set('mconv-cidade', '');
+  set('mconv-restricao', '');
+  set('mconv-obs', lead.notes || '');
+  ['mconv-foto-frontal','mconv-foto-costas','mconv-foto-esq','mconv-foto-dir'].forEach(id=>{
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('mconv-more')?.classList.remove('open');
+  const erroEl = document.getElementById('mconv-erro');
+  if (erroEl) erroEl.style.display = 'none';
+
+  document.getElementById('mconv-overlay')?.classList.add('open');
+
+  // busca o plano do lead pra saber a duração (não vem no card do kanban)
+  if (lead.planId) {
+    const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+    const personalId = session?.personal_id || session?.id;
+    const planos = await api('/plans/' + personalId + '?all=true').catch(() => null);
+    _convPlan = planos?.find(p => p.id === lead.planId) || null;
+  }
+}
+
+function fecharModalConversao() {
+  document.getElementById('mconv-overlay')?.classList.remove('open');
+  _convLead = null;
+  _convPlan = null;
+}
+
+async function salvarConversaoAluno() {
+  const erroEl = document.getElementById('mconv-erro');
+  erroEl.style.display = 'none';
+
+  const lead = _convLead;
+  if (!lead) return;
+  if (!lead.planId || !_convPlan) {
+    erroEl.textContent = 'Esse lead não tem um plano definido — não dá pra criar a assinatura. Confirma o plano no cadastro do lead antes de converter.';
+    erroEl.style.display = 'block';
+    return;
+  }
+  const inicio = document.getElementById('mconv-inicio')?.value;
+  if (!inicio) {
+    erroEl.textContent = 'Informe a data de início.';
+    erroEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('mconv-save-btn');
+  const origTxt = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Cadastrando...';
+
+  try {
+    const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+    const personalId = session?.personal_id || session?.id;
+
+    const pagamento = document.getElementById('mconv-pagamento')?.value || 'pix';
+    const peso      = parseFloat(document.getElementById('mconv-peso')?.value) || null;
+    const bf        = parseFloat(document.getElementById('mconv-bf')?.value) || null;
+    const genero    = document.getElementById('mconv-genero')?.value || null;
+    const nascimento= document.getElementById('mconv-nascimento')?.value || null;
+    const pais      = document.getElementById('mconv-pais')?.value.trim() || null;
+    const estado    = document.getElementById('mconv-estado')?.value.trim() || null;
+    const cidade    = document.getElementById('mconv-cidade')?.value.trim() || null;
+    const restricao = document.getElementById('mconv-restricao')?.value.trim() || null;
+    const obs       = document.getElementById('mconv-obs')?.value.trim() || null;
+
+    // 1) cria o aluno
+    let aluno;
+    try {
+      aluno = await api('/students', { method:'POST', body:JSON.stringify({
+        personal_id: personalId, name: lead.name, phone: lead.phone, email: lead.email || null,
+        goal: lead.goal || 'emagrecimento', channel: lead.channel || 'instagram',
+        weight_initial: peso, bf_initial: bf, notes: obs,
+        gender: genero, birth_date: nascimento, country: pais, state: estado, city: cidade,
+        dietary_restrictions: restricao,
+      })});
+    } catch (e) {
+      throw new Error('Falha ao criar o cadastro do aluno: ' + e.message);
     }
-  }, 350);
+
+    // 2) cria a assinatura — só chega aqui se o aluno foi criado com sucesso
+    const fimDate = new Date(inicio);
+    fimDate.setMonth(fimDate.getMonth() + (_convPlan.duration_months || 1));
+    const fim = fimDate.toISOString().split('T')[0];
+    try {
+      await api('/subscriptions', { method:'POST', body:JSON.stringify({
+        student_id: aluno.id, personal_id: personalId, plan_id: lead.planId,
+        price_paid: _convPlan.price_brl || lead.planPrice || 0,
+        starts_at: inicio, expires_at: fim, payment_method: pagamento, status: 'active',
+      })});
+    } catch (e) {
+      throw new Error('Aluno foi criado, mas a assinatura falhou: ' + e.message + '. Corrija a assinatura manualmente na aba Configurações — o cadastro do aluno já existe.');
+    }
+
+    // 3) fotos iniciais (opcional, não bloqueia o fluxo se falhar)
+    async function fotoParaBase64(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input?.files[0]) return null;
+      return new Promise(resolve => {
+        const r = new FileReader();
+        r.onload = e => resolve(e.target.result);
+        r.readAsDataURL(input.files[0]);
+      });
+    }
+    const [fFrontal, fCostas, fEsq, fDir] = await Promise.all([
+      fotoParaBase64('mconv-foto-frontal'), fotoParaBase64('mconv-foto-costas'),
+      fotoParaBase64('mconv-foto-esq'),     fotoParaBase64('mconv-foto-dir'),
+    ]);
+    if (fFrontal || fCostas || fEsq || fDir) {
+      await api('/students/' + aluno.id + '/photos', { method:'POST', body:JSON.stringify({
+        personal_id: personalId, form_type: 'inicial',
+        photo_frontal: fFrontal, photo_costas: fCostas, photo_esq: fEsq, photo_dir: fDir,
+      })}).catch(() => {});
+    }
+
+    // 4) grava o vínculo no lead — não bloqueia o sucesso da conversão se falhar
+    await api('/leads/' + lead.id, { method:'PATCH', body:JSON.stringify({ converted_to: aluno.id }) }).catch(() => {});
+    lead.convertedTo = aluno.id;
+    const kdataCard = Object.values(KDATA).flat().find(c => c.id === lead.id);
+    if (kdataCard) kdataCard.convertedTo = aluno.id;
+
+    fecharModalConversao();
+    alert('✓ ' + lead.name + ' cadastrado como aluno! Ativo até ' + new Date(fim).toLocaleDateString('pt-BR') + '.');
+  } catch (e) {
+    erroEl.textContent = e.message || 'Erro ao converter lead em aluno.';
+    erroEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = origTxt;
+  }
 }
 
 // ── LEADS API ────────────────────────────────────────────

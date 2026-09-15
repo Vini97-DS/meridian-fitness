@@ -560,9 +560,10 @@ class LeadCreate(BaseModel):
     notes:       Optional[str] = None
 
 class LeadUpdate(BaseModel):
-    status:     Optional[str] = None
-    notes:      Optional[str] = None
-    ai_summary: Optional[str] = None
+    status:        Optional[str] = None
+    notes:         Optional[str] = None
+    ai_summary:    Optional[str] = None
+    converted_to:  Optional[str] = None
 
 def generate_lead_ai_summary(lead_id: str):
     """Roda em background (BackgroundTasks): gera um resumo curto do lead via Anthropic
@@ -650,9 +651,10 @@ def update_lead(lead_id: str, data: LeadUpdate, background_tasks: BackgroundTask
         notes_changed = (data.notes or "") != (current_notes or "")
 
     fields, values = [], []
-    if data.status     is not None: fields.append("status = %s");     values.append(data.status)
-    if data.notes      is not None: fields.append("notes = %s");      values.append(data.notes)
-    if data.ai_summary is not None: fields.append("ai_summary = %s"); values.append(data.ai_summary)
+    if data.status       is not None: fields.append("status = %s");       values.append(data.status)
+    if data.notes        is not None: fields.append("notes = %s");        values.append(data.notes)
+    if data.ai_summary   is not None: fields.append("ai_summary = %s");   values.append(data.ai_summary)
+    if data.converted_to is not None: fields.append("converted_to = %s"); values.append(data.converted_to)
     if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
     values.append(lead_id)
     result = execute(conn, f"UPDATE leads SET {', '.join(fields)}, updated_at=NOW() WHERE id=%s RETURNING id, status", values)
