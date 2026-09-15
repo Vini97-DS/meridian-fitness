@@ -406,6 +406,7 @@ async function loadDashboard() {
       set('v-kpi-receita',    fmtBRL(sm.receita_mes || 0));
       set('v-kpi-fechamento', (sm.taxa_fechamento || 0) + '%');
       set('v-kpi-leads',      sm.total_leads || '0');
+      renderChannelConversion(sm.conversion_by_channel || []);
     }).catch(() => {});
   }
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
@@ -774,6 +775,34 @@ function setBIPeriod(btn, days) {
       initBICharts(m);
     }).catch(() => {});
   }
+}
+
+const CHANNEL_LABELS = {
+  instagram: 'Instagram', indicacao: 'Indicação', youtube: 'YouTube',
+  tiktok: 'TikTok', google: 'Google', presencial: 'Presencial', outro: 'Outro',
+};
+
+function renderChannelConversion(list) {
+  const el = document.getElementById('v-channel-conversion');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Sem leads ainda</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const label = CHANNEL_LABELS[c.channel] || capitalize(c.channel);
+    const valText  = c.low_sample ? `poucos dados (${c.total})` : `${c.rate}% (${c.fechados}/${c.total})`;
+    const valColor = c.low_sample ? 'var(--dim)' : GOLD;
+    const fillBg   = c.low_sample ? 'var(--dim)' : `linear-gradient(90deg,${GOLD},${GOLD}66)`;
+    return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">${label}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:${valColor}">${valText}</span>
+        </div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:${c.rate}%;background:${fillBg}"></div></div>
+      </div>`;
+  }).join('');
 }
 
 // ── VENDAS CHARTS ────────────────────────────────────────
@@ -1523,16 +1552,18 @@ function loadPlansFromAPI(plans) {
 }
 
 async function vSaveLead() {
-  const name    = document.getElementById('v-lead-name')?.value.trim();
-  const phone   = document.getElementById('v-lead-phone')?.value.trim();
-  const email   = document.getElementById('v-lead-email')?.value.trim();
-  const channel = document.getElementById('v-lead-channel')?.value || 'Instagram';
+  const name          = document.getElementById('v-lead-name')?.value.trim();
+  const phone         = document.getElementById('v-lead-phone')?.value.trim();
+  const email         = document.getElementById('v-lead-email')?.value.trim();
+  const channelSelect = document.getElementById('v-lead-channel');
+  const channel      = channelSelect?.value || 'instagram'; // valor do enum (sem acento), vai pro backend
+  const channelLabel = channelSelect?.selectedOptions?.[0]?.textContent || 'Instagram'; // texto exibido
 
   if (!name)  { document.getElementById('v-lead-name')?.focus();  return; }
   if (!phone) { document.getElementById('v-lead-phone')?.focus(); return; }
 
   const newId = 'tmp_' + Date.now();
-  const newLead = {id:newId,name,sub:channel+' · Novo lead',val:'',days:'Agora',phone,email,canal:channel,dp:0};
+  const newLead = {id:newId,name,sub:channelLabel+' · Novo lead',val:'',days:'Agora',phone,email,canal:channelLabel,dp:0};
   KDATA.novo.unshift(newLead);
   kStatus[newId] = 'novo';
   renderKanban();

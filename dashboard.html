@@ -919,9 +919,9 @@ canvas{background:transparent!important}
         <div class="v-field">
           <label class="v-label">Canal de Origem</label>
           <select class="v-select" id="v-lead-channel">
-            <option>Instagram</option><option>Indicação</option>
-            <option>YouTube</option><option>TikTok</option>
-            <option>Google</option><option>Outro</option>
+            <option value="instagram">Instagram</option><option value="indicacao">Indicação</option>
+            <option value="youtube">YouTube</option><option value="tiktok">TikTok</option>
+            <option value="google">Google</option><option value="outro">Outro</option>
           </select>
         </div>
         <div class="v-field">
@@ -964,31 +964,32 @@ canvas{background:transparent!important}
 
   </div>
 
-  <!-- Histórico de vendas + Mix de planos -->
-  <div class="grid g-sales-hist" style="margin-bottom:20px">
-
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Histórico de Vendas — Mai/26</div>
-          <div class="panel-sub">Últimas transações registradas</div>
-        </div>
-        <div class="panel-badge">HISTÓRICO</div>
+  <!-- Histórico de vendas -->
+  <div class="panel" style="margin-bottom:20px">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Histórico de Vendas — Mai/26</div>
+        <div class="panel-sub">Últimas transações registradas</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;margin-top:8px">
-        <thead>
-          <tr style="border-bottom:1px solid rgba(168,178,189,0.08)">
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Data</th>
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Aluno</th>
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Plano</th>
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Canal</th>
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:right">Valor</th>
-            <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px">Status</th>
-          </tr>
-        </thead>
-        <tbody id="v-sales-body"></tbody>
-      </table>
+      <div class="panel-badge">HISTÓRICO</div>
     </div>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px">
+      <thead>
+        <tr style="border-bottom:1px solid rgba(168,178,189,0.08)">
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Data</th>
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Aluno</th>
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Plano</th>
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:left">Canal</th>
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px;text-align:right">Valor</th>
+          <th style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 10px">Status</th>
+        </tr>
+      </thead>
+      <tbody id="v-sales-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Mix de planos + Conversão por canal -->
+  <div class="grid g2" style="margin-bottom:20px">
 
     <div class="panel">
       <div class="panel-header">
@@ -999,6 +1000,17 @@ canvas{background:transparent!important}
         <div class="panel-badge">MIX</div>
       </div>
       <div class="chart-wrap" style="height:300px"><canvas id="vMixChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Conversão por Canal</div>
+          <div class="panel-sub">% dos leads de cada canal que viraram aluno</div>
+        </div>
+        <div class="panel-badge">CONVERSÃO</div>
+      </div>
+      <div id="v-channel-conversion"></div>
     </div>
 
   </div>

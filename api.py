@@ -429,15 +429,38 @@ def get_sales_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_curr
                COUNT(*) FILTER (WHERE status='proposta') AS propostas
         FROM leads WHERE personal_id = %s
     """, (personal_id,))
+    by_channel = query(conn, """
+        SELECT channel,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE status='fechado') AS fechados
+        FROM leads
+        WHERE personal_id = %s
+        GROUP BY channel
+    """, (personal_id,))
     cm = current_month[0] if current_month else {}
     pl = pipeline[0] if pipeline else {}
     total_leads = int(pl.get('total_leads') or 0)
     propostas   = int(pl.get('propostas') or 0)
+
+    conversion_by_channel = []
+    for row in by_channel:
+        total    = int(row['total'])
+        fechados = int(row['fechados'])
+        conversion_by_channel.append({
+            "channel":    row['channel'],
+            "total":      total,
+            "fechados":   fechados,
+            "rate":       round(fechados / total * 100) if total > 0 else 0,
+            "low_sample": total < 3,
+        })
+    conversion_by_channel.sort(key=lambda c: c["rate"], reverse=True)
+
     return {
-        "vendas_mes":      int(cm.get('vendas_mes') or 0),
-        "receita_mes":     float(cm.get('receita_mes') or 0),
-        "taxa_fechamento": round(propostas / total_leads * 100) if total_leads > 0 else 0,
-        "total_leads":     total_leads,
+        "vendas_mes":            int(cm.get('vendas_mes') or 0),
+        "receita_mes":           float(cm.get('receita_mes') or 0),
+        "taxa_fechamento":       round(propostas / total_leads * 100) if total_leads > 0 else 0,
+        "total_leads":           total_leads,
+        "conversion_by_channel": conversion_by_channel,
     }
 
 # ═══════════════════════════════════════════════════════════════
