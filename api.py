@@ -812,8 +812,8 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         INSERT INTO checkins (student_id, personal_id, type,
             training_feedback, trainings_done, had_pain, pain_description,
             nutrition_notes, mood_score, energy_score, weight_reported,
-            general_notes, responded_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            general_notes, intensity_score, nutrition_score, responded_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
     """, (
         str(ft["student_id"]), str(ft["personal_id"]),
         data.get("form_type", ft.get("form_type","semanal")),
@@ -826,6 +826,8 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         data.get("energy_score"),
         data.get("weight_reported"),
         data.get("general_notes"),
+        data.get("intensity_score"),
+        data.get("nutrition_score"),
     ))
     # Pega id do checkin inserido
     checkin_rows = query(conn,
@@ -837,7 +839,7 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
                 (data["weight_reported"], str(ft["student_id"])))
 
-    # Salvar fotos base64
+    # Salvar fotos (URLs do Cloudinary, upload feito direto do navegador)
     photos = data.get("photos") or {}
     if any(v for v in photos.values() if v):
         execute(conn, """
@@ -849,10 +851,10 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
             str(ft["student_id"]),
             checkin_id,
             data.get("form_type", ft.get("form_type", "mensal")),
-            ("data:image/jpeg;base64," + photos["frente"]) if photos.get("frente") else None,
-            ("data:image/jpeg;base64," + photos["costas"]) if photos.get("costas") else None,
-            ("data:image/jpeg;base64," + photos["esq"])    if photos.get("esq")    else None,
-            ("data:image/jpeg;base64," + photos["dir"])    if photos.get("dir")    else None,
+            photos.get("frente") or None,
+            photos.get("costas") or None,
+            photos.get("esq") or None,
+            photos.get("dir") or None,
         ))
 
     execute(conn, "UPDATE form_tokens SET used=true WHERE token=%s", (token,))
@@ -865,7 +867,7 @@ def serve_form(token: str):
 @app.get("/api/students/{student_id}/photos")
 def get_student_photos(student_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     return query(conn, """
-        SELECT id, form_type,
+        SELECT id, checkin_id, form_type,
                weight_at_time,
                COALESCE(created_at, taken_at) AS created_at,
                photo_frontal, photo_costas, photo_esq, photo_dir

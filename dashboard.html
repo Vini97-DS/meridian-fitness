@@ -404,6 +404,10 @@ body::before{content:'';position:fixed;inset:0;
 .vbtn-green:hover{background:rgba(74,222,128,0.2)}
 .vbtn-blue{background:rgba(96,165,250,0.1);border:1px solid var(--blue);color:var(--blue)}
 .vbtn-blue:hover{background:rgba(96,165,250,0.2)}
+.weight-toggle{display:flex;gap:4px;flex-shrink:0}
+.weight-toggle-btn{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all 0.2s;border-radius:2px;background:transparent;border:1px solid rgba(168,178,189,0.15);color:var(--silver)}
+.weight-toggle-btn:hover{border-color:rgba(201,168,76,0.3)}
+.weight-toggle-btn.active{background:rgba(201,168,76,0.12);border-color:var(--gold);color:var(--gold)}
 .vkpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:rgba(201,168,76,0.07);border:1px solid rgba(201,168,76,0.1);margin-bottom:24px}
 .v-kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .v-kcol{background:rgba(168,178,189,0.02);border:1px solid rgba(168,178,189,0.06);padding:10px}
@@ -1039,7 +1043,6 @@ canvas{background:transparent!important}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <button id="btn-gerar-link-semanal"   onclick="gerarLinkFormulario('semanal')"   class="vbtn vbtn-blue" style="font-size:9px">Gerar Link Semanal</button>
       <button id="btn-gerar-link-mensal"    onclick="gerarLinkFormulario('mensal')"    class="vbtn" style="font-size:9px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);color:var(--purple)">Gerar Link Mensal</button>
-      <button id="btn-gerar-link-semestral" onclick="gerarLinkFormulario('semestral')" class="vbtn" style="font-size:9px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--amber)">Gerar Link Semestral</button>
     </div>
     <div id="form-link-result" style="display:none;padding:12px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px">✓ Link gerado — copie e envie pelo WhatsApp</div>
@@ -1106,10 +1109,13 @@ canvas{background:transparent!important}
     <div class="panel">
       <div class="panel-header">
         <div>
-          <div class="panel-title">Evolução de Peso &amp; Composição</div>
-          <div class="panel-sub">Histórico de peso e % gordura corporal</div>
+          <div class="panel-title">Evolução de Peso</div>
+          <div class="panel-sub" id="weightChartSub">Peso reportado nos check-ins mensais · 📷 marca meses com foto de progresso</div>
         </div>
-        <div class="panel-badge">EVOLUÇÃO</div>
+        <div class="weight-toggle">
+          <button id="weight-toggle-semana" class="weight-toggle-btn" onclick="setWeightChartView('semana')">Semana</button>
+          <button id="weight-toggle-mes" class="weight-toggle-btn active" onclick="setWeightChartView('mes')">Mês</button>
+        </div>
       </div>
       <div class="chart-wrap" style="height:240px"><canvas id="weightChart"></canvas></div>
     </div>

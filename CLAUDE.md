@@ -171,6 +171,9 @@ Variáveis de ambiente no Vercel: `DATABASE_URL`, `SECRET_KEY`
 ---
 
 ## Problemas conhecidos (pendentes M1)
-1. Link semestral abre 404 — `form_type=semestral` não está mapeado no `form.html` (só semanal/mensal/trimestral)
-2. Gráficos BI: sazonalidade, meta vs realizado, performance por canal, ROI — precisam de queries adicionais na API
-3. Renovação ainda cria linha duplicada — DISTINCT ON precisa de índice composto no Neon
+1. Gráficos BI: sazonalidade, meta vs realizado, performance por canal, ROI — precisam de queries adicionais na API
+2. Renovação ainda cria linha duplicada — DISTINCT ON precisa de índice composto no Neon
+
+## Resolvidos recentemente
+- Tipo de formulário "semestral" removido (redundante com mensal) — só semanal/mensal/trimestral
+- Envio do form mensal/trimestral quebrava com "Unexpected token 'R', is not valid JSON" — causa raiz: 4 fotos em base64 dentro do JSON estouravam o limite fixo de 4.5MB de request body das Serverless Functions da Vercel (a Vercel rejeita antes do Python rodar, devolvendo texto puro). Corrigido: fotos agora sobem direto do navegador pro Cloudinary (unsigned upload preset `meridian_checkin_photos`, cloud `elbxkooi`, hardcoded em `form.html`) e só a URL resultante vai no JSON pro backend.

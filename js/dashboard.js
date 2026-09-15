@@ -768,34 +768,66 @@ function initVendasCharts(planos) {
 }
 
 // ── ACOMP CHARTS — dados do aluno selecionado ────────────
+let weightChartView = 'mes'; // 'semana' | 'mes'
+
+function setWeightChartView(view) {
+  if (view !== 'semana' && view !== 'mes') return;
+  weightChartView = view;
+  document.getElementById('weight-toggle-semana')?.classList.toggle('active', view === 'semana');
+  document.getElementById('weight-toggle-mes')?.classList.toggle('active', view === 'mes');
+  renderWeightChart();
+}
+
+function renderWeightChart() {
+  const sel = document.getElementById('studentSelect');
+  const s   = sel ? students[sel.value] : null;
+  const sub = document.getElementById('weightChartSub');
+  const wd  = weightChartView === 'semana' ? s?.weightWeek : s?.weightMonth;
+
+  if (sub) sub.textContent = weightChartView === 'semana'
+    ? 'Peso reportado nos check-ins semanais'
+    : 'Peso reportado nos check-ins mensais · 📷 marca meses com foto de progresso';
+
+  if (!wd?.labels?.length) {
+    mkEmptyChart('weightChart', weightChartView === 'semana' ? 'Sem dados de peso semanal ainda' : 'Sem dados de peso mensal ainda');
+    return;
+  }
+
+  const hasPhoto = wd.hasPhoto || [];
+  mkChart('weightChart', {
+    type:'line',
+    data:{
+      labels: wd.labels,
+      datasets:[{
+        label:'Peso (kg)', data:wd.kg,
+        borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.06)',
+        fill:true, tension:0.4, borderWidth:2.5,
+        pointRadius:          wd.kg.map((_,i)=> hasPhoto[i] ? 7 : 4),
+        pointStyle:           wd.kg.map((_,i)=> hasPhoto[i] ? 'rectRot' : 'circle'),
+        pointBackgroundColor: wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : GOLD),
+        pointBorderColor:     wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : GOLD),
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}},
+        tooltip:{...tt, callbacks:{ label: ctx => {
+          const base = 'Peso: ' + ctx.parsed.y + 'kg';
+          return hasPhoto[ctx.dataIndex] ? base + ' · 📷 com foto de progresso' : base;
+        }}}
+      },
+      scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:8},maxRotation:45}},
+        y:{grid,ticks:{color:GOLD,font:{size:9},callback:v=>v+'kg'},suggestedMin:0}}}
+  });
+}
+
 function initAcompCharts() {
   const sel = document.getElementById('studentSelect');
   const s   = sel ? students[sel.value] : null;
 
-  if (!s?.weight?.labels?.length) {
-    mkEmptyChart('weightChart', 'Sem dados de peso ainda');
-    mkEmptyChart('freqChart',   'Sem dados de frequência ainda');
-    mkEmptyChart('moodChart',   'Sem dados de humor ainda');
-    return;
-  }
+  renderWeightChart();
 
-  mkChart('weightChart', {
-    type:'line',
-    data:{
-      labels: s.weight.labels,
-      datasets:[
-        {label:'Peso (kg)',data:s.weight.kg,borderColor:GOLD,backgroundColor:'rgba(201,168,76,0.06)',fill:true,tension:0.4,borderWidth:2.5,pointRadius:4,pointBackgroundColor:GOLD,yAxisID:'y'},
-        {label:'BF %',     data:s.weight.bf,borderColor:GREEN,backgroundColor:'rgba(74,222,128,0.04)',fill:true,tension:0.4,borderWidth:1.5,pointRadius:3,pointBackgroundColor:GREEN,borderDash:[4,3],yAxisID:'y2'},
-      ]
-    },
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}},tooltip:{...tt}},
-      scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:8},maxRotation:45}},
-        y:{grid,ticks:{color:GOLD,font:{size:9},callback:v=>v+'kg'},suggestedMin:0},
-        y2:{position:'right',grid:{display:false},ticks:{color:GREEN,font:{size:9},callback:v=>v+'%'},suggestedMin:0}}}
-  });
-
-  const fd = s.freq || [];
+  const fd = s?.freq || [];
   if (fd.length) {
     mkChart('freqChart', {
       type:'bar',
@@ -812,7 +844,7 @@ function initAcompCharts() {
     });
   } else { mkEmptyChart('freqChart', 'Sem dados de frequência'); }
 
-  const md = s.mood;
+  const md = s?.mood;
   if (md?.data?.length) {
     mkChart('moodChart', {
       type:'line',
@@ -848,7 +880,8 @@ function loadStudentsFromAPI(data) {
       channel:  capitalize(s.channel),
       ltv:      fmtBRL(s.ltv_total || 0),
       sk1: '—', sk2: '—', sk3: '—', sk4: '—',
-      weight:   { labels:[], kg:[], bf:[] },
+      weightWeek:  { labels:[], kg:[] },
+      weightMonth: { labels:[], kg:[], checkinIds:[], hasPhoto:[] },
       freq:     [],
       mood:     { labels:[], data:[] },
       photos:   [
@@ -908,8 +941,11 @@ function buildEngagement(s) {
 }
 
 async function loadStudentCheckins(studentId) {
-  const data = await api('/checkins/' + studentId).catch(() => null);
-  const s    = students[studentId];
+  const [data, photos] = await Promise.all([
+    api('/checkins/' + studentId).catch(() => null),
+    api('/students/' + studentId + '/photos').catch(() => []),
+  ]);
+  const s = students[studentId];
   if (!data?.length || !s) return;
 
   // Respostas
@@ -933,13 +969,25 @@ async function loadStudentCheckins(studentId) {
     };
   });
 
-  // Peso e frequência dos check-ins
-  const withWeight = data.filter(c=>c.weight_reported).reverse();
-  if (withWeight.length >= 2) {
-    s.weight.labels = withWeight.map(c=>new Date(c.created_at).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}));
-    s.weight.kg     = withWeight.map(c=>parseFloat(c.weight_reported));
-    s.weight.bf     = withWeight.map(c=>parseFloat(c.bf_measured)||0);
-  }
+  // Peso — visão Semana (todos os check-ins semanais com peso, cronológico)
+  const weekly = data.filter(c=>c.type==='semanal' && c.weight_reported).slice().reverse();
+  s.weightWeek = {
+    labels: weekly.map(c=>new Date(c.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),
+    kg:     weekly.map(c=>parseFloat(c.weight_reported)),
+  };
+
+  // Peso — visão Mês (check-ins mensais, marcando quem tem foto de progresso)
+  const photoCheckinIds = new Set(
+    (photos || []).filter(p => posesKeys.some(k=>p[k])).map(p => p.checkin_id)
+  );
+  const monthly = data.filter(c=>c.type==='mensal' && c.weight_reported).slice().reverse();
+  s.weightMonth = {
+    labels:     monthly.map(c=>new Date(c.created_at).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})),
+    kg:         monthly.map(c=>parseFloat(c.weight_reported)),
+    checkinIds: monthly.map(c=>c.id),
+    hasPhoto:   monthly.map(c=>photoCheckinIds.has(c.id)),
+  };
+
   const freqData = data.reverse().map(c=>c.trainings_done||0);
   if (freqData.length) s.freq = freqData;
 
@@ -999,8 +1047,6 @@ async function loadStudentCheckins(studentId) {
       </div>`).join('');
   }
 
-  // Busca fotos de progresso (formulários + foto inicial)
-  const photos = await api('/students/' + studentId + '/photos').catch(() => []);
   renderPhotoCarousel(studentId, photos || []);
 }
 
@@ -1111,9 +1157,9 @@ function renderPhotoCarousel(studentId, photos) {
   const container = document.getElementById('photo-compare');
   if (!container) return;
 
-  // Exclude old Cloudinary records — only keep rows with at least one base64 photo
+  // Mantém linhas com pelo menos uma foto real (base64 legado ou URL do Cloudinary)
   const validPhotos = (photos || []).filter(p =>
-    posesKeys.some(k => p[k] && p[k].startsWith('data:'))
+    posesKeys.some(k => !!p[k])
   );
 
   if (!validPhotos.length) {
@@ -2092,7 +2138,7 @@ async function gerarLinkFormulario(tipo) {
   const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
   const personalId = session?.personal_id || session?.id;
   if (!studentId) { alert('Selecione um aluno primeiro.'); return; }
-  const labels = { semanal:'Semanal', mensal:'Mensal', semestral:'Semestral' };
+  const labels = { semanal:'Semanal', mensal:'Mensal' };
   const btn = document.getElementById('btn-gerar-link-' + tipo);
   if (btn) { btn.disabled=true; btn.textContent='Gerando...'; }
   try {
