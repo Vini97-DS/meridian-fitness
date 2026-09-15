@@ -297,6 +297,10 @@ function capitalize(str) {
   if (!str) return '—';
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+function truncate(str, max) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max - 1).trim() + '…' : str;
+}
 
 // ── LOAD DASHBOARD ───────────────────────────────────────
 async function loadDashboard() {
@@ -1333,6 +1337,7 @@ function loadLeadsFromAPI(pipeline) {
         hot:         status==='proposta',
         isIndicacao: (l.channel||'').toLowerCase() === 'indicacao',
         created_at:  l.created_at,
+        aiSummary:   l.ai_summary || '',
       };
       KDATA[status] = KDATA[status] || [];
       KDATA[status].push(card);
@@ -1353,6 +1358,7 @@ function renderKanban(overrideData) {
         +'<div class="v-kcard-name">'+c.name+'</div>'
         +'<div class="v-kcard-detail">'+c.sub+'</div>'
         +(c.isIndicacao ? '<div style="font-size:7px;padding:2px 6px;background:rgba(167,139,250,0.15);color:var(--purple);border:1px solid rgba(167,139,250,0.2);display:inline-block;margin-top:3px">INDICAÇÃO</div>' : '')
+        +(c.aiSummary ? '<div class="v-kcard-ai" style="font-size:8px;color:var(--gold);font-style:italic;margin-top:4px;line-height:1.4">✦ '+truncate(c.aiSummary,78)+'</div>' : '')
         +(c.val?'<div class="v-kcard-val" style="'+(c.ok?'color:var(--green)':c.lost?'color:var(--red)':'')+'">'+c.val+'</div>':'')
         +(c.days?'<div class="v-kcard-days">'+c.days+'</div>':'')
         +'</div>').join('')
@@ -1400,6 +1406,8 @@ function openCtxMenu(e, cardId, curStatus) {
     {l:'WhatsApp',v:c.phone||'—'},{l:'E-mail',v:c.email||'—'},
     {l:'No pipeline',v:c.dp===0?'Hoje':c.dp+'d'},{l:'Status',v:curStatus},
   ].map(i=>'<div><div class="ctx-info-label">'+i.l+'</div><div class="ctx-info-val">'+i.v+'</div></div>').join('');
+  const aiTextEl = document.querySelector('.ctx-ai-text');
+  if (aiTextEl) aiTextEl.textContent = c.aiSummary || 'Sem resumo ainda.';
   document.querySelectorAll('.ctx-sbtn').forEach(b=>b.classList.toggle('cur',b.dataset.s===curStatus));
   document.getElementById('ctx-notes-input').value = kNotes[cardId]||'';
   menu.style.display='block'; overlay.classList.add('open');
@@ -1534,7 +1542,7 @@ async function vSaveLead() {
   btn.textContent='✓ Lead adicionado!'; btn.disabled=true;
   btn.style.cssText += ';background:rgba(74,222,128,0.15);border-color:var(--green);color:var(--green)';
 
-  saveLeadToAPI({name, phone, email:email||null, channel:channel.toLowerCase(), goal:'emagrecimento'})
+  saveLeadToAPI({name, phone, email:email||null, channel:channel.toLowerCase(), goal:'emagrecimento', plan_id:vSelectedPlan.id||null})
     .then(saved => {
       if (saved?.id) {
         const idx = KDATA.novo.findIndex(c=>c.id===newId);

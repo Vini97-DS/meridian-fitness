@@ -5,7 +5,7 @@ Banco: Neon (Postgres)
 Rodar: uvicorn api:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -18,8 +18,11 @@ import os
 import bcrypt
 from jose import jwt, JWTError
 from dotenv import load_dotenv
+import anthropic
 
 load_dotenv()
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 app = FastAPI(title="Meridian Fitness API", version="1.0.0")
 
@@ -538,6 +541,59 @@ class LeadUpdate(BaseModel):
     notes:      Optional[str] = None
     ai_summary: Optional[str] = None
 
+def generate_lead_ai_summary(lead_id: str):
+    """Roda em background (BackgroundTasks): gera um resumo curto do lead via Anthropic
+    e salva em leads.ai_summary. Abre sua própria conexão porque roda depois da resposta,
+    quando a conexão da requisição (Depends(get_db)) já pode estar fechada."""
+    if not ANTHROPIC_API_KEY:
+        return
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return
+    conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        rows = query(conn, """
+            SELECT l.name, l.channel, l.goal, l.notes, p.name AS plan_name
+            FROM leads l LEFT JOIN plans p ON p.id = l.plan_id
+            WHERE l.id = %s
+        """, (lead_id,))
+        if not rows or not rows[0].get("notes"):
+            return
+        lead = rows[0]
+
+        info = [f"Nome: {lead['name']}"]
+        if lead.get("channel"):
+            info.append(f"Canal de origem: {lead['channel']}")
+        if lead.get("plan_name"):
+            info.append(f"Plano de interesse: {lead['plan_name']}")
+        info.append(f"Observações do personal trainer sobre o lead: {lead['notes']}")
+
+        prompt = (
+            "Você ajuda um personal trainer a lembrar rapidamente do que um lead precisa. "
+            "Com base SOMENTE nos dados abaixo, escreva um resumo curto (uma frase, no máximo "
+            "25 palavras), em português, direto ao ponto, sem aspas e sem markdown. "
+            "O nome já aparece em outro lugar da tela — NÃO repita o nome no resumo, comece "
+            "direto pelo que a pessoa quer. "
+            "Não invente nenhuma informação que não esteja nos dados.\n\n" + "\n".join(info)
+        )
+
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        summary = "".join(
+            b.text for b in resp.content if getattr(b, "type", None) == "text"
+        ).strip()
+        if summary:
+            execute(conn, "UPDATE leads SET ai_summary=%s WHERE id=%s", (summary, lead_id))
+            print(f"[ai_summary] gerado pro lead {lead_id}: {summary}")
+    except Exception as e:
+        print(f"[ai_summary] falhou pro lead {lead_id}: {e}")
+    finally:
+        conn.close()
+
 @app.get("/api/leads/{personal_id}")
 def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     rows = query(conn, """
@@ -563,14 +619,25 @@ def create_lead(data: LeadCreate, conn=Depends(get_db), _=Depends(get_current_us
           data.plan_id, data.notes))
 
 @app.patch("/api/leads/{lead_id}")
-def update_lead(lead_id: str, data: LeadUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
+def update_lead(lead_id: str, data: LeadUpdate, background_tasks: BackgroundTasks, conn=Depends(get_db), _=Depends(get_current_user)):
+    notes_changed = False
+    if data.notes is not None:
+        current = query(conn, "SELECT notes FROM leads WHERE id=%s", (lead_id,))
+        current_notes = current[0]["notes"] if current else None
+        notes_changed = (data.notes or "") != (current_notes or "")
+
     fields, values = [], []
     if data.status     is not None: fields.append("status = %s");     values.append(data.status)
     if data.notes      is not None: fields.append("notes = %s");      values.append(data.notes)
     if data.ai_summary is not None: fields.append("ai_summary = %s"); values.append(data.ai_summary)
     if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
     values.append(lead_id)
-    return execute(conn, f"UPDATE leads SET {', '.join(fields)}, updated_at=NOW() WHERE id=%s RETURNING id, status", values)
+    result = execute(conn, f"UPDATE leads SET {', '.join(fields)}, updated_at=NOW() WHERE id=%s RETURNING id, status", values)
+
+    if notes_changed:
+        background_tasks.add_task(generate_lead_ai_summary, lead_id)
+
+    return result
 
 # ═══════════════════════════════════════════════════════════════
 #  PLANOS
