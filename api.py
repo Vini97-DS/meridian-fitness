@@ -250,6 +250,10 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         FROM subscriptions WHERE personal_id = %s AND status = 'active'
           AND expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
     """, (personal_id,))
+    pending_forms = query(conn, """
+        SELECT COUNT(*) AS count
+        FROM form_tokens WHERE personal_id = %s AND used = false AND expires_at > NOW()
+    """, (personal_id,))
     mrr_history = query(conn, f"""
         SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
                SUM(price_paid) AS mrr
@@ -266,11 +270,31 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         "GROUP BY channel ORDER BY count DESC",
         (personal_id, 'active'))
 
-    # Renovação por plano
+    # Taxa de renovação por plano — de contratos que já venceram nesse plano,
+    # quantos tiveram uma assinatura seguinte (renovaram, em qualquer plano)
     renewal_by_plan = query(conn,
-        "SELECT p.name AS plan_name, p.duration_months, COUNT(*) AS renewals "
+        "SELECT p.name AS plan_name, p.duration_months, "
+        "COUNT(*) FILTER (WHERE sub.expires_at < CURRENT_DATE) AS expired_count, "
+        "COUNT(*) FILTER (WHERE sub.expires_at < CURRENT_DATE AND EXISTS ("
+        "  SELECT 1 FROM subscriptions sub2 WHERE sub2.student_id = sub.student_id "
+        "    AND sub2.starts_at > sub.starts_at"
+        ")) AS renewed_count "
         "FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id "
         "WHERE sub.personal_id = %s "
+        "GROUP BY p.name, p.duration_months "
+        "HAVING COUNT(*) FILTER (WHERE sub.expires_at < CURRENT_DATE) > 0 "
+        "ORDER BY p.duration_months",
+        (personal_id,))
+    for r in renewal_by_plan:
+        expired = int(r.pop("expired_count") or 0)
+        renewed = int(r.pop("renewed_count") or 0)
+        r["renewal_rate"] = round(renewed / expired * 100) if expired else 0
+
+    # Mix de planos — base ativa agora (status active E ainda não vencido)
+    active_plan_mix = query(conn,
+        "SELECT p.name AS plan_name, p.duration_months, COUNT(*) AS active_count "
+        "FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id "
+        "WHERE sub.personal_id = %s AND sub.status = 'active' AND sub.expires_at >= CURRENT_DATE "
         "GROUP BY p.name, p.duration_months ORDER BY p.duration_months",
         (personal_id,))
 
@@ -286,12 +310,21 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         (personal_id,))
 
     # Novos alunos por mês
-    student_flow = query(conn,
-        "SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month, "
+    student_flow = query(conn, f"""
+        SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
+               COUNT(DISTINCT student_id) AS new_students
+        FROM subscriptions WHERE personal_id = %s AND starts_at IS NOT NULL
+          AND starts_at >= NOW() - INTERVAL '{period} days'
+        GROUP BY DATE_TRUNC('month', starts_at)
+        ORDER BY DATE_TRUNC('month', starts_at) LIMIT 12
+    """, (personal_id,))
+
+    # Sazonalidade — matrículas por mês do ano (Jan-Dez), somando todos os anos
+    seasonality = query(conn,
+        "SELECT EXTRACT(MONTH FROM starts_at)::int AS month_num, "
         "COUNT(DISTINCT student_id) AS new_students "
         "FROM subscriptions WHERE personal_id = %s AND starts_at IS NOT NULL "
-        "GROUP BY DATE_TRUNC('month', starts_at) "
-        "ORDER BY DATE_TRUNC('month', starts_at) LIMIT 12",
+        "GROUP BY month_num ORDER BY month_num",
         (personal_id,))
 
     # Taxa de renovação, churn e LTV médio
@@ -322,10 +355,13 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
                             "value": float((e7[0] if e7 else {}).get("value") or 0)},
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
+        "pending_forms":   int((pending_forms[0] if pending_forms else {}).get("count") or 0),
         "mrr_history":     mrr_history,
         "student_flow":    student_flow,
+        "seasonality":     seasonality,
         "channels":            channels,
         "renewal_by_plan":     renewal_by_plan,
+        "active_plan_mix":     active_plan_mix,
         "revenue_by_channel":  revenue_by_channel,
     }
 

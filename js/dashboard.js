@@ -483,6 +483,14 @@ function updateAlertBar(m) {
     show = true;
   } else if (expEl) expEl.style.display = 'none';
   if (bar) bar.style.display = show ? 'flex' : 'none';
+
+  const pendEl = document.getElementById('acomp-pending-text');
+  if (pendEl) {
+    const pending = m?.pending_forms || 0;
+    pendEl.textContent = pending
+      ? pending + (pending === 1 ? ' formulário aguardando resposta' : ' formulários aguardando resposta')
+      : 'Nenhum formulário pendente';
+  }
 }
 
 // ── BI CHARTS — dados do banco ou vazio ──────────────────
@@ -534,23 +542,38 @@ function initBICharts(m) {
     });
   } else { mkEmptyChart('channelChart', empty); }
 
-  // Renovação por plano
+  // Taxa de renovação por plano
   if (m?.renewal_by_plan?.length) {
     mkChart('renewalChart', {
       type:'bar',
       data:{
         labels: m.renewal_by_plan.map(r => r.plan_name || r.duration_months+'m'),
-        datasets:[{label:'Renovações',data:m.renewal_by_plan.map(r=>parseInt(r.renewals)||0),
+        datasets:[{label:'Taxa de renovação',data:m.renewal_by_plan.map(r=>parseInt(r.renewal_rate)||0),
           backgroundColor:GOLD+'55',borderColor:GOLD,borderWidth:1.5,borderRadius:4}]
       },
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{...tt}},
-        scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:9}}},y:{grid,ticks:{color:SILV}}}}
+        plugins:{legend:{display:false},tooltip:{...tt,callbacks:{label:ctx=>ctx.parsed.y+'% renovaram'}}},
+        scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:9}}},y:{grid,ticks:{color:SILV,callback:v=>v+'%'},suggestedMin:0,suggestedMax:100}}}
     });
-  } else { mkEmptyChart('renewalChart', empty); }
+  } else { mkEmptyChart('renewalChart', 'Sem contratos vencidos ainda pra calcular taxa de renovação'); }
 
-  // Sazonalidade — precisa de histórico longo
-  mkEmptyChart('seasonChart', 'Sem dados · histórico de 12+ meses necessário');
+  // Sazonalidade — matrículas por mês do ano (soma todos os anos)
+  if (m?.seasonality?.length) {
+    const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const byMonth = Array(12).fill(0);
+    m.seasonality.forEach(r => { byMonth[r.month_num - 1] = parseInt(r.new_students) || 0; });
+    mkChart('seasonChart', {
+      type: 'bar',
+      data: {
+        labels: MESES,
+        datasets: [{ label: 'Matrículas', data: byMonth,
+          backgroundColor: BLUE + '55', borderColor: BLUE, borderWidth: 1.5, borderRadius: 3 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { ...tt } },
+        scales: { x: { grid: { display: false }, ticks: { color: SILV, font: { size: 9 } } }, y: { grid, ticks: { color: SILV, precision: 0 } } } }
+    });
+  } else { mkEmptyChart('seasonChart', 'Sem dados · cadastre alunos para ver'); }
 
   // Meta vs Realizado
   const _metaSess   = JSON.parse(localStorage.getItem('mf_user')||'null');
@@ -633,13 +656,13 @@ function initBICharts(m) {
     mkEmptyChart('metaChart', 'Configure sua meta em ⚙ Configurações para ver este gráfico');
   }
 
-  // rpsChart — Mix de Planos (doughnut por duração)
-  if (m?.renewal_by_plan?.length) {
+  // rpsChart — Mix de Planos (doughnut por duração, base ativa agora)
+  if (m?.active_plan_mix?.length) {
     mkChart('rpsChart', {
       type: 'doughnut',
       data: {
-        labels: m.renewal_by_plan.map(r => r.plan_name || r.duration_months + 'm'),
-        datasets: [{ data: m.renewal_by_plan.map(r => parseInt(r.renewals) || 0),
+        labels: m.active_plan_mix.map(r => r.plan_name || r.duration_months + 'm'),
+        datasets: [{ data: m.active_plan_mix.map(r => parseInt(r.active_count) || 0),
           backgroundColor: [GOLD+'99', SILV+'88', GREEN+'77', AMBER+'88', BLUE+'77', PURPLE+'77'],
           borderColor: 'transparent', borderWidth: 2 }]
       },
@@ -1240,7 +1263,7 @@ function fmtPhotoWeight(photo) {
 function renderChurnListFromAPI(data) {
   const el = document.getElementById('churn-list');
   if (!el) return;
-  const atRisk = data.filter(s => s.days_to_expire !== null && s.days_to_expire <= 21);
+  const atRisk = data.filter(s => s.days_to_expire !== null && s.days_to_expire >= 0 && s.days_to_expire <= 21);
   if (!atRisk.length) {
     el.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum aluno em risco de churn ✓</div>';
     return;
@@ -2163,9 +2186,17 @@ function copyFormLink() {
 }
 
 // ── SALES TABLE + MIX CHART ───────────────────────────────
+function updateExpiringCard(expiring) {
+  const el = document.getElementById('acomp-expiring-text');
+  if (!el) return;
+  el.textContent = expiring.length
+    ? expiring.length + (expiring.length === 1 ? ' aluno' : ' alunos') + ' com plano vencendo'
+    : 'Nenhum plano vencendo nos próximos 30 dias';
+}
+
 async function loadSalesTable(personalId) {
   const data = await api('/students/' + personalId).catch(()=>null);
-  if (!data?.length) { renderSalesTable([]); return; }
+  if (!data?.length) { renderSalesTable([]); updateExpiringCard([]); return; }
   const rows = data.map(s => ({
     created_at: s.starts_at,
     name:       s.name,
@@ -2184,7 +2215,8 @@ async function loadSalesTable(personalId) {
     charts['vMixChart'].update();
   }
   // Renewal list
-  const expiring = data.filter(s => s.days_to_expire !== null && s.days_to_expire <= 30);
+  const expiring = data.filter(s => s.days_to_expire !== null && s.days_to_expire >= 0 && s.days_to_expire <= 30);
+  updateExpiringCard(expiring);
   const renewalEl = document.getElementById('renewal-list');
   if (renewalEl) {
     if (expiring.length) {
