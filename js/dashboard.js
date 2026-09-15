@@ -1417,14 +1417,41 @@ function ctxMove(newStatus) {
   document.querySelectorAll('.ctx-sbtn').forEach(b=>b.classList.toggle('cur',b.dataset.s===newStatus));
   renderKanban();
 }
+function moveCardInKDATA(cardId, fromStatus, toStatus) {
+  const idx = (KDATA[fromStatus] || []).findIndex(c => c.id === cardId);
+  if (idx < 0) return null;
+  const [card] = KDATA[fromStatus].splice(idx, 1);
+  card.ok   = toStatus === 'fechado';
+  card.lost = toStatus === 'perdido';
+  card.hot  = toStatus === 'proposta';
+  KDATA[toStatus] = KDATA[toStatus] || [];
+  KDATA[toStatus].push(card);
+  return card;
+}
+
 function ctxSave() {
   if (ctxId) {
-    kNotes[ctxId] = document.getElementById('ctx-notes-input')?.value;
+    const leadId = ctxId; // guarda antes do closeCtxMenu() zerar ctxId
+    kNotes[leadId] = document.getElementById('ctx-notes-input')?.value;
     const newStatus = document.querySelector('.ctx-sbtn.cur')?.dataset.s;
     if (newStatus) {
-      updateLeadInAPI(ctxId, newStatus, kNotes[ctxId]).catch(()=>{});
+      const oldStatus = Object.keys(KDATA).find(k => (KDATA[k] || []).some(c => c.id === leadId));
+      if (oldStatus && oldStatus !== newStatus) {
+        // move otimista: atualiza o board na hora, sem esperar a API
+        moveCardInKDATA(leadId, oldStatus, newStatus);
+        kStatus[leadId] = newStatus;
+        renderKanban();
+        updateLeadInAPI(leadId, newStatus, kNotes[leadId]).catch(() => {
+          // API falhou: reverte o card pra coluna original
+          moveCardInKDATA(leadId, newStatus, oldStatus);
+          kStatus[leadId] = oldStatus;
+          renderKanban();
+        });
+      } else {
+        updateLeadInAPI(leadId, newStatus, kNotes[leadId]).catch(()=>{});
+      }
       if (newStatus === 'fechado') {
-        const lead = Object.values(KDATA).flat().find(c => c.id === ctxId);
+        const lead = Object.values(KDATA).flat().find(c => c.id === leadId);
         if (lead && confirm('Converter ' + lead.name + ' em aluno? Isso abrirá o formulário de cadastro pré-preenchido.')) {
           closeCtxMenu();
           converterLeadEmAluno(lead);
@@ -2206,13 +2233,22 @@ async function loadSalesTable(personalId) {
     status:     s.status || 'active',
   }));
   renderSalesTable(rows);
-  // Mix chart
-  if (charts['vMixChart'] && data.length) {
-    const planCount = {};
-    data.forEach(s => { const k=s.plan_name||'Outro'; planCount[k]=(planCount[k]||0)+1; });
-    charts['vMixChart'].data.labels   = Object.keys(planCount);
-    charts['vMixChart'].data.datasets[0].data = Object.values(planCount);
-    charts['vMixChart'].update();
+  // Mix chart — construído com os planos vendidos de verdade
+  const planCount = {};
+  data.forEach(s => { const k=s.plan_name||'Outro'; planCount[k]=(planCount[k]||0)+1; });
+  if (Object.keys(planCount).length) {
+    mkChart('vMixChart', {
+      type:'doughnut',
+      data:{
+        labels: Object.keys(planCount),
+        datasets:[{data:Object.values(planCount),
+          backgroundColor:[RED+'55',AMBER+'55',GOLD+'66',GREEN+'55'],borderColor:'#081321',borderWidth:3,hoverOffset:6}]
+      },
+      options:{responsive:true,maintainAspectRatio:false,cutout:'56%',
+        plugins:{legend:{position:'right',labels:{color:SILV,usePointStyle:true,font:{size:9},padding:10}},tooltip:{...tt}}}
+    });
+  } else {
+    mkEmptyChart('vMixChart', 'Sem vendas ainda');
   }
   // Renewal list
   const expiring = data.filter(s => s.days_to_expire !== null && s.days_to_expire >= 0 && s.days_to_expire <= 30);
