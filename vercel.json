@@ -18,6 +18,14 @@
       "use": "@vercel/static"
     },
     {
+      "src": "recuperar-senha.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "minha-conta.html",
+      "use": "@vercel/static"
+    },
+    {
       "src": "form.html",
       "use": "@vercel/static"
     },
@@ -41,6 +49,8 @@
     { "src": "/js/(.*)",  "dest": "/js/$1"  },
     { "src": "/dashboard",       "dest": "/dashboard.html" },
     { "src": "/primeiro-acesso", "dest": "/primeiro-acesso.html" },
+    { "src": "/recuperar-senha", "dest": "/recuperar-senha.html" },
+    { "src": "/minha-conta",     "dest": "/minha-conta.html" },
     { "src": "/admin",           "dest": "/admin.html" },
     { "src": "/",                "dest": "/index.html" }
   ]

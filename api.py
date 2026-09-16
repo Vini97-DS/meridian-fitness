@@ -11,10 +11,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import psycopg2
 import psycopg2.extras
 import os
+import secrets
 import bcrypt
 from jose import jwt, JWTError
 from dotenv import load_dotenv
@@ -76,6 +77,14 @@ def serve_dashboard():
 def serve_first_access():
     return FileResponse("primeiro-acesso.html")
 
+@app.get("/recuperar-senha")
+def serve_forgot_password():
+    return FileResponse("recuperar-senha.html")
+
+@app.get("/minha-conta")
+def serve_my_account():
+    return FileResponse("minha-conta.html")
+
 # ── JWT helpers ──────────────────────────────────────────────────
 def create_token(user_id: str, email: str, name: str) -> str:
     payload = {
@@ -122,6 +131,17 @@ def create_users_table():
                     email      TEXT UNIQUE NOT NULL,
                     password   TEXT NOT NULL,
                     role       TEXT DEFAULT 'personal',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            conn.commit()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS password_resets (
+                    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id    UUID NOT NULL REFERENCES users(id),
+                    token      TEXT UNIQUE NOT NULL,
+                    expires_at TIMESTAMPTZ NOT NULL,
+                    used       BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
@@ -222,6 +242,64 @@ def me(current_user=Depends(get_current_user), conn=Depends(get_db)):
     else:
         personal_id = str(personal[0]["id"])
     return {**current_user, "personal_id": personal_id, "role": role}
+
+class ForgotPasswordData(BaseModel):
+    email: str
+
+class ResetPasswordData(BaseModel):
+    token:        str
+    new_password: str
+
+class ChangePasswordData(BaseModel):
+    current_password: str
+    new_password:      str
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(data: ForgotPasswordData, conn=Depends(get_db)):
+    rows = query(conn, "SELECT id FROM users WHERE email = %s", (data.email.lower().strip(),))
+    if not rows:
+        raise HTTPException(status_code=404, detail="E-mail nao encontrado")
+    token      = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    execute(conn, """
+        INSERT INTO password_resets (user_id, token, expires_at)
+        VALUES (%s, %s, %s)
+        RETURNING id
+    """, (rows[0]["id"], token, expires_at))
+    return {"token": token}
+
+@app.post("/api/auth/reset-password")
+def reset_password(data: ResetPasswordData, conn=Depends(get_db)):
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Senha deve ter minimo 8 caracteres")
+    rows = query(conn, """
+        SELECT id, user_id, expires_at, used FROM password_resets WHERE token = %s
+    """, (data.token,))
+    if not rows:
+        raise HTTPException(status_code=400, detail="Token invalido")
+    reset = rows[0]
+    if reset["used"]:
+        raise HTTPException(status_code=400, detail="Token ja utilizado")
+    if reset["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Token expirado")
+    hashed = hash_password(data.new_password)
+    execute(conn, "UPDATE users SET password = %s WHERE id = %s", (hashed, reset["user_id"]))
+    execute(conn, "UPDATE password_resets SET used = TRUE WHERE id = %s", (reset["id"],))
+    return {"ok": True}
+
+@app.patch("/api/auth/change-password")
+def change_password(data: ChangePasswordData, current_user=Depends(get_current_user), conn=Depends(get_db)):
+    user_id = current_user.get("sub")
+    rows = query(conn, "SELECT password FROM users WHERE id = %s", (user_id,))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+    if not check_password(data.current_password, rows[0]["password"]):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Senha deve ter minimo 8 caracteres")
+    hashed = hash_password(data.new_password)
+    execute(conn, "UPDATE users SET password = %s WHERE id = %s", (hashed, user_id))
+    return {"ok": True}
 
 # ═══════════════════════════════════════════════════════════════
 #  HEALTH

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Performance Hub · Recuperar Senha</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="auth-page">
+
+  <div class="bg">
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+  </div>
+
+  <main class="auth-center">
+    <div class="card">
+
+      <!-- Logo -->
+      <div class="card-logo">
+        <div class="logo-mark">M</div>
+        <div class="logo-text">
+          <span class="logo-name">Performance Hub</span>
+          <span class="logo-sub">by Meridian Labs</span>
+        </div>
+      </div>
+
+      <!-- Progress bars -->
+      <div class="steps">
+        <div class="step active" id="dot-1"></div>
+        <div class="step" id="dot-2"></div>
+        <div class="step" id="dot-3"></div>
+      </div>
+
+      <!-- Step 1: E-mail -->
+      <div id="step-1">
+        <h1 class="card-title">Recuperar <em>Senha</em></h1>
+        <p class="card-desc">Informe o e-mail da sua conta para definir uma nova senha.</p>
+
+        <div class="alert alert-error" id="rs1-error" style="display:none"></div>
+
+        <div class="field">
+          <label class="field-label" for="rs1-email">E-mail</label>
+          <input class="field-input" id="rs1-email" type="email"
+            placeholder="seu@email.com" autocomplete="email" />
+        </div>
+
+        <button class="btn-primary" id="rs1-btn">Continuar</button>
+
+        <div class="card-footer">
+          <span class="card-footer-note">
+            Lembrou a senha? <a href="/">Entrar</a>
+          </span>
+        </div>
+      </div>
+
+      <!-- Step 2: Nova senha -->
+      <div id="step-2" style="display:none">
+        <h1 class="card-title">Definir <em>Nova Senha</em></h1>
+        <p class="card-desc">Crie uma nova senha para acessar sua conta.</p>
+
+        <div class="alert alert-error" id="rs2-error" style="display:none"></div>
+
+        <div class="field">
+          <label class="field-label" for="rs2-pass">Nova senha</label>
+          <div class="field-wrap">
+            <input class="field-input" id="rs2-pass" type="password"
+              placeholder="••••••••" autocomplete="new-password" />
+            <span class="field-eye" id="toggle-rs2">👁</span>
+          </div>
+          <div class="strength-wrap">
+            <div class="strength-track"><div class="strength-fill" id="str-fill"></div></div>
+            <span class="strength-label" id="str-label">—</span>
+          </div>
+          <div class="req-list">
+            <div class="req-item"><div class="req-dot" id="req-len"></div><span class="req-text">Mínimo 8 caracteres</span></div>
+            <div class="req-item"><div class="req-dot" id="req-upper"></div><span class="req-text">Uma letra maiúscula</span></div>
+            <div class="req-item"><div class="req-dot" id="req-num"></div><span class="req-text">Um número</span></div>
+            <div class="req-item"><div class="req-dot" id="req-special"></div><span class="req-text">Um caractere especial (!@#$%^&*)</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="rs2-pass2">Confirmar nova senha</label>
+          <div class="field-wrap">
+            <input class="field-input" id="rs2-pass2" type="password"
+              placeholder="••••••••" autocomplete="new-password" />
+            <span class="field-eye" id="toggle-rs2b">👁</span>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="rs2-btn">Redefinir Senha</button>
+      </div>
+
+      <!-- Step 3: Sucesso -->
+      <div id="step-3" style="display:none">
+        <h1 class="card-title">Senha <em>Redefinida</em></h1>
+        <p class="card-desc">Sua senha foi alterada com sucesso. Acesse sua conta com a nova senha.</p>
+        <button class="btn-primary" id="rs3-btn">Ir para o Login →</button>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>

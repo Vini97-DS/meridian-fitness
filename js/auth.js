@@ -108,7 +108,7 @@ function initLogin() {
 
   document.getElementById('forgot-link')?.addEventListener('click', e => {
     e.preventDefault();
-    alert('Para redefinir sua senha, entre em contato:\nsuporte@meridian.com');
+    window.location.href = '/recuperar-senha';
   });
 }
 
@@ -241,6 +241,160 @@ function goToStep(num) {
 }
 
 // ════════════════════════════════════════════════════════
+//  PAGINA: recuperar-senha.html
+// ════════════════════════════════════════════════════════
+let rsStep = 1;
+
+function initForgotPassword() {
+  if (getToken()) { window.location.href = '/dashboard'; return; }
+
+  document.getElementById('rs1-btn')?.addEventListener('click', rsStep1Next);
+  document.getElementById('rs1-email')
+    ?.addEventListener('keydown', e => { if (e.key === 'Enter') rsStep1Next(); });
+
+  document.getElementById('toggle-rs2')
+    ?.addEventListener('click', () => toggleEye('rs2-pass', 'toggle-rs2'));
+  document.getElementById('toggle-rs2b')
+    ?.addEventListener('click', () => toggleEye('rs2-pass2', 'toggle-rs2b'));
+  document.getElementById('rs2-pass')
+    ?.addEventListener('input', e => checkStrength(e.target.value));
+  document.getElementById('rs2-btn')?.addEventListener('click', rsStep2Next);
+  ['rs2-pass','rs2-pass2'].forEach(id =>
+    document.getElementById(id)
+      ?.addEventListener('keydown', e => { if (e.key === 'Enter') rsStep2Next(); })
+  );
+
+  document.getElementById('rs3-btn')
+    ?.addEventListener('click', () => { window.location.href = '/'; });
+}
+
+async function rsStep1Next() {
+  const email = document.getElementById('rs1-email')?.value.trim().toLowerCase() || '';
+  hideError('rs1-error');
+  if (!email || !email.includes('@')) { showError('rs1-error', 'Informe um e-mail válido.'); return; }
+
+  setLoading('rs1-btn', true, 'Verificando...');
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showError('rs1-error', data.detail || 'E-mail não encontrado.');
+    } else {
+      window._resetToken = data.token;
+      goToRsStep(2);
+    }
+  } catch {
+    showError('rs1-error', 'Erro de conexao. Tente novamente.');
+  }
+  setLoading('rs1-btn', false);
+}
+
+async function rsStep2Next() {
+  const pass  = document.getElementById('rs2-pass')?.value  || '';
+  const pass2 = document.getElementById('rs2-pass2')?.value || '';
+  hideError('rs2-error');
+
+  const c = checkStrength(pass);
+  if (!c.len || !c.upper || !c.num || !c.special) {
+    showError('rs2-error', 'A senha nao atende todos os requisitos.'); return;
+  }
+  if (pass !== pass2) { showError('rs2-error', 'As senhas nao coincidem.'); return; }
+  if (!window._resetToken) { showError('rs2-error', 'Sessao expirada, recomece o processo.'); return; }
+
+  setLoading('rs2-btn', true, 'Salvando...');
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: window._resetToken, new_password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showError('rs2-error', data.detail || 'Erro ao redefinir senha.');
+    } else {
+      goToRsStep(3);
+    }
+  } catch {
+    showError('rs2-error', 'Erro de conexao. Tente novamente.');
+  }
+  setLoading('rs2-btn', false);
+}
+
+function goToRsStep(num) {
+  rsStep = num;
+  [1,2,3].forEach(n => {
+    const el = document.getElementById('step-' + n);
+    if (el) el.style.display = n === num ? 'block' : 'none';
+  });
+  [1,2,3].forEach(n => {
+    const dot = document.getElementById('dot-' + n);
+    if (!dot) return;
+    dot.classList.remove('active','done');
+    if (n < num)        dot.classList.add('done');
+    else if (n === num) dot.classList.add('active');
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  PAGINA: minha-conta.html
+// ════════════════════════════════════════════════════════
+function initChangePassword() {
+  const user = getUser();
+  if (!getToken() || !user) { window.location.href = '/'; return; }
+
+  const descEl = document.getElementById('mc-user-desc');
+  if (descEl && user.email) descEl.textContent = 'Altere a senha da conta ' + user.email + '.';
+
+  document.getElementById('toggle-mc-current')
+    ?.addEventListener('click', () => toggleEye('mc-current', 'toggle-mc-current'));
+  document.getElementById('toggle-mc-new')
+    ?.addEventListener('click', () => toggleEye('mc-new', 'toggle-mc-new'));
+  document.getElementById('toggle-mc-new2')
+    ?.addEventListener('click', () => toggleEye('mc-new2', 'toggle-mc-new2'));
+  document.getElementById('mc-new')
+    ?.addEventListener('input', e => checkStrength(e.target.value));
+  document.getElementById('mc-btn')?.addEventListener('click', doChangePassword);
+  ['mc-current','mc-new','mc-new2'].forEach(id =>
+    document.getElementById(id)
+      ?.addEventListener('keydown', e => { if (e.key === 'Enter') doChangePassword(); })
+  );
+}
+
+async function doChangePassword() {
+  const current = document.getElementById('mc-current')?.value || '';
+  const pass    = document.getElementById('mc-new')?.value     || '';
+  const pass2   = document.getElementById('mc-new2')?.value    || '';
+  hideError('mc-error');
+  document.getElementById('mc-success').style.display = 'none';
+
+  if (!current) { showError('mc-error', 'Informe sua senha atual.'); return; }
+  const c = checkStrength(pass);
+  if (!c.len || !c.upper || !c.num || !c.special) {
+    showError('mc-error', 'A nova senha nao atende todos os requisitos.'); return;
+  }
+  if (pass !== pass2) { showError('mc-error', 'As senhas nao coincidem.'); return; }
+
+  setLoading('mc-btn', true, 'Salvando...');
+  try {
+    await apiCall('/auth/change-password', {
+      method: 'PATCH',
+      body: JSON.stringify({ current_password: current, new_password: pass }),
+    });
+    document.getElementById('mc-success').textContent = '✓ Senha alterada com sucesso.';
+    document.getElementById('mc-success').style.display = 'block';
+    ['mc-current','mc-new','mc-new2'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    checkStrength('');
+  } catch (err) {
+    showError('mc-error', err.message || 'Erro ao alterar senha.');
+  }
+  setLoading('mc-btn', false);
+}
+
+// ════════════════════════════════════════════════════════
 //  PAGINA: dashboard.html
 // ════════════════════════════════════════════════════════
 function initDashboard() {
@@ -268,5 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const page = window.location.pathname.replace(/\/$/, '') || '/';
   if (page === '/' || page === '/login') initLogin();
   if (page === '/primeiro-acesso')       initFirstAccess();
+  if (page === '/recuperar-senha')       initForgotPassword();
+  if (page === '/minha-conta')           initChangePassword();
   if (page === '/dashboard')             initDashboard();
 });

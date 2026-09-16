@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Performance Hub · Minha Conta</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="auth-page">
+
+  <div class="bg">
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+  </div>
+
+  <main class="auth-center">
+    <div class="card">
+
+      <!-- Logo -->
+      <div class="card-logo">
+        <div class="logo-mark">M</div>
+        <div class="logo-text">
+          <span class="logo-name">Performance Hub</span>
+          <span class="logo-sub">by Meridian Labs</span>
+        </div>
+      </div>
+
+      <h1 class="card-title">Minha <em>Conta</em></h1>
+      <p class="card-desc" id="mc-user-desc">Altere sua senha de acesso.</p>
+
+      <div class="alert alert-error"   id="mc-error"   style="display:none"></div>
+      <div class="alert alert-success" id="mc-success" style="display:none"></div>
+
+      <div class="field">
+        <label class="field-label" for="mc-current">Senha atual</label>
+        <div class="field-wrap">
+          <input class="field-input" id="mc-current" type="password"
+            placeholder="••••••••" autocomplete="current-password" />
+          <span class="field-eye" id="toggle-mc-current">👁</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="mc-new">Nova senha</label>
+        <div class="field-wrap">
+          <input class="field-input" id="mc-new" type="password"
+            placeholder="••••••••" autocomplete="new-password" />
+          <span class="field-eye" id="toggle-mc-new">👁</span>
+        </div>
+        <div class="strength-wrap">
+          <div class="strength-track"><div class="strength-fill" id="str-fill"></div></div>
+          <span class="strength-label" id="str-label">—</span>
+        </div>
+        <div class="req-list">
+          <div class="req-item"><div class="req-dot" id="req-len"></div><span class="req-text">Mínimo 8 caracteres</span></div>
+          <div class="req-item"><div class="req-dot" id="req-upper"></div><span class="req-text">Uma letra maiúscula</span></div>
+          <div class="req-item"><div class="req-dot" id="req-num"></div><span class="req-text">Um número</span></div>
+          <div class="req-item"><div class="req-dot" id="req-special"></div><span class="req-text">Um caractere especial (!@#$%^&*)</span></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="mc-new2">Confirmar nova senha</label>
+        <div class="field-wrap">
+          <input class="field-input" id="mc-new2" type="password"
+            placeholder="••••••••" autocomplete="new-password" />
+          <span class="field-eye" id="toggle-mc-new2">👁</span>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="mc-btn">Salvar Nova Senha</button>
+
+      <div class="card-footer">
+        <span class="card-footer-note">
+          <a href="/dashboard">← Voltar ao Dashboard</a>
+        </span>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
