@@ -329,13 +329,18 @@ async function loadDashboard() {
   const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const h1 = document.getElementById('dash-user-h1');
   const roleLabel = role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
-  if (h1) h1.innerHTML = name + ' — <em>' + roleLabel + '</em>';
+  if (h1) h1.innerHTML = name + ' <em>· ' + roleLabel + '</em>';
   const nameEl   = document.getElementById('dash-user-name');
   const avatarEl = document.getElementById('dash-user-avatar');
+  const roleEl   = document.getElementById('dash-user-role');
   if (nameEl)   nameEl.textContent   = name;
   if (avatarEl) avatarEl.textContent = initials;
+  if (roleEl)   roleEl.textContent   = roleLabel;
   const bioEl = document.getElementById('dash-user-bio');
-  if (bioEl) bioEl.textContent = session.bio || bioEl.textContent;
+  if (bioEl) {
+    if (session.bio) { bioEl.textContent = session.bio; bioEl.style.display = ''; }
+    else              { bioEl.textContent = ''; bioEl.style.display = 'none'; }
+  }
 
   // Init gráficos vazios enquanto carrega
   initBICharts(null);
@@ -357,15 +362,22 @@ async function loadDashboard() {
   updateKPICards(metrics);
   updateAlertBar(metrics);
 
-  // Carrega meta do personal se não estiver na sessão
-  if (!session.meta_anual) {
+  // Sincroniza dados do personal (bio, especialidade, meta, pagamento) com o servidor
+  {
     const personalData = await api('/personals/' + personalId).catch(() => null);
-    if (personalData?.meta_anual) {
+    if (personalData) {
+      session.bio                  = personalData.bio || '';
+      session.especialidade        = personalData.especialidade || '';
       session.meta_anual           = personalData.meta_anual;
       session.payment_link         = personalData.payment_link;
       session.pix_key              = personalData.pix_key;
       session.payment_instruction  = personalData.payment_instruction;
       localStorage.setItem('mf_user', JSON.stringify(session));
+      const bioEl = document.getElementById('dash-user-bio');
+      if (bioEl) {
+        if (session.bio) { bioEl.textContent = session.bio; bioEl.style.display = ''; }
+        else              { bioEl.textContent = ''; bioEl.style.display = 'none'; }
+      }
     }
   }
 
@@ -2245,24 +2257,30 @@ async function salvarPerfil(){
   const personalId = session && (session.personal_id || session.id);
   if(session) {
     session.name = nome;
-    if(bio)  session.bio           = bio;
-    if(esp)  session.especialidade = esp;
+    session.bio           = bio;
+    session.especialidade = esp;
     localStorage.setItem('mf_user', JSON.stringify(session));
   }
   const h1 = document.getElementById('dash-user-h1');
   const role = session?.role || 'personal';
   const roleLabel = role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
-  if(h1) h1.innerHTML = nome + ' — <em>' + roleLabel + '</em>';
+  if(h1) h1.innerHTML = nome + ' <em>· ' + roleLabel + '</em>';
   const nameEl = document.getElementById('dash-user-name');
   if(nameEl) nameEl.textContent = nome;
+  const roleEl = document.getElementById('dash-user-role');
+  if(roleEl) roleEl.textContent = roleLabel;
   const bioEl  = document.getElementById('dash-user-bio');
-  if(bioEl && bio) bioEl.textContent = bio;
-  // Persist to API
+  if(bioEl) {
+    if (bio) { bioEl.textContent = bio; bioEl.style.display = ''; }
+    else     { bioEl.textContent = ''; bioEl.style.display = 'none'; }
+  }
+  // Persist to API — manda string vazia (não null) nos campos desse form,
+  // senão o backend interpreta null como "não mexer" e limpar o campo nunca persiste
   if (personalId) {
     api('/personals/' + personalId, { method:'PATCH', body:JSON.stringify({
-      name: nome, bio: bio||null, especialidade: esp||null,
-      whatsapp: wh||null, instagram: insta||null, site: site||null,
-      cidade: cid||null, pais, moeda,
+      name: nome, bio: bio, especialidade: esp,
+      whatsapp: wh, instagram: insta, site: site,
+      cidade: cid, pais, moeda,
     })}).catch(()=>{});
   }
   okEl.style.display='block';

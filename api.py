@@ -146,30 +146,36 @@ def create_users_table():
                 )
             """)
             conn.commit()
-        # Add personals columns if missing (safe: IF NOT EXISTS)
-        for col_sql in [
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS whatsapp TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS instagram TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS site TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS cidade TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT 'Brasil'",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS moeda TEXT DEFAULT 'BRL'",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS birth_date DATE",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Brasil'",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS state TEXT",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS city TEXT",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS dietary_restrictions TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_link TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pix_key TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_instruction TEXT",
-            "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(12,2)",
-        ]:
-            try:
-                cur.execute(col_sql)
-                conn.commit()
-            except Exception:
-                conn.rollback()
+        # Add personals/students columns if missing (safe: IF NOT EXISTS)
+        # IMPORTANTE: usa um cursor novo — o "cur" acima já foi fechado pelo
+        # "with" que terminou logo ali em cima (psycopg2 fecha o cursor no
+        # __exit__), reaproveitá-lo aqui faz todo cur.execute() falhar
+        # silenciosamente com "cursor already closed", engolido pelo except.
+        with conn.cursor() as cur2:
+            for col_sql in [
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS whatsapp TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS instagram TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS site TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS cidade TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT 'Brasil'",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS moeda TEXT DEFAULT 'BRL'",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS especialidade TEXT",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS birth_date DATE",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Brasil'",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS state TEXT",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS city TEXT",
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS dietary_restrictions TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_link TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pix_key TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_instruction TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(12,2)",
+            ]:
+                try:
+                    cur2.execute(col_sql)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
         conn.close()
         print("Tabela users OK")
     except Exception as e:
