@@ -1121,9 +1121,9 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
     execute(conn, """
         INSERT INTO checkins (student_id, personal_id, type,
             training_feedback, trainings_done, had_pain, pain_description,
-            nutrition_notes, mood_score, energy_score, weight_reported,
+            nutrition_notes, mood_score, energy_score, weight_reported, bf_measured,
             general_notes, intensity_score, nutrition_score, responded_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
     """, (
         str(ft["student_id"]), str(ft["personal_id"]),
         data.get("form_type", ft.get("form_type","semanal")),
@@ -1135,6 +1135,7 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
         data.get("mood_score"),
         data.get("energy_score"),
         data.get("weight_reported"),
+        data.get("bf_measured"),
         data.get("general_notes"),
         data.get("intensity_score"),
         data.get("nutrition_score"),
@@ -1148,6 +1149,9 @@ def submit_form(token: str, data: dict, conn=Depends(get_db)):
     if data.get("weight_reported"):
         execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s",
                 (data["weight_reported"], str(ft["student_id"])))
+    if data.get("bf_measured"):
+        execute(conn, "UPDATE students SET bf_current=%s WHERE id=%s",
+                (data["bf_measured"], str(ft["student_id"])))
 
     # Salvar fotos (URLs do Cloudinary, upload feito direto do navegador)
     photos = data.get("photos") or {}

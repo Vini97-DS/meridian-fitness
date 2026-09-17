@@ -8,7 +8,7 @@
 <style>
 :root {
   --navy:#081321; --navy2:#0D1E30; --gold:#C9A84C;
-  --silver:#A8B2BD; --white:#F0F4F8; --dim:#3D5068;
+  --silver:#A8B2BD; --white:#F0F4F8; --dim:#6B7F94;
   --green:#4ade80; --red:#f87171; --amber:#fbbf24; --purple:#a78bfa;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -240,6 +240,11 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         </div>
 
         <div class="field">
+          <div class="field-label">% de Gordura Corporal (opcional)</div>
+          <input type="number" class="field-input" id="m-bf" placeholder="Ex: 18.5 — só se você tiver medido" step="0.1" style="height:42px">
+        </div>
+
+        <div class="field">
           <div class="field-label">Fotos de progresso <span class="req">*</span></div>
           <div class="photo-grid">
             <div class="photo-upload" onclick="document.getElementById('foto-frente').click()">
@@ -343,6 +348,11 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <div class="field">
           <div class="field-label">Peso atual (kg) <span class="req">*</span></div>
           <input type="number" class="field-input" id="t-peso" placeholder="Ex: 72.5" step="0.1" style="height:42px">
+        </div>
+
+        <div class="field">
+          <div class="field-label">% de Gordura Corporal (opcional)</div>
+          <input type="number" class="field-input" id="t-bf" placeholder="Ex: 18.5 — só se você tiver medido" step="0.1" style="height:42px">
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -602,6 +612,12 @@ async function submitMensal() {
   if (!alim)        { showError('m-error','Selecione a aderência alimentar.'); return; }
   if (!humor)       { showError('m-error','Selecione o humor.'); return; }
   if (!peso)        { showError('m-error','Informe o peso atual.'); return; }
+  if (!document.getElementById('foto-frente').files[0] ||
+      !document.getElementById('foto-costas').files[0] ||
+      !document.getElementById('foto-esq').files[0]    ||
+      !document.getElementById('foto-dir').files[0]) {
+    showError('m-error','Anexe as 4 fotos de progresso.'); return;
+  }
 
   const btn = document.querySelector('#form-mensal .submit-btn');
   btn.disabled = true; btn.textContent = 'Enviando...';
@@ -626,6 +642,7 @@ async function submitMensal() {
       had_pain:          !!getVal('m-dor'),
       pain_description:  getVal('m-dor'),
       weight_reported:   parseFloat(peso),
+      bf_measured:       getVal('m-bf') ? parseFloat(getVal('m-bf')) : null,
       general_notes:     getVal('m-obs'),
       training_feedback: 'Mensal · Freq: '+freq+'/sem · Int: '+intensidade+'/5',
       photos:            { frente, costas, esq, dir },
@@ -656,6 +673,12 @@ async function submitTrimestral() {
   if (!satisfacao) { showError('t-error','Selecione a satisfação.'); return; }
   if (!peso)       { showError('t-error','Informe o peso atual.'); return; }
   if (!resultados) { showError('t-error','Descreva os principais resultados.'); return; }
+  if (!document.getElementById('t-foto-frente').files[0] ||
+      !document.getElementById('t-foto-costas').files[0] ||
+      !document.getElementById('t-foto-esq').files[0]    ||
+      !document.getElementById('t-foto-dir').files[0]) {
+    showError('t-error','Anexe as 4 fotos de progresso.'); return;
+  }
 
   const btn = document.querySelector('#form-trimestral .submit-btn');
   btn.disabled = true; btn.textContent = 'Enviando...';
@@ -681,6 +704,7 @@ async function submitTrimestral() {
       had_pain:          !!getVal('t-dor'),
       pain_description:  getVal('t-dor'),
       weight_reported:   parseFloat(peso),
+      bf_measured:       getVal('t-bf') ? parseFloat(getVal('t-bf')) : null,
       waist_cm:          parseFloat(getVal('t-cintura')) || null,
       hip_cm:            parseFloat(getVal('t-quadril')) || null,
       results_text:      resultados,

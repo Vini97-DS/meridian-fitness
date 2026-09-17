@@ -228,6 +228,9 @@ function switchTab(tab, btn) {
     } else {
       setTimeout(updateStudent, 60);
     }
+    startAcompPolling();
+  } else {
+    stopAcompPolling();
   }
   if (tab === 'config' && !window._configInited) {
     window._configInited = true;
@@ -240,6 +243,26 @@ function switchTab(tab, btn) {
     try { Object.values(charts).forEach(ch => ch && ch.resize()); } catch {}
   }, 150);
 }
+
+// ── REFRESH AUTOMÁTICO (aba Acompanhamento) ──────────────
+// Sem isso, um check-in enviado pelo aluno só aparecia após F5 manual.
+let acompPollTimer = null;
+function refreshCurrentStudentCheckins() {
+  const sel = document.getElementById('studentSelect');
+  if (sel?.value) loadStudentCheckins(sel.value);
+}
+function startAcompPolling() {
+  stopAcompPolling();
+  acompPollTimer = setInterval(refreshCurrentStudentCheckins, 20000);
+}
+function stopAcompPolling() {
+  if (acompPollTimer) { clearInterval(acompPollTimer); acompPollTimer = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && document.getElementById('tab-acompanhamento')?.classList.contains('active')) {
+    refreshCurrentStudentCheckins();
+  }
+});
 
 // ── SCALE BUTTONS ────────────────────────────────────────
 function selectScale(btn, scaleId) {
@@ -946,6 +969,7 @@ function loadStudentsFromAPI(data) {
       avatar:   s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(),
       name:     s.name,
       time:     calcTime(s.student_since),
+      sinceRaw: s.student_since || null,
       plan:     (s.plan_name || '—') + (s.price_paid ? ' — R$'+Math.round(s.price_paid)+'/mês' : ''),
       channel:  capitalize(s.channel),
       ltv:      fmtBRL(s.ltv_total || 0),
@@ -1039,6 +1063,30 @@ async function loadStudentCheckins(studentId) {
     };
   });
 
+  // Timeline — marcos da jornada (check-ins reais, mais recente primeiro, + início do plano)
+  const tlDot = { semanal: '', mensal: 'blue', trimestral: 'amber' };
+  const tlLabel = { semanal: 'Check-in semanal', mensal: 'Check-in mensal', trimestral: 'Check-in trimestral' };
+  s.timeline = data.map(c => {
+    const parts = [];
+    if (c.weight_reported) parts.push(c.weight_reported + ' kg');
+    if (c.trainings_done !== null && c.trainings_done !== undefined) parts.push(c.trainings_done + ' treinos/semana');
+    if (c.mood_score) parts.push('humor ' + c.mood_score + '/5');
+    return {
+      date:  new Date(c.responded_at || c.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+      title: tlLabel[c.type] || 'Check-in',
+      desc:  parts.join(' · ') || 'Sem detalhes adicionais',
+      dot:   tlDot[c.type] || '',
+    };
+  });
+  if (s.sinceRaw) {
+    s.timeline.push({
+      date:  new Date(s.sinceRaw).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+      title: 'Início como aluno',
+      desc:  s.plan,
+      dot:   'green',
+    });
+  }
+
   // Peso — visão Semana (todos os check-ins semanais com peso, cronológico)
   const weekly = data.filter(c=>c.type==='semanal' && c.weight_reported).slice().reverse();
   s.weightWeek = {
@@ -1082,13 +1130,23 @@ async function loadStudentCheckins(studentId) {
     s.engagement.mood = { labels: s.mood.labels, data: s.mood.data };
   }
 
+  // Mesmo cálculo alimenta o card "Engajamento Score" (student-stats), que antes
+  // ficava congelado em '—' por nunca ser atualizado após o load inicial do aluno
+  if (s.stats) {
+    s.stats.engLabel = freq > 0 ? (freq/5*10).toFixed(1)+'/10' : '—';
+    s.stats.engBar   = freq > 0 ? Math.round(freq/5*100) : 0;
+    s.stats.engColor = freq>=4 ? 'var(--green)' : freq>=3 ? 'var(--gold)' : freq>0 ? 'var(--red)' : 'var(--dim)';
+  }
+
   // Update sk1/sk2/sk3 with real values
   s.sk1 = freq > 0 ? Math.round(freq/5*100)+'%' : '—';
   s.sk2 = avgMood > 0 ? avgMood.toFixed(1) : '—';
   s.sk3 = avgMood > 0 ? (avgMood/5).toFixed(1)+'/5' : '—';
 
-  // Re-render engagement panel
-  if (typeof renderEngagementPanel === 'function') renderEngagementPanel(s.engagement);
+  // Re-render engagement panel + stats card (Engajamento Score) + timeline com dado novo
+  renderEngagementPanel(s.engagement);
+  renderStudentStats(s);
+  renderTimeline(s);
 
   // Refresh charts
   if (acompChartsDone) setTimeout(initAcompCharts, 100);
@@ -1120,6 +1178,56 @@ async function loadStudentCheckins(studentId) {
   renderPhotoCarousel(studentId, photos || []);
 }
 
+function renderTimeline(s) {
+  const tlEl = document.getElementById('student-timeline');
+  if (!tlEl) return;
+  if (s.timeline?.length) {
+    tlEl.innerHTML = s.timeline.map(t=>`
+      <div class="tl-item">
+        <div class="tl-dot ${t.dot||''}"></div>
+        <div class="tl-date">${t.date}</div>
+        <div class="tl-title">${t.title}</div>
+        <div class="tl-desc">${t.desc}</div>
+      </div>`).join('');
+  } else {
+    tlEl.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum marco registrado ainda</div>';
+  }
+}
+
+function renderStudentStats(s) {
+  const statsEl = document.getElementById('student-stats');
+  if (!statsEl || !s.stats) return;
+  const st = s.stats;
+  statsEl.innerHTML = [
+    {label:'Peso Total Perdido', val:st.pesoLabel, pct:st.pesoBar, color:'var(--green)'},
+    {label:'Redução BF',         val:st.bfLabel,   pct:st.bfBar,   color:'var(--green)'},
+    {label:'Meta Atingida',      val:st.metaLabel, pct:st.metaBar, color:'var(--gold)' },
+    {label:'Engajamento Score',  val:st.engLabel,  pct:st.engBar,  color:st.engColor   },
+  ].map(item=>`
+    <div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">${item.label}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:${item.color}">${item.val}</div>
+      <div class="engagement-bar"><div class="engagement-fill" style="width:${item.pct}%;background:linear-gradient(90deg,${item.color},${item.color}66)"></div></div>
+    </div>`).join('');
+}
+
+function renderEngagementPanel(eng) {
+  const engPanel = document.getElementById('engagement-panel');
+  if (!engPanel || !eng) return;
+  const badge = document.getElementById('engagement-score-badge');
+  if (badge) { badge.textContent = 'SCORE ' + eng.score; badge.className = 'panel-badge ' + (eng.scoreColor==='fail'?'fail':'green'); }
+  const barsHtml = eng.bars.map(bar=>`
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">${bar.label}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:${bar.color}">${bar.val}</span>
+      </div>
+      <div class="engagement-bar"><div class="engagement-fill" style="width:${bar.pct}%;background:linear-gradient(90deg,${bar.color},${bar.color}44)"></div></div>
+    </div>`).join('');
+  Array.from(engPanel.children).forEach(child => { if(!child.classList.contains('panel-header')) child.remove(); });
+  engPanel.insertAdjacentHTML('beforeend', barsHtml);
+}
+
 function updateStudent() {
   const sel = document.getElementById('studentSelect');
   if (!sel?.value) return;
@@ -1140,20 +1248,7 @@ function updateStudent() {
   renderPhotoCarousel(sel.value, []);
 
   // Timeline
-  const tlEl = document.getElementById('student-timeline');
-  if (tlEl) {
-    if (s.timeline?.length) {
-      tlEl.innerHTML = s.timeline.map(t=>`
-        <div class="tl-item">
-          <div class="tl-dot ${t.dot||''}"></div>
-          <div class="tl-date">${t.date}</div>
-          <div class="tl-title">${t.title}</div>
-          <div class="tl-desc">${t.desc}</div>
-        </div>`).join('');
-    } else {
-      tlEl.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum marco registrado ainda</div>';
-    }
-  }
+  renderTimeline(s);
 
   // Respostas
   const respEl    = document.getElementById('student-responses');
@@ -1180,40 +1275,10 @@ function updateStudent() {
   }
 
   // Stats
-  const statsEl = document.getElementById('student-stats');
-  if (statsEl && s.stats) {
-    const st = s.stats;
-    statsEl.innerHTML = [
-      {label:'Peso Total Perdido', val:st.pesoLabel, pct:st.pesoBar, color:'var(--green)'},
-      {label:'Redução BF',         val:st.bfLabel,   pct:st.bfBar,   color:'var(--green)'},
-      {label:'Meta Atingida',      val:st.metaLabel, pct:st.metaBar, color:'var(--gold)' },
-      {label:'Engajamento Score',  val:st.engLabel,  pct:st.engBar,  color:st.engColor   },
-    ].map(item=>`
-      <div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver);margin-bottom:6px">${item.label}</div>
-        <div style="font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:${item.color}">${item.val}</div>
-        <div class="engagement-bar"><div class="engagement-fill" style="width:${item.pct}%;background:linear-gradient(90deg,${item.color},${item.color}66)"></div></div>
-      </div>`).join('');
-  }
+  renderStudentStats(s);
 
   // Engagement panel
-  const engPanel = document.getElementById('engagement-panel');
-  if (engPanel && s.engagement) {
-    const eng   = s.engagement;
-    const badge = document.getElementById('engagement-score-badge');
-    if (badge) { badge.textContent = 'SCORE ' + eng.score; badge.className = 'panel-badge ' + (eng.scoreColor==='fail'?'fail':'green'); }
-    const barsHtml = eng.bars.map(bar=>`
-      <div style="margin-bottom:20px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--silver)">${bar.label}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:10px;color:${bar.color}">${bar.val}</span>
-        </div>
-        <div class="engagement-bar"><div class="engagement-fill" style="width:${bar.pct}%;background:linear-gradient(90deg,${bar.color},${bar.color}44)"></div></div>
-      </div>`).join('');
-    const panelHeader = engPanel.querySelector('.panel-header');
-    Array.from(engPanel.children).forEach(child => { if(!child.classList.contains('panel-header')) child.remove(); });
-    engPanel.insertAdjacentHTML('beforeend', barsHtml);
-  }
+  renderEngagementPanel(s.engagement);
 
   if (typeof updateFormStudentName === 'function') updateFormStudentName();
   if (acompChartsDone) setTimeout(initAcompCharts, 50);
