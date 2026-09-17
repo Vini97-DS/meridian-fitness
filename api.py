@@ -332,6 +332,9 @@ def health(conn=Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════
 @app.get("/api/metrics/{personal_id}")
 def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Depends(get_current_user)):
+    return _compute_bi_metrics(conn, personal_id, period)
+
+def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
     period = max(7, min(int(period), 1095))
     mrr = query(conn, """
         SELECT COUNT(DISTINCT student_id) AS active_students,
@@ -512,6 +515,9 @@ def get_geo(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user))
 
 @app.get("/api/sales/metrics/{personal_id}")
 def get_sales_metrics(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return _compute_sales_metrics(conn, personal_id)
+
+def _compute_sales_metrics(conn, personal_id: str):
     current_month = query(conn, """
         SELECT COUNT(*) AS vendas_mes,
                COALESCE(SUM(price_paid), 0) AS receita_mes
@@ -953,6 +959,84 @@ def admin_personais(admin_key: str, conn=Depends(get_db)):
         ORDER BY mrr DESC
     """)
     return rows
+
+def _delta_status(now: float, then: float):
+    """Calcula delta% entre dois pontos no tempo, tratando os casos de borda
+    (sem base pra comparar, comecou do zero, etc) que uma divisao direta nao cobre."""
+    if then == 0 and now == 0:
+        return {"pct": None, "status": "no_data"}
+    if then == 0:
+        return {"pct": None, "status": "new"}
+    pct = round((now - then) / then * 100)
+    if pct > 0:
+        status = "up"
+    elif pct < 0:
+        status = "down"
+    else:
+        status = "flat"
+    return {"pct": pct, "status": status}
+
+@app.get("/api/admin/growth")
+def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    months = max(1, min(int(months), 24))
+    rows = query(conn, """
+        WITH sub_calc AS (
+            SELECT personal_id, student_id, price_paid, starts_at,
+                   CASE WHEN status = 'cancelled'
+                        THEN LEAST(expires_at, updated_at::date)
+                        ELSE expires_at
+                   END AS effective_end
+            FROM subscriptions
+        )
+        SELECT
+            p.id AS personal_id, u.name, u.email, u.role,
+            COUNT(DISTINCT sc.student_id) FILTER (
+                WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
+            ) AS active_now,
+            COALESCE(SUM(sc.price_paid) FILTER (
+                WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
+            ), 0) AS mrr_now,
+            COUNT(DISTINCT sc.student_id) FILTER (
+                WHERE sc.starts_at <= (CURRENT_DATE - (INTERVAL '1 month' * %s))
+                  AND sc.effective_end >= (CURRENT_DATE - (INTERVAL '1 month' * %s))
+            ) AS active_then,
+            COALESCE(SUM(sc.price_paid) FILTER (
+                WHERE sc.starts_at <= (CURRENT_DATE - (INTERVAL '1 month' * %s))
+                  AND sc.effective_end >= (CURRENT_DATE - (INTERVAL '1 month' * %s))
+            ), 0) AS mrr_then
+        FROM personals p
+        JOIN users u ON u.id::text = p.clerk_user_id
+        LEFT JOIN sub_calc sc ON sc.personal_id = p.id
+        GROUP BY p.id, u.name, u.email, u.role
+    """, (months, months, months, months))
+
+    result = []
+    for r in rows:
+        active_now, active_then = int(r["active_now"] or 0), int(r["active_then"] or 0)
+        mrr_now, mrr_then       = float(r["mrr_now"] or 0), float(r["mrr_then"] or 0)
+        students_delta = _delta_status(active_now, active_then)
+        mrr_delta      = _delta_status(mrr_now, mrr_then)
+        # ordenacao: crescimento novo > % de crescimento > estavel > queda > sem dado
+        sort_key = {"new": 10**6, "up": students_delta["pct"] or 0, "flat": 0,
+                    "down": students_delta["pct"] or 0, "no_data": -(10**6)}[students_delta["status"]]
+        result.append({
+            "personal_id": r["personal_id"], "name": r["name"], "email": r["email"], "role": r["role"],
+            "active_now": active_now, "active_then": active_then, "students_delta": students_delta,
+            "mrr_now": mrr_now, "mrr_then": mrr_then, "mrr_delta": mrr_delta,
+            "_sort_key": sort_key,
+        })
+    result.sort(key=lambda x: x["_sort_key"], reverse=True)
+    for r in result:
+        del r["_sort_key"]
+    return result
+
+@app.get("/api/admin/personal/{personal_id}/metrics")
+def admin_personal_metrics(personal_id: str, admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    bi    = _compute_bi_metrics(conn, personal_id, 365)
+    sales = _compute_sales_metrics(conn, personal_id)
+    return {**bi, **sales}
 
 @app.get("/api/admin/invites")
 def admin_invites(admin_key: str, conn=Depends(get_db)):
