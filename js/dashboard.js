@@ -1332,7 +1332,7 @@ function renderEmptyChurnList() {
 function renderTopTableFromAPI(data) {
   const el = document.getElementById('table-top-students');
   if (!el) return;
-  const sorted = [...data].sort((a,b)=>(b.ltv_total||0)-(a.ltv_total||0)).slice(0,10);
+  const sorted = [...data].sort((a,b)=>(b.ltv_total||0)-(a.ltv_total||0)).slice(0,5);
   el.innerHTML = '<thead><tr><th>#</th><th>Nome</th><th>Plano</th><th>Tempo</th><th>Canal</th><th style="text-align:right">LTV</th><th style="text-align:right">Renovações</th></tr></thead><tbody>'
     + sorted.map((s,i)=>'<tr><td class="num">'+(i+1)+'</td><td>'+s.name+'</td><td>'+(s.plan_name||'—')+'</td><td>'+calcTime(s.student_since)+'</td><td>'+capitalize(s.channel)+'</td><td class="num">'+fmtBRL(s.ltv_total||0)+'</td><td class="num">'+((s.renewals_count||0)+'×')+'</td></tr>').join('')
     + '</tbody>';

@@ -592,7 +592,7 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
         SELECT DISTINCT ON (s.id)
             s.id, s.name, s.phone, s.email, s.goal, s.channel,
             s.weight_initial, s.weight_current, s.bf_initial, s.bf_current,
-            s.created_at AS student_since,
+            (SELECT MIN(s4.starts_at) FROM subscriptions s4 WHERE s4.student_id=s.id) AS student_since,
             sub.plan_id, sub.price_paid, sub.starts_at, sub.expires_at, sub.status,
             p.name AS plan_name, p.duration_months,
             (sub.expires_at - CURRENT_DATE) AS days_to_expire,
