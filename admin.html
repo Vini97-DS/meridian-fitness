@@ -222,6 +222,7 @@
         <thead>
           <tr>
             <th>Personal</th>
+            <th>Profissão</th>
             <th>Alunos Ativos</th>
             <th>Total Alunos</th>
             <th>MRR (R$)</th>
@@ -231,7 +232,7 @@
           </tr>
         </thead>
         <tbody id="tbl-personais">
-          <tr><td colspan="7" class="empty">Carregando...</td></tr>
+          <tr><td colspan="8" class="empty">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -377,17 +378,19 @@ async function loadPersonais() {
   try {
     const rows = await adminGet('personais');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum personal cadastrado ainda.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">Nenhum personal cadastrado ainda.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(r => {
       const activeClass = r.active_students > 0 ? 'badge-green' : 'badge-gray';
+      const roleLabel = r.role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
       return `
         <tr>
           <td>
             <div class="name-cell">${esc(r.name)}</div>
             <div class="email-cell">${esc(r.email)}</div>
           </td>
+          <td><span class="badge badge-gray">${roleLabel}</span></td>
           <td><span class="badge ${activeClass}">${r.active_students}</span></td>
           <td>${r.total_students}</td>
           <td class="mrr-cell">${fmt(r.mrr)}</td>
@@ -397,7 +400,7 @@ async function loadPersonais() {
         </tr>`;
     }).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">Erro ao carregar: ${esc(e.message)}</td></tr>`;
   }
 }
 

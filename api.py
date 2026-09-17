@@ -176,6 +176,17 @@ def create_users_table():
                     conn.commit()
                 except Exception:
                     conn.rollback()
+            # Backfill: convite cujo e-mail já tem conta criada nunca era
+            # marcado como usado (o UPDATE correspondente nunca existiu em
+            # /api/auth/register) — corrige o que já ficou pra trás.
+            try:
+                cur2.execute("""
+                    UPDATE invites SET used = TRUE
+                    WHERE used = FALSE AND email IN (SELECT email FROM users)
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
         conn.close()
         print("Tabela users OK")
     except Exception as e:
@@ -218,6 +229,7 @@ def register(data: RegisterData, conn=Depends(get_db)):
         VALUES (%s, %s, %s, %s)
         RETURNING id, name, email, role
     """, (data.name.strip(), data.email.lower().strip(), hashed, data.role or 'personal'))
+    execute(conn, "UPDATE invites SET used = TRUE WHERE email = %s", (data.email.lower().strip(),))
     token = create_token(str(user["id"]), user["email"], user["name"])
     return {"token": token, "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"], "role": user.get("role","personal")}}
 
@@ -925,6 +937,7 @@ def admin_personais(admin_key: str, conn=Depends(get_db)):
             p.id                                                                AS personal_id,
             u.name,
             u.email,
+            u.role,
             u.created_at,
             COUNT(DISTINCT s.id)                                                AS total_students,
             COUNT(DISTINCT s.id) FILTER (WHERE sub.status = 'active')          AS active_students,
@@ -936,7 +949,7 @@ def admin_personais(admin_key: str, conn=Depends(get_db)):
         LEFT JOIN students s   ON s.personal_id = p.id
         LEFT JOIN subscriptions sub ON sub.student_id = s.id
         LEFT JOIN checkins c   ON c.student_id = s.id
-        GROUP BY p.id, u.name, u.email, u.created_at
+        GROUP BY p.id, u.name, u.email, u.role, u.created_at
         ORDER BY mrr DESC
     """)
     return rows
