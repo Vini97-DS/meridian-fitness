@@ -146,6 +146,19 @@ def create_users_table():
                 )
             """)
             conn.commit()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS payment_methods (
+                    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    personal_id UUID NOT NULL REFERENCES personals(id),
+                    type        TEXT NOT NULL,
+                    label       TEXT NOT NULL,
+                    value       TEXT NOT NULL,
+                    instruction TEXT,
+                    is_default  BOOLEAN DEFAULT FALSE,
+                    created_at  TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            conn.commit()
         # Add personals/students columns if missing (safe: IF NOT EXISTS)
         # IMPORTANTE: usa um cursor novo — o "cur" acima já foi fechado pelo
         # "with" que terminou logo ali em cima (psycopg2 fecha o cursor no
@@ -170,6 +183,8 @@ def create_users_table():
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS pix_key TEXT",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS payment_instruction TEXT",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(12,2)",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS canais_atendimento TEXT[]",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS formas_pagamento TEXT[]",
             ]:
                 try:
                     cur2.execute(col_sql)
@@ -647,6 +662,89 @@ def get_personal(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
     if not rows:
         raise HTTPException(404, "Personal não encontrado")
     return rows[0]
+
+# ═══════════════════════════════════════════════════════════════
+#  PAYMENT METHODS
+# ═══════════════════════════════════════════════════════════════
+def _detect_gateway(url: str):
+    u = (url or "").lower()
+    if "stripe" in u:                            return "stripe", "Stripe"
+    if "mercadopago" in u or "mpago" in u:        return "mercado_pago", "Mercado Pago"
+    if "pagseguro" in u or "pagbank" in u:        return "pagseguro", "PagSeguro"
+    if "paypal" in u:                             return "paypal", "PayPal"
+    return "outro", "Link de Pagamento"
+
+def _migrate_legacy_payment(conn, personal_id: str):
+    """Migra payment_link/pix_key/payment_instruction (campos antigos, singulares)
+    pra registros em payment_methods, rodando só na primeira vez que a lista
+    vem vazia — preserva o que já foi configurado sem exigir recadastro."""
+    rows = query(conn, "SELECT payment_link, pix_key, payment_instruction FROM personals WHERE id=%s", (personal_id,))
+    if not rows:
+        return []
+    p = rows[0]
+    link, pix, instr = p.get("payment_link"), p.get("pix_key"), p.get("payment_instruction")
+    if not link and not pix:
+        return []
+    inserted = []
+    if link:
+        gtype, label = _detect_gateway(link)
+        inserted.append(execute(conn, """
+            INSERT INTO payment_methods (personal_id, type, label, value, instruction, is_default)
+            VALUES (%s,%s,%s,%s,%s,TRUE) RETURNING *
+        """, (personal_id, gtype, label, link, instr)))
+    if pix:
+        inserted.append(execute(conn, """
+            INSERT INTO payment_methods (personal_id, type, label, value, instruction, is_default)
+            VALUES (%s,'pix','PIX',%s,%s,%s) RETURNING *
+        """, (personal_id, pix, instr, not link)))
+    return inserted
+
+class PaymentMethodCreate(BaseModel):
+    personal_id: str
+    type:        str
+    label:       str
+    value:       str
+    instruction: Optional[str] = None
+    is_default:  Optional[bool] = False
+
+@app.get("/api/payment-methods/{personal_id}")
+def get_payment_methods(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    rows = query(conn, "SELECT * FROM payment_methods WHERE personal_id=%s ORDER BY is_default DESC, created_at", (personal_id,))
+    if not rows:
+        rows = _migrate_legacy_payment(conn, personal_id)
+    return rows
+
+@app.post("/api/payment-methods")
+def create_payment_method(data: PaymentMethodCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    if data.is_default:
+        execute(conn, "UPDATE payment_methods SET is_default=FALSE WHERE personal_id=%s", (data.personal_id,))
+    return execute(conn, """
+        INSERT INTO payment_methods (personal_id, type, label, value, instruction, is_default)
+        VALUES (%s,%s,%s,%s,%s,%s) RETURNING *
+    """, (data.personal_id, data.type, data.label, data.value, data.instruction, data.is_default or False))
+
+@app.patch("/api/payment-methods/{method_id}")
+def update_payment_method(method_id: str, data: dict, conn=Depends(get_db), _=Depends(get_current_user)):
+    rows = query(conn, "SELECT personal_id FROM payment_methods WHERE id=%s", (method_id,))
+    if not rows:
+        raise HTTPException(404, "Método não encontrado")
+    if data.get("is_default"):
+        execute(conn, "UPDATE payment_methods SET is_default=FALSE WHERE personal_id=%s", (rows[0]["personal_id"],))
+    allowed = ["type", "label", "value", "instruction", "is_default"]
+    fields, values = [], []
+    for k in allowed:
+        if k in data:
+            fields.append(f"{k} = %s")
+            values.append(data[k])
+    if not fields:
+        raise HTTPException(400, "Nenhum campo para atualizar")
+    values.append(method_id)
+    return execute(conn, f"UPDATE payment_methods SET {', '.join(fields)} WHERE id=%s RETURNING *", values)
+
+@app.delete("/api/payment-methods/{method_id}")
+def delete_payment_method(method_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    execute(conn, "DELETE FROM payment_methods WHERE id=%s", (method_id,))
+    return {"ok": True}
 
 # ═══════════════════════════════════════════════════════════════
 #  LEADS

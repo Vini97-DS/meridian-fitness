@@ -946,13 +946,9 @@ canvas{background:transparent!important}
           </select>
         </div>
         <div class="v-field">
-          <label class="v-label">Forma de Pagamento Preferida</label>
+          <label class="v-label">Método de Pagamento</label>
           <select class="v-select" id="v-lead-payment">
-            <option value="">Selecione...</option>
-            <option value="pix">PIX</option>
-            <option value="cartao">Cartão de Crédito</option>
-            <option value="boleto">Boleto</option>
-            <option value="outro">Outro</option>
+            <option value="">Carregando métodos...</option>
           </select>
         </div>
       </div>
@@ -1321,26 +1317,53 @@ canvas{background:transparent!important}
       <div class="panel-header">
         <div>
           <div class="panel-title">Meios de Pagamento</div>
-          <div class="panel-sub">Configure seu link de pagamento e chave PIX — usado nos links de venda</div>
+          <div class="panel-sub">Cadastre quantos métodos quiser (Stripe, Mercado Pago, PIX...) — usados nos links de venda</div>
         </div>
-        <button class="vbtn vbtn-gold" onclick="salvarPagamento()">Salvar</button>
+        <div class="panel-badge">MÉTODOS</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
-        <div class="v-field" style="grid-column:1/-1">
-          <label class="v-label">Link de Pagamento Principal</label>
-          <input class="v-input" id="cfg-payment-link" type="url" placeholder="Ex: https://mpago.la/abc123 ou https://buy.stripe.com/abc" />
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">Mercado Pago, Stripe, PagSeguro, PayPal — qualquer link funciona</div>
+
+      <div id="cfg-pagamento-lista" style="margin-top:4px"></div>
+
+      <div style="margin-top:20px;border-top:1px solid rgba(201,168,76,0.1);padding-top:16px">
+        <div class="panel-title" style="font-size:12px;margin-bottom:12px" id="cfg-pagamento-form-title">Novo Método</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="v-field">
+            <label class="v-label">Tipo</label>
+            <select class="v-select" id="cfg-method-tipo">
+              <option value="stripe">Stripe</option>
+              <option value="mercado_pago">Mercado Pago</option>
+              <option value="pagseguro">PagSeguro</option>
+              <option value="paypal">PayPal</option>
+              <option value="pix">PIX</option>
+              <option value="boleto">Boleto</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Rótulo</label>
+            <input class="v-input" id="cfg-method-label" type="text" placeholder="Ex: Stripe Anual" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Link ou Chave PIX</label>
+            <input class="v-input" id="cfg-method-value" type="text" placeholder="https://... ou chave PIX" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label class="v-label">Instrução (opcional)</label>
+            <input class="v-input" id="cfg-method-instr" type="text" placeholder="Ex: Envie o comprovante no WhatsApp após pagar" />
+          </div>
+          <div class="v-field" style="grid-column:1/-1">
+            <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);display:flex;align-items:center;gap:6px;cursor:pointer;min-height:44px">
+              <input type="checkbox" id="cfg-method-default" style="accent-color:var(--gold);width:18px;height:18px;flex-shrink:0"> Marcar como padrão
+            </label>
+          </div>
         </div>
-        <div class="v-field">
-          <label class="v-label">Chave PIX</label>
-          <input class="v-input" id="cfg-pix-key" type="text" placeholder="CPF, email, telefone ou chave aleatória" />
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="vbtn vbtn-gold" id="cfg-method-save-btn" onclick="salvarMetodoPagamento()">+ Adicionar Método</button>
+          <button class="vbtn" id="cfg-method-cancel-btn" style="display:none" onclick="cancelarEdicaoMetodo()">Cancelar edição</button>
         </div>
-        <div class="v-field">
-          <label class="v-label">Instrução de Pagamento</label>
-          <input class="v-input" id="cfg-payment-instruction" type="text" placeholder="Ex: Envie o comprovante no WhatsApp após pagar" />
-        </div>
+        <div id="cfg-method-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+        <div id="cfg-method-ok" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Método salvo</div>
       </div>
-      <div id="cfg-payment-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Configurações de pagamento salvas</div>
     </div>
   </div>
 
@@ -1673,6 +1696,18 @@ canvas{background:transparent!important}
     <button class="ctx-sbtn" data-s="proposta" onclick="ctxMove('proposta')">Proposta</button>
     <button class="ctx-sbtn" data-s="fechado"  onclick="ctxMove('fechado')">Fechado ✓</button>
     <button class="ctx-sbtn" data-s="perdido"  onclick="ctxMove('perdido')">Perdido ✗</button>
+  </div>
+  <div class="ctx-section-label">Pagamento</div>
+  <div style="padding:0 16px 10px">
+    <select class="v-select" id="ctx-payment-method" style="width:100%;margin-bottom:8px"></select>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ctx-btn" style="min-height:44px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:var(--blue)" onclick="ctxGerarLink()">🔗 Gerar Link/Chave</button>
+      <button class="ctx-btn" style="min-height:44px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:var(--green)" onclick="ctxEnviarWhatsApp()">📲 Enviar no WhatsApp</button>
+    </div>
+    <div id="ctx-link-result" style="display:none;margin-top:10px;padding:10px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
+      <div id="ctx-generated-link" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);word-break:break-all"></div>
+      <button onclick="ctxCopyLink()" style="margin-top:6px;min-height:36px;font-family:'DM Mono',monospace;font-size:9px;padding:5px 12px;background:transparent;border:1px solid rgba(74,222,128,0.3);color:var(--green);cursor:pointer">Copiar</button>
+    </div>
   </div>
   <div class="ctx-section-label">Notas</div>
   <div style="padding:0 16px 10px">

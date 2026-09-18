@@ -404,6 +404,9 @@ async function loadDashboard() {
     }
   }
 
+  // Meios de pagamento (usados no card do lead e no formulário de cadastro)
+  loadPaymentMethods().then(() => populatePaymentMethodSelect(document.getElementById('v-lead-payment')));
+
   // Gráficos com dados reais
   initBICharts(metrics);
 
@@ -1524,6 +1527,9 @@ function openCtxMenu(e, cardId, curStatus) {
   if (aiTextEl) aiTextEl.textContent = c.aiSummary || 'Sem resumo ainda.';
   document.querySelectorAll('.ctx-sbtn').forEach(b=>b.classList.toggle('cur',b.dataset.s===curStatus));
   document.getElementById('ctx-notes-input').value = kNotes[cardId]||'';
+  populatePaymentMethodSelect(document.getElementById('ctx-payment-method'));
+  const ctxLinkResult = document.getElementById('ctx-link-result');
+  if (ctxLinkResult) ctxLinkResult.style.display = 'none';
   menu.style.display='block'; overlay.classList.add('open');
   const x=Math.min(e.clientX+8,window.innerWidth-328);
   const y=Math.min(e.clientY+8,window.innerHeight-468);
@@ -1532,6 +1538,32 @@ function openCtxMenu(e, cardId, curStatus) {
 function closeCtxMenu() {
   const m=document.getElementById('ctx-menu'),o=document.getElementById('ctx-overlay');
   if(m) m.style.display='none'; if(o) o.classList.remove('open'); ctxId=null;
+}
+function ctxGerarLink() {
+  if (!ctxId) return;
+  const c = Object.values(KDATA).flat().find(x=>x.id===ctxId);
+  if (!c) return;
+  const method = paymentMethodById(document.getElementById('ctx-payment-method')?.value);
+  const resultEl = document.getElementById('ctx-link-result');
+  const linkEl   = document.getElementById('ctx-generated-link');
+  if (!method) {
+    linkEl.textContent = 'Cadastre um método de pagamento nas ⚙ Configurações';
+  } else {
+    linkEl.textContent = (method.type === 'pix' ? 'PIX (' + method.label + '): ' : method.label + ': ') + method.value;
+  }
+  resultEl.style.display = 'block';
+}
+function ctxCopyLink() {
+  const text = document.getElementById('ctx-generated-link')?.textContent;
+  navigator.clipboard.writeText(text||'').catch(()=>{});
+}
+function ctxEnviarWhatsApp() {
+  if (!ctxId) return;
+  const c = Object.values(KDATA).flat().find(x=>x.id===ctxId);
+  if (!c) return;
+  const method = paymentMethodById(document.getElementById('ctx-payment-method')?.value);
+  const msg = buildPaymentMessage(c.name, c.planName, c.planPrice, method);
+  window.open(waLinkFor(c.phone, msg), '_blank');
 }
 function ctxMove(newStatus) {
   if (!ctxId) return;
@@ -1813,51 +1845,63 @@ async function vSaveLead() {
   }, 2500);
 }
 
-async function vGerarLink() {
-  const session     = JSON.parse(localStorage.getItem('mf_user')||'null');
-  const paymentLink = session?.payment_link || '';
-  const pixKey      = session?.pix_key || '';
-  const instruction = session?.payment_instruction || '';
-  const planPrice   = vSelectedPlan.price || '0';
-  const planDur     = vSelectedPlan.dur   || '';
-  const leadName    = document.getElementById('v-lead-name')?.value.trim() || 'Cliente';
+// ── PAGAMENTO — mensagens genéricas (reaproveitadas pelo form de
+// cadastro E pelo card do lead já existente, ao invés de presas a
+// inputs fixos do formulário de criação) ──────────────────────
+function paymentMethodById(id) { return paymentMethods.find(m => m.id === id) || null; }
 
-  let msg = `Olá ${leadName}!\n\n`;
-  msg += `Segue o link para contratar o *Plano ${planDur}* — *R$${planPrice}*:\n\n`;
-  if (paymentLink) msg += `🔗 ${paymentLink}\n\n`;
-  if (pixKey)      msg += `💳 PIX: ${pixKey}\n\n`;
-  if (instruction) msg += `📌 ${instruction}\n\n`;
-  msg += `Qualquer dúvida estou aqui!`;
+function buildPaymentMessage(name, planLabel, planPrice, method) {
+  let msg = `Olá ${name}! 😊\n\n`;
+  if (planLabel && planPrice) {
+    msg += `Tudo certo para você começar com o *${planLabel}* — *R$ ${planPrice}*!\n\n`;
+  } else {
+    msg += `Segue a forma de pagamento:\n\n`;
+  }
+  if (method) {
+    if (method.type === 'pix') {
+      msg += `💳 *Pagamento via PIX (${method.label}):*\nChave: \`${method.value}\`\n\nApós o pagamento, me envie o comprovante aqui! ✅\n`;
+    } else {
+      msg += `🔗 *${method.label}:*\n${method.value}\n\nÉ só clicar no link e concluir o pagamento! ✅\n`;
+    }
+    if (method.instruction) msg += `\n📌 ${method.instruction}`;
+  } else {
+    msg += `Ainda não tenho um método de pagamento configurado aqui — te aviso em breve!`;
+  }
+  return msg;
+}
 
-  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(msg);
+function waLinkFor(phone, msg) {
+  const digits = (phone||'').replace(/\D/g,'');
+  return digits ? `https://wa.me/55${digits}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+}
 
-  document.getElementById('v-generated-link').textContent = paymentLink || 'Configure seu link de pagamento nas Configurações';
+function vGerarLink() {
+  const leadName  = document.getElementById('v-lead-name')?.value.trim() || 'Cliente';
+  const leadPhone = document.getElementById('v-lead-phone')?.value.trim() || '';
+  const method    = paymentMethodById(document.getElementById('v-lead-payment')?.value);
+  const planPrice = vSelectedPlan.price || '0';
+  const planLabel = 'Plano ' + (vSelectedPlan.dur || '');
+
+  const msg   = buildPaymentMessage(leadName, planLabel, planPrice, method);
+  const waUrl = waLinkFor(leadPhone, msg);
+
+  document.getElementById('v-generated-link').textContent = method ? method.value : 'Cadastre um método de pagamento nas ⚙ Configurações';
   document.getElementById('v-link-result').style.display = 'block';
 
-  // Preview da forma de pagamento detectada
-  const payMethod = document.getElementById('v-lead-payment')?.value || '';
   const previewEl = document.getElementById('v-msg-preview');
-  if (previewEl) {
-    if (payMethod === 'pix' && session?.pix_key) {
-      previewEl.textContent = 'PIX: ' + session.pix_key;
-    } else if (session?.payment_link) {
-      previewEl.textContent = session.payment_link;
-    } else {
-      previewEl.textContent = 'Configure seu link/PIX nas ⚙ Configurações';
-    }
-  }
+  if (previewEl) previewEl.textContent = method ? method.label + ' (' + (PAYMENT_TYPE_LABELS[method.type]||method.type) + ')' : 'Nenhum método configurado';
 
   const existing = document.getElementById('v-whatsapp-btn');
   if (!existing) {
     const btn = document.createElement('a');
     btn.id        = 'v-whatsapp-btn';
-    btn.href      = whatsappUrl;
+    btn.href      = waUrl;
     btn.target    = '_blank';
     btn.textContent = '📲 Abrir no WhatsApp';
     btn.style.cssText = "display:inline-block;margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;padding:6px 14px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:var(--green);text-decoration:none;cursor:pointer";
     document.getElementById('v-link-result').appendChild(btn);
   } else {
-    existing.href = whatsappUrl;
+    existing.href = waUrl;
   }
 }
 function vCopyLink() {
@@ -1982,28 +2026,28 @@ async function initConfig() {
   const inicioEl = document.getElementById('cfg-aluno-inicio');
   if (inicioEl) inicioEl.value = new Date().toISOString().split('T')[0];
 
-  // Carrega configurações de pagamento e meta
+  // Carrega meta e as formas de pagamento/atendimento aceitas (checkboxes)
   if (personalData) {
     const setVal = (id, val) => { const el=document.getElementById(id); if(el && val != null) el.value=val; };
-    setVal('cfg-payment-link',        personalData.payment_link);
-    setVal('cfg-pix-key',             personalData.pix_key);
-    setVal('cfg-payment-instruction', personalData.payment_instruction);
-
     if (personalData.meta_anual) {
       setVal('cfg-meta-anual', personalData.meta_anual);
       atualizarDisplayMeta(personalData.meta_anual);
     }
+    (personalData.formas_pagamento || []).forEach(v => { const el = document.getElementById('cfg-pgto-'+v); if (el) el.checked = true; });
+    (personalData.canais_atendimento || []).forEach(v => { const el = document.getElementById('cfg-canal-'+v); if (el) el.checked = true; });
 
-    // Persiste na sessão para uso no link de vendas e no BI
+    // Persiste na sessão para uso no BI
     const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
     if (s2) {
-      s2.meta_anual    = personalData.meta_anual;
-      s2.payment_link  = personalData.payment_link;
-      s2.pix_key       = personalData.pix_key;
-      s2.payment_instruction = personalData.payment_instruction;
+      s2.meta_anual = personalData.meta_anual;
       localStorage.setItem('mf_user', JSON.stringify(s2));
     }
   }
+
+  // Meios de pagamento (métodos múltiplos, migra dados antigos se necessário)
+  await loadPaymentMethods();
+  renderPaymentMethodsList();
+  populatePaymentMethodSelect(document.getElementById('v-lead-payment'));
 }
 
 function renderPlanosList(planos) {
@@ -2316,6 +2360,8 @@ async function salvarPerfil(){
   const cid   = document.getElementById('cfg-cidade')?.value.trim() || '';
   const pais  = document.getElementById('cfg-pais')?.value || 'Brasil';
   const moeda = document.getElementById('cfg-moeda')?.value || 'BRL';
+  const formasPgto  = Array.from(document.querySelectorAll('input[id^="cfg-pgto-"]:checked')).map(el=>el.value);
+  const canaisAtend = Array.from(document.querySelectorAll('input[id^="cfg-canal-"]:checked')).map(el=>el.value);
   const okEl  = document.getElementById('cfg-perfil-ok');
   if(!nome) return;
   const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
@@ -2346,6 +2392,7 @@ async function salvarPerfil(){
       name: nome, bio: bio, especialidade: esp,
       whatsapp: wh, instagram: insta, site: site,
       cidade: cid, pais, moeda,
+      canais_atendimento: canaisAtend, formas_pagamento: formasPgto,
     })}).catch(()=>{});
   }
   okEl.style.display='block';
@@ -2354,62 +2401,142 @@ async function salvarPerfil(){
 
 // ── WHATSAPP INTELIGENTE ──────────────────────────────────
 function vEnviarWhatsApp() {
-  const session     = JSON.parse(localStorage.getItem('mf_user')||'null');
-  const paymentLink = session?.payment_link        || '';
-  const pixKey      = session?.pix_key             || '';
-  const instruction = session?.payment_instruction || '';
-
   const leadName  = document.getElementById('v-lead-name')?.value.trim()  || 'Cliente';
   const leadPhone = document.getElementById('v-lead-phone')?.value.trim() || '';
-  const payMethod = document.getElementById('v-lead-payment')?.value      || '';
+  const method    = paymentMethodById(document.getElementById('v-lead-payment')?.value);
   const planPrice = vSelectedPlan.price || '0';
   const planName  = document.querySelector('.plan-card-v.sel')
     ?.querySelector('[style*="font-size:9px"]')?.textContent
     || 'Plano ' + (vSelectedPlan.dur || '');
 
-  let msg = `Olá ${leadName}! 😊\n\n`;
-  msg += `Tudo certo para você começar com o *${planName}* — *R$ ${planPrice}*!\n\n`;
-
-  if (payMethod === 'pix' && pixKey) {
-    msg += `💳 *Pagamento via PIX:*\nChave: \`${pixKey}\`\n\nApós o pagamento, me envie o comprovante aqui! ✅\n`;
-  } else if ((payMethod === 'cartao' || payMethod === '') && paymentLink) {
-    msg += `💳 *Link de pagamento:*\n${paymentLink}\n\nÉ só clicar no link e concluir o pagamento! ✅\n`;
-  } else if (payMethod === 'boleto') {
-    msg += `📄 *Pagamento via Boleto:*\n`;
-    if (paymentLink) msg += `${paymentLink}\n\n`;
-    msg += `Após o pagamento o boleto compensa em até 1 dia útil. ✅\n`;
-  } else {
-    if (paymentLink) msg += `🔗 Link de pagamento:\n${paymentLink}\n\n`;
-    if (pixKey)      msg += `💳 PIX: ${pixKey}\n\n`;
-  }
-
-  if (instruction) msg += `\n📌 ${instruction}`;
-
-  const phone = leadPhone.replace(/\D/g, '');
-  const waUrl = phone
-    ? `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`
-    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-
-  window.open(waUrl, '_blank');
+  const msg = buildPaymentMessage(leadName, planName, planPrice, method);
+  window.open(waLinkFor(leadPhone, msg), '_blank');
 }
 
-// ── SALVAR PAGAMENTO ──────────────────────────────────────
-async function salvarPagamento() {
+// ── MEIOS DE PAGAMENTO (múltiplos métodos) ────────────────
+const PAYMENT_TYPE_LABELS = {
+  stripe: 'Stripe', mercado_pago: 'Mercado Pago', pagseguro: 'PagSeguro',
+  paypal: 'PayPal', pix: 'PIX', boleto: 'Boleto', outro: 'Outro',
+};
+let paymentMethods = [];
+let editingPaymentMethodId = null;
+
+async function loadPaymentMethods() {
   const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
   const personalId = session?.personal_id || session?.id;
-  const okEl       = document.getElementById('cfg-payment-ok');
-  const payload = {
-    payment_link:        document.getElementById('cfg-payment-link')?.value.trim() || null,
-    pix_key:             document.getElementById('cfg-pix-key')?.value.trim()      || null,
-    payment_instruction: document.getElementById('cfg-payment-instruction')?.value.trim() || null,
-  };
+  if (!personalId) return [];
+  paymentMethods = await api('/payment-methods/' + personalId).catch(() => []);
+  return paymentMethods;
+}
+
+function populatePaymentMethodSelect(selectEl) {
+  if (!selectEl) return;
+  if (!paymentMethods.length) {
+    selectEl.innerHTML = '<option value="">Nenhum método cadastrado</option>';
+    selectEl.disabled = true;
+    return;
+  }
+  selectEl.disabled = false;
+  selectEl.innerHTML = paymentMethods.map(m =>
+    '<option value="'+m.id+'"'+(m.is_default?' selected':'')+'>'+m.label+' ('+(PAYMENT_TYPE_LABELS[m.type]||m.type)+')</option>'
+  ).join('');
+}
+
+function renderPaymentMethodsList() {
+  const el = document.getElementById('cfg-pagamento-lista');
+  if (!el) return;
+  if (!paymentMethods.length) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--dim);padding:16px 0;text-align:center">Nenhum método cadastrado ainda. Adicione um abaixo.</div>';
+    return;
+  }
+  const rows = paymentMethods.map(m => {
+    const badge = m.is_default
+      ? ' <span style="font-size:8px;padding:3px 8px;background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)">PADRÃO</span>'
+      : '';
+    const editBtn = '<button data-action="editar" data-id="'+m.id+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Editar</button>';
+    const delBtn  = '<button data-action="apagar" data-id="'+m.id+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Apagar</button>';
+    return '<tr><td>'+m.label+badge+'</td><td>'+(PAYMENT_TYPE_LABELS[m.type]||m.type)+'</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+m.value+'</td><td style="text-align:right">'+editBtn+delBtn+'</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Rótulo</th><th>Tipo</th><th>Valor</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action, id = btn.dataset.id;
+    if (action === 'editar') iniciarEdicaoMetodo(id);
+    if (action === 'apagar') apagarMetodoPagamento(id);
+  }, { once: true });
+}
+
+function iniciarEdicaoMetodo(id) {
+  const m = paymentMethods.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('cfg-method-tipo').value    = m.type;
+  document.getElementById('cfg-method-label').value   = m.label;
+  document.getElementById('cfg-method-value').value   = m.value;
+  document.getElementById('cfg-method-instr').value   = m.instruction || '';
+  document.getElementById('cfg-method-default').checked = !!m.is_default;
+  document.getElementById('cfg-pagamento-form-title').textContent = 'Editar Método';
+  document.getElementById('cfg-method-save-btn').textContent = 'Salvar Alterações';
+  document.getElementById('cfg-method-cancel-btn').style.display = 'inline-block';
+  editingPaymentMethodId = id;
+}
+
+function cancelarEdicaoMetodo() {
+  editingPaymentMethodId = null;
+  document.getElementById('cfg-method-tipo').value  = 'stripe';
+  document.getElementById('cfg-method-label').value = '';
+  document.getElementById('cfg-method-value').value = '';
+  document.getElementById('cfg-method-instr').value = '';
+  document.getElementById('cfg-method-default').checked = false;
+  document.getElementById('cfg-pagamento-form-title').textContent = 'Novo Método';
+  document.getElementById('cfg-method-save-btn').textContent = '+ Adicionar Método';
+  document.getElementById('cfg-method-cancel-btn').style.display = 'none';
+}
+
+async function salvarMetodoPagamento() {
+  const tipo      = document.getElementById('cfg-method-tipo')?.value;
+  const label     = document.getElementById('cfg-method-label')?.value.trim();
+  const value     = document.getElementById('cfg-method-value')?.value.trim();
+  const instr     = document.getElementById('cfg-method-instr')?.value.trim() || null;
+  const isDefault = !!document.getElementById('cfg-method-default')?.checked;
+  const errEl     = document.getElementById('cfg-method-erro');
+  errEl.style.display = 'none';
+  if (!label || !value) { errEl.textContent = 'Preencha rótulo e link/chave.'; errEl.style.display = 'block'; return; }
+
+  const session    = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session?.personal_id || session?.id;
   try {
-    await api('/personals/' + personalId, { method:'PATCH', body:JSON.stringify(payload) });
-    const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
-    if (s2) { Object.assign(s2, payload); localStorage.setItem('mf_user', JSON.stringify(s2)); }
+    if (editingPaymentMethodId) {
+      await api('/payment-methods/' + editingPaymentMethodId, { method:'PATCH', body:JSON.stringify({
+        type: tipo, label, value, instruction: instr, is_default: isDefault,
+      })});
+    } else {
+      await api('/payment-methods', { method:'POST', body:JSON.stringify({
+        personal_id: personalId, type: tipo, label, value, instruction: instr, is_default: isDefault,
+      })});
+    }
+    await loadPaymentMethods();
+    renderPaymentMethodsList();
+    populatePaymentMethodSelect(document.getElementById('v-lead-payment'));
+    cancelarEdicaoMetodo();
+    const okEl = document.getElementById('cfg-method-ok');
     okEl.style.display = 'block';
-    setTimeout(() => okEl.style.display = 'none', 3000);
-  } catch(err) { alert('Erro ao salvar: ' + err.message); }
+    setTimeout(() => okEl.style.display = 'none', 2500);
+  } catch(err) {
+    errEl.textContent = 'Erro ao salvar: ' + err.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function apagarMetodoPagamento(id) {
+  const m = paymentMethods.find(x => x.id === id);
+  if (!m || !confirm('Apagar o método "' + m.label + '"?')) return;
+  try {
+    await api('/payment-methods/' + id, { method:'DELETE' });
+    await loadPaymentMethods();
+    renderPaymentMethodsList();
+    populatePaymentMethodSelect(document.getElementById('v-lead-payment'));
+  } catch(err) { alert('Erro ao apagar: ' + err.message); }
 }
 
 // ── SALVAR META ───────────────────────────────────────────
