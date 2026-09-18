@@ -18,8 +18,9 @@
   --navy3:  #011E22; /* was #112440 — mapped to shadow-darker (function: darker section background/gradient) */
   --gold:   #02C39A; /* was #C9A84C */
   --gold2:  #00A896; /* was #E8C96A — mapped to secondary (function: brighter/complementary accent) */
-  --silver: #4B6367; /* was #A8B5C4 */
-  --dim:    #4B6367; /* was #6B7F94 — mapped to text-muted (function: muted/secondary text) */
+  --silver: #8FA6AB; /* was #A8B5C4 — bumped from #4B6367 (P-vendas4): ~1.95:1 contrast against
+                         the new --navy #013A40, below WCAG AA. #8FA6AB gives ~4.9:1 */
+  --dim:    #8FA6AB; /* was #6B7F94 — same contrast fix as --silver above */
   --white:  #FFFFFF; /* was #EEF3F8 */
   --green:  #47D98A;
   --red:    #F4706A;

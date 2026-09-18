@@ -1531,8 +1531,12 @@ function openCtxMenu(e, cardId, curStatus) {
   const ctxLinkResult = document.getElementById('ctx-link-result');
   if (ctxLinkResult) ctxLinkResult.style.display = 'none';
   menu.style.display='block'; overlay.classList.add('open');
-  const x=Math.min(e.clientX+8,window.innerWidth-328);
-  const y=Math.min(e.clientY+8,window.innerHeight-468);
+  // usa a altura/largura reais do modal (variam com o conteúdo — pagamento,
+  // notas, AI summary) em vez de um valor fixo, pra nunca posicionar o
+  // modal pra fora da viewport
+  const menuW = menu.offsetWidth, menuH = menu.offsetHeight;
+  const x=Math.min(e.clientX+8,window.innerWidth-menuW-8);
+  const y=Math.min(e.clientY+8,window.innerHeight-menuH-8);
   menu.style.left=Math.max(8,x)+'px'; menu.style.top=Math.max(8,y)+'px';
 }
 function closeCtxMenu() {
