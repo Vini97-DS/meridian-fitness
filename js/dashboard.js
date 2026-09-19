@@ -2285,6 +2285,8 @@ async function cadastrarAluno() {
   if(btn){btn.disabled=false;btn.textContent='Cadastrar Aluno';}
 }
 let _cfgAlunosRaw = [];
+let _cfgAlunosPage = 1;
+const CFG_ALUNOS_PER_PAGE = 12;
 function renderAlunosList(alunos) {
   const el=document.getElementById('cfg-alunos-lista');
   if(!el) return;
@@ -2295,7 +2297,11 @@ function renderAlunosList(alunos) {
                   : filtro==='vencido'? _cfgAlunosRaw.filter(a=>a.days_to_expire<0)
                   : _cfgAlunosRaw;
   if(!filtered.length){el.innerHTML='<div style="font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno '+(filtro==='ativo'?'ativo':'vencido')+' no momento.</div>';return;}
-  const rows=filtered.map(function(a){
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CFG_ALUNOS_PER_PAGE));
+  _cfgAlunosPage = Math.min(Math.max(1, _cfgAlunosPage), totalPages);
+  const pageStart = (_cfgAlunosPage - 1) * CFG_ALUNOS_PER_PAGE;
+  const pageItems = filtered.slice(pageStart, pageStart + CFG_ALUNOS_PER_PAGE);
+  const rows=pageItems.map(function(a){
     const days=a.days_to_expire;
     const daysColor=days<=7?'var(--red)':days<=30?'var(--amber)':'var(--green)';
     const daysText=days===0?'Hoje':days<0?'Vencido':days+'d';
@@ -2304,8 +2310,16 @@ function renderAlunosList(alunos) {
     const encBtn='<button data-action="encerrar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
     return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
   }).join('');
-  el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+filtered.length+' de '+_cfgAlunosRaw.length+' aluno(s)</div>'
+  const pagerHtml = totalPages > 1
+    ? '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-family:\'DM Mono\',monospace;font-size:9px;color:var(--dim)">'
+      +'<button data-action="prev-page" '+(_cfgAlunosPage<=1?'disabled':'')+' style="padding:6px 12px;min-height:36px;background:transparent;border:1px solid rgba(168,178,189,0.2);color:'+(_cfgAlunosPage<=1?'var(--dim)':'var(--white)')+';cursor:'+(_cfgAlunosPage<=1?'default':'pointer')+';opacity:'+(_cfgAlunosPage<=1?'0.4':'1')+'">‹ Anterior</button>'
+      +'<span>Página '+_cfgAlunosPage+' de '+totalPages+'</span>'
+      +'<button data-action="next-page" '+(_cfgAlunosPage>=totalPages?'disabled':'')+' style="padding:6px 12px;min-height:36px;background:transparent;border:1px solid rgba(168,178,189,0.2);color:'+(_cfgAlunosPage>=totalPages?'var(--dim)':'var(--white)')+';cursor:'+(_cfgAlunosPage>=totalPages?'default':'pointer')+';opacity:'+(_cfgAlunosPage>=totalPages?'0.4':'1')+'">Próxima ›</button>'
+    +'</div>'
+    : '';
+  el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+filtered.length+' de '+_cfgAlunosRaw.length+' aluno(s)'+(totalPages>1?' · mostrando '+(pageStart+1)+'–'+Math.min(pageStart+CFG_ALUNOS_PER_PAGE,filtered.length):'')+'</div>'
     +'<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +pagerHtml
     +'<div id="cfg-renov-form" style="display:none;margin-top:16px;padding:16px;background:rgba(201,168,76,0.04);border:1px solid rgba(201,168,76,0.15)">'
       +'<div style="font-family:\'DM Mono\',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">RENOVAR CONTRATO — <span id="cfg-renov-name"></span></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
@@ -2323,16 +2337,24 @@ function renderAlunosList(alunos) {
       +'<input type="hidden" id="cfg-renov-student-id" />'
     +'</div>';
 
-  // Event delegation — handles dynamically generated buttons
-  el.addEventListener('click', function(e) {
-    const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    const action = btn.dataset.action;
-    const id     = btn.dataset.id;
-    const name   = btn.dataset.name;
-    if (action === 'renovar')  abrirRenovacao(id, name);
-    if (action === 'encerrar') encerrarContrato(id, name);
-  }, { once: true });
+  // Event delegation — liga UMA vez só no container (que nunca é recriado,
+  // so seu innerHTML muda), evita empilhar listeners duplicados a cada render
+  // (com {once:true} antigo, um render sem clique nao removia o listener
+  // anterior; cliques em paginacao repetidos faziam a pagina pular sozinha)
+  if (!el.dataset.listenerBound) {
+    el.dataset.listenerBound = '1';
+    el.addEventListener('click', function(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id     = btn.dataset.id;
+      const name   = btn.dataset.name;
+      if (action === 'renovar')  abrirRenovacao(id, name);
+      if (action === 'encerrar') encerrarContrato(id, name);
+      if (action === 'prev-page') { _cfgAlunosPage--; renderAlunosList(_cfgAlunosRaw); }
+      if (action === 'next-page') { _cfgAlunosPage++; renderAlunosList(_cfgAlunosRaw); }
+    });
+  }
 }
 
 function abrirRenovacao(studentId, name) {

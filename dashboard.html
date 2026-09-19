@@ -1645,7 +1645,7 @@ canvas{background:transparent!important}
       <!-- Filtro de status -->
       <div style="display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
         <label class="v-label" style="margin:0">Status</label>
-        <select class="v-select" id="cfg-alunos-filtro-status" style="max-width:160px" onchange="renderAlunosList(_cfgAlunosRaw)">
+        <select class="v-select" id="cfg-alunos-filtro-status" style="max-width:160px" onchange="_cfgAlunosPage=1;renderAlunosList(_cfgAlunosRaw)">
           <option value="todos" selected>Todos</option>
           <option value="ativo">Ativo</option>
           <option value="vencido">Vencido</option>
