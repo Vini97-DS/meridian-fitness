@@ -421,6 +421,7 @@ async function loadDashboard() {
     renderEmptyTopTable();
     updateStudent();
   }
+  populateLeadIndicadorSelect();
 
   // Leads/Kanban
   if (leadsData) {
@@ -1428,7 +1429,7 @@ function loadLeadsFromAPI(pipeline) {
   Object.keys(kStatus).forEach(k => delete kStatus[k]);
   Object.entries(pipeline).forEach(([status, leads]) => {
     leads.forEach(l => {
-      const indicadoPor = l.notes?.match(/Indicado por: (.+)/)?.[1];
+      const indicadoPor = l.referred_by_student_name || l.referred_by_other || null;
       const sub = indicadoPor
         ? 'Indicação de ' + indicadoPor
         : capitalize(l.channel||'instagram') + ' · ' + capitalize(l.goal||'emagrecimento');
@@ -1822,6 +1823,16 @@ async function vSaveLead() {
   if (!name)  { document.getElementById('v-lead-name')?.focus();  return; }
   if (!phone) { document.getElementById('v-lead-phone')?.focus(); return; }
 
+  let referredByStudentId = null, referredByOther = null;
+  if (channel.toLowerCase() === 'indicacao') {
+    const indSel = document.getElementById('v-lead-indicador-aluno')?.value;
+    if (indSel === '_outro') {
+      referredByOther = document.getElementById('v-lead-indicador-outro')?.value.trim() || null;
+    } else if (indSel) {
+      referredByStudentId = indSel;
+    }
+  }
+
   const newId = 'tmp_' + Date.now();
   const newLead = {id:newId,name,sub:channelLabel+' · Novo lead',val:'',days:'Agora',phone,email,canal:channelLabel,dp:0};
   KDATA.novo.unshift(newLead);
@@ -1833,7 +1844,8 @@ async function vSaveLead() {
   btn.textContent='✓ Lead adicionado!'; btn.disabled=true;
   btn.style.cssText += ';background:rgba(74,222,128,0.15);border-color:var(--green);color:var(--green)';
 
-  saveLeadToAPI({name, phone, email:email||null, channel:channel.toLowerCase(), goal:'emagrecimento', plan_id:vSelectedPlan.id||null})
+  saveLeadToAPI({name, phone, email:email||null, channel:channel.toLowerCase(), goal:'emagrecimento', plan_id:vSelectedPlan.id||null,
+    referred_by_student_id: referredByStudentId, referred_by_other: referredByOther})
     .then(saved => {
       if (saved?.id) {
         const idx = KDATA.novo.findIndex(c=>c.id===newId);
@@ -1843,10 +1855,34 @@ async function vSaveLead() {
     }).catch(()=>{});
 
   setTimeout(() => {
-    ['v-lead-name','v-lead-phone','v-lead-email'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['v-lead-name','v-lead-phone','v-lead-email','v-lead-indicador-outro'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const indSel = document.getElementById('v-lead-indicador-aluno');
+    if (indSel) indSel.value = '';
+    document.getElementById('v-lead-indicacao-field').style.display = 'none';
+    document.getElementById('v-lead-indicador-outro').style.display = 'none';
     btn.textContent=orig; btn.disabled=false;
     btn.style.background=''; btn.style.borderColor=''; btn.style.color='';
   }, 2500);
+}
+
+// ── INDICAÇÃO — campo condicional no cadastro de lead ────
+function toggleLeadIndicacaoField(sel) {
+  const field = document.getElementById('v-lead-indicacao-field');
+  if (field) field.style.display = sel?.value === 'indicacao' ? 'block' : 'none';
+}
+function toggleLeadIndicadorOutro(sel) {
+  const outroInput = document.getElementById('v-lead-indicador-outro');
+  if (outroInput) outroInput.style.display = sel?.value === '_outro' ? 'block' : 'none';
+}
+function populateLeadIndicadorSelect() {
+  const sel = document.getElementById('v-lead-indicador-aluno');
+  if (!sel) return;
+  const alunos = Object.entries(students)
+    .map(([id, s]) => ({ id, name: s.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = '<option value="">Selecione o aluno...</option>'
+    + alunos.map(a => '<option value="'+a.id+'">'+a.name+'</option>').join('')
+    + '<option value="_outro">Outro (não é aluno)</option>';
 }
 
 // ── PAGAMENTO — mensagens genéricas (reaproveitadas pelo form de

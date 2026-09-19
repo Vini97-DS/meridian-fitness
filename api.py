@@ -185,6 +185,8 @@ def create_users_table():
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(12,2)",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS canais_atendimento TEXT[]",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS formas_pagamento TEXT[]",
+                "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_student_id UUID REFERENCES students(id)",
+                "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_other TEXT",
             ]:
                 try:
                     cur2.execute(col_sql)
@@ -758,6 +760,8 @@ class LeadCreate(BaseModel):
     goal:        Optional[str] = "emagrecimento"
     plan_id:     Optional[str] = None
     notes:       Optional[str] = None
+    referred_by_student_id: Optional[str] = None
+    referred_by_other:      Optional[str] = None
 
 class LeadUpdate(BaseModel):
     status:        Optional[str] = None
@@ -821,8 +825,10 @@ def generate_lead_ai_summary(lead_id: str):
 @app.get("/api/leads/{personal_id}")
 def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     rows = query(conn, """
-        SELECT l.*, p.name AS plan_name, p.price_brl FROM leads l
+        SELECT l.*, p.name AS plan_name, p.price_brl, st.name AS referred_by_student_name
+        FROM leads l
         LEFT JOIN plans p ON p.id = l.plan_id
+        LEFT JOIN students st ON st.id = l.referred_by_student_id
         WHERE l.personal_id = %s ORDER BY l.updated_at DESC
     """, (personal_id,))
     pipeline = {"novo":[],"contato":[],"proposta":[],"fechado":[],"perdido":[]}
@@ -834,13 +840,15 @@ def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user
 @app.post("/api/leads")
 def create_lead(data: LeadCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     return execute(conn, """
-        INSERT INTO leads (personal_id, name, phone, email, channel, goal, plan_id, notes)
-        VALUES (%s,%s,%s,%s,%s::acquisition_channel,%s::student_goal,%s,%s)
+        INSERT INTO leads (personal_id, name, phone, email, channel, goal, plan_id, notes,
+            referred_by_student_id, referred_by_other)
+        VALUES (%s,%s,%s,%s,%s::acquisition_channel,%s::student_goal,%s,%s,%s,%s)
         RETURNING id, name, phone, status, created_at
     """, (data.personal_id, data.name, data.phone, data.email,
           (data.channel or 'outro').lower(),
           (data.goal or 'outro').lower(),
-          data.plan_id, data.notes))
+          data.plan_id, data.notes,
+          data.referred_by_student_id, data.referred_by_other))
 
 @app.patch("/api/leads/{lead_id}")
 def update_lead(lead_id: str, data: LeadUpdate, background_tasks: BackgroundTasks, conn=Depends(get_db), _=Depends(get_current_user)):

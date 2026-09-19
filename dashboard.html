@@ -984,11 +984,19 @@ canvas{background:transparent!important}
         </div>
         <div class="v-field">
           <label class="v-label">Canal de Origem</label>
-          <select class="v-select" id="v-lead-channel">
+          <select class="v-select" id="v-lead-channel" onchange="toggleLeadIndicacaoField(this)">
             <option value="instagram">Instagram</option><option value="indicacao">Indicação</option>
             <option value="youtube">YouTube</option><option value="tiktok">TikTok</option>
             <option value="google">Google</option><option value="outro">Outro</option>
           </select>
+        </div>
+        <div class="v-field" id="v-lead-indicacao-field" style="display:none">
+          <label class="v-label">Quem indicou?</label>
+          <select class="v-select" id="v-lead-indicador-aluno" onchange="toggleLeadIndicadorOutro(this)">
+            <option value="">Selecione o aluno...</option>
+            <option value="_outro">Outro (não é aluno)</option>
+          </select>
+          <input class="v-input" id="v-lead-indicador-outro" type="text" placeholder="Nome de quem indicou" style="display:none;margin-top:8px" />
         </div>
         <div class="v-field">
           <label class="v-label">Método de Pagamento</label>
