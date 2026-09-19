@@ -1384,7 +1384,7 @@ function renderChurnListFromAPI(data) {
     el.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum aluno em risco de churn ✓</div>';
     return;
   }
-  el.innerHTML = atRisk.slice(0,6).map(s => {
+  el.innerHTML = atRisk.map(s => {
     const level  = s.days_to_expire <= 7 ? 'high' : 'med';
     const detail = 'Plano vence em ' + s.days_to_expire + ' dias · R$' + Math.round(s.price_paid||0);
     const init   = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
