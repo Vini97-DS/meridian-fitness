@@ -354,11 +354,12 @@ def get_metrics(personal_id: str, period: int = 365, conn=Depends(get_db), _=Dep
 def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
     period = max(7, min(int(period), 1095))
     mrr = query(conn, """
-        SELECT COUNT(DISTINCT student_id) AS active_students,
-               COALESCE(SUM(price_paid),0) AS mrr,
-               COALESCE(AVG(price_paid),0) AS avg_ticket
-        FROM subscriptions WHERE personal_id = %s AND status = 'active'
-          AND expires_at >= CURRENT_DATE
+        SELECT COUNT(DISTINCT sub.student_id) AS active_students,
+               COALESCE(SUM(sub.price_paid / NULLIF(p.duration_months,0)),0) AS mrr,
+               COALESCE(AVG(sub.price_paid),0) AS avg_ticket
+        FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
+        WHERE sub.personal_id = %s AND sub.status = 'active'
+          AND sub.expires_at >= CURRENT_DATE
     """, (personal_id,))
     e7 = query(conn, """
         SELECT COUNT(*) AS count, COALESCE(SUM(price_paid),0) AS value
@@ -375,12 +376,13 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
         FROM form_tokens WHERE personal_id = %s AND used = false AND expires_at > NOW()
     """, (personal_id,))
     mrr_history = query(conn, f"""
-        SELECT TO_CHAR(DATE_TRUNC('month', starts_at), 'Mon/YY') AS month,
-               SUM(price_paid) AS mrr
-        FROM subscriptions WHERE personal_id = %s
-          AND starts_at >= NOW() - INTERVAL '{period} days'
-        GROUP BY DATE_TRUNC('month', starts_at)
-        ORDER BY DATE_TRUNC('month', starts_at)
+        SELECT TO_CHAR(DATE_TRUNC('month', sub.starts_at), 'Mon/YY') AS month,
+               SUM(sub.price_paid / NULLIF(p.duration_months,0)) AS mrr
+        FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
+        WHERE sub.personal_id = %s
+          AND sub.starts_at >= NOW() - INTERVAL '{period} days'
+        GROUP BY DATE_TRUNC('month', sub.starts_at)
+        ORDER BY DATE_TRUNC('month', sub.starts_at)
     """, (personal_id,))
     # Canais de aquisição
     channels = query(conn,
@@ -464,6 +466,14 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
     churn_rate   = round((total_s - active_s) / total_s * 100) if total_s > 0 else 0
     avg_ltv = float((ltv_data[0] if ltv_data else {}).get("avg_ltv") or 0)
 
+    # Receita acumulada no ano corrente (pra progresso da meta anual em Config)
+    receita_ano_data = query(conn, """
+        SELECT COALESCE(SUM(price_paid),0) AS receita_ano
+        FROM subscriptions WHERE personal_id = %s
+          AND DATE_TRUNC('year', starts_at) = DATE_TRUNC('year', CURRENT_DATE)
+    """, (personal_id,))
+    receita_ano = float((receita_ano_data[0] if receita_ano_data else {}).get("receita_ano") or 0)
+
     m = mrr[0] if mrr else {}
     return {
         "active_students": int(m.get("active_students") or 0),
@@ -472,6 +482,7 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
         "renewal_rate":    renewal_rate,
         "churn_rate":      churn_rate,
         "avg_ltv":         round(avg_ltv, 2),
+        "receita_ano":     round(receita_ano, 2),
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
                             "value": float((e7[0] if e7 else {}).get("value") or 0)},
         "expiring_30d":    {"count": int((e30[0] if e30 else {}).get("count") or 0)},
@@ -1035,7 +1046,9 @@ def admin_overview(admin_key: str, conn=Depends(get_db)):
         SELECT
             (SELECT COUNT(*) FROM personals)                                                  AS total_personais,
             (SELECT COUNT(*) FROM students)                                                   AS total_students,
-            (SELECT COALESCE(SUM(price_paid),0) FROM subscriptions WHERE status='active')     AS mrr_total,
+            (SELECT COALESCE(SUM(sub.price_paid / NULLIF(p.duration_months,0)),0)
+               FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
+               WHERE sub.status='active')                                                     AS mrr_total,
             (SELECT COUNT(*) FROM checkins)                                                   AS total_checkins,
             (SELECT COUNT(*) FROM invites WHERE used = false)                                 AS invites_pending
     """)
@@ -1053,13 +1066,14 @@ def admin_personais(admin_key: str, conn=Depends(get_db)):
             u.created_at,
             COUNT(DISTINCT s.id)                                                AS total_students,
             COUNT(DISTINCT s.id) FILTER (WHERE sub.status = 'active')          AS active_students,
-            COALESCE(SUM(sub.price_paid) FILTER (WHERE sub.status='active'), 0) AS mrr,
+            COALESCE(SUM(sub.price_paid / NULLIF(pl.duration_months,0)) FILTER (WHERE sub.status='active'), 0) AS mrr,
             COUNT(DISTINCT sub.id)                                              AS total_subs,
             COUNT(DISTINCT c.id)                                                AS total_checkins
         FROM personals p
         JOIN users u ON u.id::text = p.clerk_user_id
         LEFT JOIN students s   ON s.personal_id = p.id
         LEFT JOIN subscriptions sub ON sub.student_id = s.id
+        LEFT JOIN plans pl      ON pl.id = sub.plan_id
         LEFT JOIN checkins c   ON c.student_id = s.id
         GROUP BY p.id, u.name, u.email, u.role, u.created_at
         ORDER BY mrr DESC
@@ -1088,26 +1102,27 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
     months = max(1, min(int(months), 24))
     rows = query(conn, """
         WITH sub_calc AS (
-            SELECT personal_id, student_id, price_paid, starts_at,
-                   CASE WHEN status = 'cancelled'
-                        THEN LEAST(expires_at, updated_at::date)
-                        ELSE expires_at
+            SELECT sub.personal_id, sub.student_id, sub.price_paid,
+                   sub.price_paid / NULLIF(p.duration_months,0) AS price_paid_monthly, sub.starts_at,
+                   CASE WHEN sub.status = 'cancelled'
+                        THEN LEAST(sub.expires_at, sub.updated_at::date)
+                        ELSE sub.expires_at
                    END AS effective_end
-            FROM subscriptions
+            FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
         )
         SELECT
             p.id AS personal_id, u.name, u.email, u.role,
             COUNT(DISTINCT sc.student_id) FILTER (
                 WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
             ) AS active_now,
-            COALESCE(SUM(sc.price_paid) FILTER (
+            COALESCE(SUM(sc.price_paid_monthly) FILTER (
                 WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
             ), 0) AS mrr_now,
             COUNT(DISTINCT sc.student_id) FILTER (
                 WHERE sc.starts_at <= (CURRENT_DATE - (INTERVAL '1 month' * %s))
                   AND sc.effective_end >= (CURRENT_DATE - (INTERVAL '1 month' * %s))
             ) AS active_then,
-            COALESCE(SUM(sc.price_paid) FILTER (
+            COALESCE(SUM(sc.price_paid_monthly) FILTER (
                 WHERE sc.starts_at <= (CURRENT_DATE - (INTERVAL '1 month' * %s))
                   AND sc.effective_end >= (CURRENT_DATE - (INTERVAL '1 month' * %s))
             ), 0) AS mrr_then

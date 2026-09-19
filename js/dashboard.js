@@ -401,6 +401,8 @@ async function loadDashboard() {
         if (session.bio) { bioEl.textContent = session.bio; bioEl.style.display = ''; }
         else              { bioEl.textContent = ''; bioEl.style.display = 'none'; }
       }
+      // meta_anual só chega aqui — recalcula os cards de progresso de meta com o valor real
+      updateKPICards(metrics);
     }
   }
 
@@ -505,13 +507,27 @@ function updateKPICards(m) {
     set('kpi-meta-sub', pct + '% atingido · ' + fmtBRL(mrrAtual) + ' de ' + fmtBRL(metaMensal));
     const bar = document.getElementById('kpi-meta-bar');
     if (bar) bar.style.width = pct + '%';
-    // Progresso na aba config
+    // Progresso mensal na aba config
     const prog = document.getElementById('cfg-meta-progresso');
     const pctEl = document.getElementById('cfg-meta-pct');
     const cfgBar = document.getElementById('cfg-meta-bar');
     if (prog)   prog.textContent   = fmtBRL(mrrAtual) + ' / ' + fmtBRL(metaMensal) + '/mês';
-    if (pctEl)  pctEl.textContent  = pct + '% da meta mensal (' + Math.round(mrrAtual/metaAnual*100) + '% da meta anual)';
+    if (pctEl)  pctEl.textContent  = pct + '% da meta mensal';
     if (cfgBar) cfgBar.style.width = pct + '%';
+  }
+
+  // Progresso anual acumulado (real, nao so o mes atual) na aba config
+  const receitaAno = m?.receita_ano || 0;
+  if (metaAnual > 0) {
+    const pctAno = Math.min(100, Math.round(receitaAno / metaAnual * 100));
+    const progAno = document.getElementById('cfg-meta-anual-progresso');
+    const pctAnoEl = document.getElementById('cfg-meta-anual-pct');
+    const barAno = document.getElementById('cfg-meta-anual-bar');
+    const anoLabel = document.getElementById('cfg-meta-ano-label');
+    if (progAno)  progAno.textContent  = fmtBRL(receitaAno) + ' / ' + fmtBRL(metaAnual) + '/ano';
+    if (pctAnoEl) pctAnoEl.textContent = pctAno + '% da meta anual';
+    if (barAno)   barAno.style.width   = pctAno + '%';
+    if (anoLabel) anoLabel.textContent = new Date().getFullYear();
   }
 }
 
@@ -2268,11 +2284,18 @@ async function cadastrarAluno() {
   } catch(err){erroEl.textContent=err.message||'Erro.';erroEl.style.display='block';}
   if(btn){btn.disabled=false;btn.textContent='Cadastrar Aluno';}
 }
+let _cfgAlunosRaw = [];
 function renderAlunosList(alunos) {
   const el=document.getElementById('cfg-alunos-lista');
   if(!el) return;
-  if(!alunos.length){el.innerHTML='<div style="font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno cadastrado ainda.</div>';return;}
-  const rows=alunos.map(function(a){
+  _cfgAlunosRaw = alunos || [];
+  if(!_cfgAlunosRaw.length){el.innerHTML='<div style="font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno cadastrado ainda.</div>';return;}
+  const filtro = document.getElementById('cfg-alunos-filtro-status')?.value || 'todos';
+  const filtered = filtro==='ativo'   ? _cfgAlunosRaw.filter(a=>a.days_to_expire>=0)
+                  : filtro==='vencido'? _cfgAlunosRaw.filter(a=>a.days_to_expire<0)
+                  : _cfgAlunosRaw;
+  if(!filtered.length){el.innerHTML='<div style="font-size:10px;color:var(--dim);padding:12px 0">Nenhum aluno '+(filtro==='ativo'?'ativo':'vencido')+' no momento.</div>';return;}
+  const rows=filtered.map(function(a){
     const days=a.days_to_expire;
     const daysColor=days<=7?'var(--red)':days<=30?'var(--amber)':'var(--green)';
     const daysText=days===0?'Hoje':days<0?'Vencido':days+'d';
@@ -2281,7 +2304,7 @@ function renderAlunosList(alunos) {
     const encBtn='<button data-action="encerrar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
     return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
   }).join('');
-  el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+alunos.length+' aluno(s) ativo(s)</div>'
+  el.innerHTML='<div style="font-size:9px;color:var(--dim);margin-bottom:10px">'+filtered.length+' de '+_cfgAlunosRaw.length+' aluno(s)</div>'
     +'<table class="data-table" style="width:100%"><thead><tr><th>Nome</th><th>Plano</th><th>Vence em</th><th>Canal</th><th style="text-align:right">LTV</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div id="cfg-renov-form" style="display:none;margin-top:16px;padding:16px;background:rgba(201,168,76,0.04);border:1px solid rgba(201,168,76,0.15)">'
       +'<div style="font-family:\'DM Mono\',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">RENOVAR CONTRATO — <span id="cfg-renov-name"></span></div>'

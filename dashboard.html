@@ -1426,13 +1426,21 @@ canvas{background:transparent!important}
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">Meta mensal calculada automaticamente: <span id="cfg-meta-mensal-calc">—</span></div>
         </div>
         <div style="padding-bottom:4px">
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">Progresso atual</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">Progresso mensal</div>
           <div style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--gold)" id="cfg-meta-progresso">—</div>
           <div class="engagement-bar" style="margin-top:8px">
             <div class="engagement-fill" id="cfg-meta-bar" style="width:0%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div>
           </div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px" id="cfg-meta-pct">0% da meta anual</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px" id="cfg-meta-pct">0% da meta mensal</div>
         </div>
+      </div>
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">Progresso anual (acumulado em <span id="cfg-meta-ano-label">—</span>)</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--gold)" id="cfg-meta-anual-progresso">—</div>
+        <div class="engagement-bar" style="margin-top:8px">
+          <div class="engagement-fill" id="cfg-meta-anual-bar" style="width:0%;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.4))"></div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px" id="cfg-meta-anual-pct">0% da meta anual</div>
       </div>
       <div id="cfg-meta-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Meta salva com sucesso</div>
     </div>
@@ -1632,6 +1640,16 @@ canvas{background:transparent!important}
         </div>
         <div id="cfg-aluno-ok" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)"></div>
         <div id="cfg-aluno-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+      </div>
+
+      <!-- Filtro de status -->
+      <div style="display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
+        <label class="v-label" style="margin:0">Status</label>
+        <select class="v-select" id="cfg-alunos-filtro-status" style="max-width:160px" onchange="renderAlunosList(_cfgAlunosRaw)">
+          <option value="todos" selected>Todos</option>
+          <option value="ativo">Ativo</option>
+          <option value="vencido">Vencido</option>
+        </select>
       </div>
 
       <!-- Lista de alunos ativos -->
