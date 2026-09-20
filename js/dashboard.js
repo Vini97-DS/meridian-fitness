@@ -470,7 +470,7 @@ function updateKPICards(m) {
   set('kpi-alunos-val',    alunos || '0');
   set('kpi-ticket-val',    fmtBRL(ticket));
   set('kpi-renovacao-val', renov > 0 ? renov + '%' : '—');
-  set('kpi-churn-val',     churn > 0 ? churn + '%' : '—');
+  set('kpi-churn-val',     m?.churn_rate != null ? churn + '%' : '—');
   set('kpi-ltv-val',       ltv   > 0 ? fmtBRL(ltv) : '—');
   // Subs
   set('kpi-alunos-sub', alunos > 0 ? alunos + ' alunos ativos' : 'Nenhum aluno ainda');
@@ -493,7 +493,7 @@ function updateKPICards(m) {
 
   // Outros KPIs — zerados até ter dados
   set('kpi-renovacao-val', m?.renewal_rate ? m.renewal_rate + '%' : '—');
-  set('kpi-churn-val',     m?.churn_rate   ? m.churn_rate   + '%' : '—');
+  set('kpi-churn-val',     m?.churn_rate != null ? m.churn_rate + '%' : '—');
   set('kpi-ltv-val',       m?.avg_ltv      ? fmtBRL(m.avg_ltv)   : '—');
 
   // Meta mensal

@@ -463,8 +463,27 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
     total_s  = int(rd.get("total") or 0)
     active_s = int(rd.get("active") or 0)
     renewal_rate = round(active_s / total_s * 100) if total_s > 0 else 0
-    churn_rate   = round((total_s - active_s) / total_s * 100) if total_s > 0 else 0
     avg_ltv = float((ltv_data[0] if ltv_data else {}).get("avg_ltv") or 0)
+
+    # Churn: % de alunos cuja assinatura mais recente esta vencida ou cancelada
+    # (perda real — plano venceu e nao foi renovado — nao apenas cancelamento
+    # explicito, que na pratica quase nunca acontece; personal trainer so para
+    # de renovar). Nao usa "status" bruto porque status nunca vira sozinho ao
+    # vencer (mesmo padrao ja conhecido de expires_at neste projeto).
+    churn_data = query(conn, """
+        WITH latest_sub AS (
+            SELECT DISTINCT ON (sub.student_id) sub.student_id, sub.status, sub.expires_at
+            FROM subscriptions sub WHERE sub.personal_id = %s
+            ORDER BY sub.student_id, sub.starts_at DESC
+        )
+        SELECT COUNT(*) AS total_students,
+               COUNT(*) FILTER (WHERE status = 'cancelled' OR expires_at < CURRENT_DATE) AS churned_students
+        FROM latest_sub
+    """, (personal_id,))
+    cd = churn_data[0] if churn_data else {}
+    total_students   = int(cd.get("total_students") or 0)
+    churned_students = int(cd.get("churned_students") or 0)
+    churn_rate = round(churned_students / total_students * 100) if total_students > 0 else 0
 
     # Receita acumulada no ano corrente (pra progresso da meta anual em Config)
     receita_ano_data = query(conn, """
