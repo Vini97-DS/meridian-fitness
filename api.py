@@ -194,6 +194,9 @@ def create_users_table():
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_status TEXT DEFAULT 'tester'",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_started_at DATE",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_price_paid NUMERIC(10,2)",
+                # so usada quando meridian_plan = 'outro' (valor manual fora
+                # dos planos padrao Mensal/Semestral/Anual)
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_plan_duration_months INTEGER",
                 # Suporte a multiplas moedas (Nivel 1 — cada profissional opera
                 # na moeda do pais onde atua). O nome "price_brl" mentia sobre
                 # o conteudo assim que o primeiro profissional fora do Brasil
@@ -223,6 +226,26 @@ def create_users_table():
                 cur2.execute("SELECT COUNT(*) AS n FROM platform_settings")
                 if cur2.fetchone()[0] == 0:
                     cur2.execute("INSERT INTO platform_settings (meta_anual) VALUES (NULL)")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+            # acquisition_costs — lançamento manual de custo de aquisição
+            # (trafego pago/conteudo/outro), pra alimentar o CAC do Nivel 2.
+            # "amount" e sempre o equivalente em EUR (convertido a mao pelo
+            # Vinicius antes de lancar); "currency" e so anotacao de onde o
+            # dinheiro saiu de fato, nao entra em nenhuma conta.
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS acquisition_costs (
+                        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        amount      NUMERIC(10,2) NOT NULL,
+                        currency    TEXT DEFAULT 'EUR',
+                        category    TEXT NOT NULL,
+                        description TEXT,
+                        date        DATE NOT NULL DEFAULT CURRENT_DATE,
+                        created_at  TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -1121,7 +1144,7 @@ def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
     _check_admin_key(admin_key)
     rows = query(conn, """
         SELECT p.id, u.role, p.meridian_plan, p.meridian_status,
-               p.meridian_started_at, p.meridian_price_paid
+               p.meridian_started_at, p.meridian_price_paid, p.meridian_plan_duration_months
         FROM personals p JOIN users u ON u.id::text = p.clerk_user_id
     """)
     pagantes   = [r for r in rows if r["meridian_status"] == "pagante"]
@@ -1129,8 +1152,11 @@ def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
     cancelados = [r for r in rows if r["meridian_status"] == "cancelado"]
 
     def monthly_value(r):
-        plan = MERIDIAN_PLANS.get(r["meridian_plan"])
         price = float(r["meridian_price_paid"] or 0)
+        if r["meridian_plan"] == "outro":
+            duration = r["meridian_plan_duration_months"] or 1
+            return price / duration
+        plan = MERIDIAN_PLANS.get(r["meridian_plan"])
         return (price / plan["duration_months"]) if plan else 0.0
 
     mrr = sum(monthly_value(r) for r in pagantes)
@@ -1145,8 +1171,9 @@ def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
             for p in subset:
                 counts[p] = counts.get(p, 0) + 1
             top_plan = max(counts, key=counts.get)
+            label = "Outro" if top_plan == "outro" else MERIDIAN_PLANS.get(top_plan, {}).get("label", top_plan)
             plano_por_tipo[role_key] = {
-                "plan": top_plan, "label": MERIDIAN_PLANS.get(top_plan, {}).get("label", top_plan),
+                "plan": top_plan, "label": label,
                 "count": counts[top_plan], "total": len(subset),
             }
         else:
@@ -1167,6 +1194,15 @@ def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
     meta_anual = float((settings_row[0] if settings_row else {}).get("meta_anual") or 0)
     run_rate_anual = mrr * 12
 
+    # CAC = soma de todos os custos de aquisicao ja lancados (acumulado,
+    # sempre em EUR) / total de profissionais que ja viraram pagantes em
+    # algum momento (tem meridian_started_at preenchido, mesmo que tenham
+    # cancelado depois — o custo foi pra adquiri-los, nao pra mante-los)
+    cost_row = query(conn, "SELECT COALESCE(SUM(amount),0) AS total FROM acquisition_costs")
+    total_custos = float(cost_row[0]["total"]) if cost_row else 0.0
+    profissionais_adquiridos = len([r for r in rows if r["meridian_started_at"]])
+    cac = round(total_custos / profissionais_adquiridos, 2) if total_custos > 0 and profissionais_adquiridos > 0 else None
+
     return {
         "mrr": round(mrr, 2),
         "ticket_medio": round(ticket_medio, 2),
@@ -1179,8 +1215,37 @@ def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
         "meta_anual": meta_anual,
         "run_rate_anual": round(run_rate_anual, 2),
         "meta_pct": round(run_rate_anual / meta_anual * 100) if meta_anual > 0 else None,
-        "cac": None,  # sem fonte de custo de aquisicao ainda — nao inventa numero
+        "cac": cac,
     }
+
+ACQUISITION_COST_CATEGORIES = ("trafego_pago", "conteudo", "outro")
+
+@app.get("/api/admin/acquisition-costs")
+def list_acquisition_costs(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    return query(conn, "SELECT * FROM acquisition_costs ORDER BY date DESC, created_at DESC LIMIT 100")
+
+@app.post("/api/admin/acquisition-costs")
+def add_acquisition_cost(data: dict, conn=Depends(get_db)):
+    _check_admin_key(data.get("admin_key", ""))
+    try:
+        amount = float(data.get("amount"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Valor invalido")
+    if amount <= 0:
+        raise HTTPException(400, "Valor deve ser maior que zero")
+    category = data.get("category")
+    if category not in ACQUISITION_COST_CATEGORIES:
+        raise HTTPException(400, "Categoria invalida")
+    currency = data.get("currency") or "EUR"
+    description = data.get("description") or None
+    cost_date = data.get("date") or None
+    row = execute(conn, """
+        INSERT INTO acquisition_costs (amount, currency, category, description, date)
+        VALUES (%s, %s, %s, %s, COALESCE(%s, CURRENT_DATE))
+        RETURNING id
+    """, (amount, currency, category, description, cost_date))
+    return {"ok": True, "id": str(row.get("id"))}
 
 @app.get("/api/admin/platform-settings")
 def get_platform_settings(admin_key: str, conn=Depends(get_db)):
@@ -1206,13 +1271,14 @@ def update_personal_meridian(personal_id: str, data: dict, conn=Depends(get_db))
     do profissional com o Meridian — nao existe cobranca automatica ainda."""
     _check_admin_key(data.get("admin_key", ""))
     plan = data.get("meridian_plan")
-    if plan is not None and plan not in MERIDIAN_PLANS and plan != "":
+    if plan is not None and plan not in MERIDIAN_PLANS and plan not in ("outro", ""):
         raise HTTPException(400, "Plano invalido")
     status = data.get("meridian_status")
     if status is not None and status not in ("tester", "pagante", "cancelado"):
         raise HTTPException(400, "Status invalido")
     fields, values = [], []
-    for key in ("meridian_plan", "meridian_status", "meridian_started_at", "meridian_price_paid"):
+    for key in ("meridian_plan", "meridian_status", "meridian_started_at", "meridian_price_paid",
+                "meridian_plan_duration_months"):
         if key in data:
             fields.append(f"{key}=%s")
             values.append(data[key] if data[key] != "" else None)
@@ -1309,6 +1375,7 @@ def admin_personal_metrics(personal_id: str, admin_key: str, conn=Depends(get_db
             COUNT(DISTINCT sub.id) AS total_subs,
             COUNT(DISTINCT c.id)   AS total_checkins,
             p.meridian_plan, p.meridian_status, p.meridian_started_at, p.meridian_price_paid,
+            p.meridian_plan_duration_months,
             p.moeda
         FROM personals p
         LEFT JOIN students s ON s.personal_id = p.id

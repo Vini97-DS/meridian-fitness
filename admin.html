@@ -272,6 +272,46 @@
       </div>
     </div>
 
+    <!-- Custos de aquisição (alimenta o CAC) -->
+    <div class="tbl-wrap" style="padding:20px 22px;margin-bottom:28px;min-width:0">
+      <div class="section-title" style="margin-bottom:4px">Custos de Aquisição</div>
+      <div class="section-sub" style="margin-bottom:16px">Lançamento manual — valor já convertido em EUR quando o gasto foi em outra moeda</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+        <div>
+          <label class="field-label">Valor (€)</label>
+          <input class="field-input" id="ac-amount" type="number" step="0.01" min="0" placeholder="Ex: 100" />
+        </div>
+        <div>
+          <label class="field-label">Categoria</label>
+          <select class="field-input" id="ac-category">
+            <option value="trafego_pago">Tráfego pago</option>
+            <option value="conteudo">Conteúdo</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Moeda original (opcional)</label>
+          <select class="field-input" id="ac-currency">
+            <option value="EUR">EUR</option>
+            <option value="BRL">BRL</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Data</label>
+          <input class="field-input" id="ac-date" type="date" />
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Descrição (opcional)</label>
+        <input class="field-input" id="ac-description" type="text" placeholder="Ex: campanha Instagram Ads semana 3" style="width:100%" />
+      </div>
+      <button class="btn-invite" id="btn-add-cost" onclick="adicionarCustoAquisicao()">+ Adicionar custo</button>
+      <div class="invite-feedback" id="ac-fb"></div>
+      <div class="section-sub" style="margin-top:20px;margin-bottom:8px">Lançamentos recentes</div>
+      <div id="acq-cost-list"><div class="empty" style="padding:12px 0">Carregando...</div></div>
+    </div>
+
     <!-- Meta anual do Meridian + Plano mais vendido -->
     <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:28px" id="meridian-secondary-grid">
       <div class="tbl-wrap" style="padding:20px 22px;margin-bottom:0;min-width:0">
@@ -518,7 +558,7 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ── Load all ──────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadOverview(), loadMeridianMetrics(), loadGrowth(_growthMonths), loadInvites()]);
+  await Promise.all([loadOverview(), loadMeridianMetrics(), loadGrowth(_growthMonths), loadInvites(), loadAcquisitionCosts()]);
 }
 
 async function loadOverview() {
@@ -571,6 +611,58 @@ async function loadMeridianMetrics() {
   } catch (e) {
     console.error('meridian-metrics', e);
   }
+}
+
+// ── Custos de aquisição (CAC) ──────────────────────────
+const ACQ_COST_CATEGORY_LABELS = { trafego_pago: 'Tráfego pago', conteudo: 'Conteúdo', outro: 'Outro' };
+
+async function loadAcquisitionCosts() {
+  const box = document.getElementById('acq-cost-list');
+  try {
+    const rows = await adminGet('acquisition-costs');
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty" style="padding:12px 0">Nenhum custo lançado ainda.</div>';
+      return;
+    }
+    box.innerHTML = rows.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid #1e2030">
+        <div style="min-width:0;flex:1;overflow-wrap:break-word">
+          <div style="color:#cbd5e1;font-size:12px">${fmtDate(r.date)} · ${esc(ACQ_COST_CATEGORY_LABELS[r.category] || r.category)}${r.currency && r.currency !== 'EUR' ? ' · orig. ' + esc(r.currency) : ''}</div>
+          ${r.description ? `<div style="color:#64748b;font-size:11px;margin-top:2px">${esc(r.description)}</div>` : ''}
+        </div>
+        <div style="flex-shrink:0;color:#e2e8f0;font-weight:600;font-size:13px">${fmtEUR(r.amount)}</div>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="empty" style="padding:12px 0">Erro: ${esc(e.message)}</div>`;
+  }
+}
+
+async function adicionarCustoAquisicao() {
+  const fb  = document.getElementById('ac-fb');
+  const btn = document.getElementById('btn-add-cost');
+  fb.textContent = ''; fb.className = 'invite-feedback';
+  const amount      = parseFloat(document.getElementById('ac-amount').value);
+  const category    = document.getElementById('ac-category').value;
+  const currency    = document.getElementById('ac-currency').value;
+  const date        = document.getElementById('ac-date').value;
+  const description = document.getElementById('ac-description').value.trim();
+  if (!amount || amount <= 0) {
+    fb.textContent = 'Informe um valor válido.'; fb.className = 'invite-feedback err';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await adminPost('acquisition-costs', {
+      amount, category, currency, date: date || null, description: description || null,
+    });
+    fb.textContent = 'Custo lançado.'; fb.className = 'invite-feedback ok';
+    document.getElementById('ac-amount').value = '';
+    document.getElementById('ac-description').value = '';
+    await Promise.all([loadAcquisitionCosts(), loadMeridianMetrics()]);
+  } catch (e) {
+    fb.textContent = e.message; fb.className = 'invite-feedback err';
+  }
+  btn.disabled = false;
 }
 
 async function salvarMeridianMeta() {
@@ -671,11 +763,14 @@ async function openGrowthModal(personalId) {
       </div>`).join('') || '<div class="empty">Sem leads registrados ainda.</div>';
 
     const planOptions = Object.entries(MERIDIAN_PLANS_FRONT).map(([k,v]) =>
-      `<option value="${k}" ${m.meridian_plan===k?'selected':''}>${v.label} — €${v.price.toFixed(2)}</option>`).join('');
+      `<option value="${k}" ${m.meridian_plan===k?'selected':''}>${v.label} — €${v.price.toFixed(2)}</option>`).join('')
+      + `<option value="outro" ${m.meridian_plan==='outro'?'selected':''}>Outro (valor manual)</option>`;
     const statusOptions = ['tester','pagante','cancelado'].map(s =>
       `<option value="${s}" ${m.meridian_status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('');
     const startedAt = m.meridian_started_at ? String(m.meridian_started_at).slice(0,10) : '';
     const pricePaid = m.meridian_price_paid ?? '';
+    const planDuration = m.meridian_plan_duration_months ?? '';
+    const isOutro = m.meridian_plan === 'outro';
 
     document.getElementById('gm-body').innerHTML = `
       <div class="modal-section-title">Nível 1 — Faturamento dele com os alunos dele</div>
@@ -704,7 +799,7 @@ async function openGrowthModal(personalId) {
           </div>
           <div>
             <label class="field-label">Plano</label>
-            <select class="field-input" id="gm-meridian-plan"><option value="">—</option>${planOptions}</select>
+            <select class="field-input" id="gm-meridian-plan" onchange="toggleMeridianDuration()"><option value="">—</option>${planOptions}</select>
           </div>
           <div>
             <label class="field-label">Valor pago (€)</label>
@@ -713,6 +808,10 @@ async function openGrowthModal(personalId) {
           <div>
             <label class="field-label">Início</label>
             <input class="field-input" id="gm-meridian-started" type="date" value="${startedAt}" />
+          </div>
+          <div id="gm-meridian-duration-wrap" style="display:${isOutro ? 'block' : 'none'}">
+            <label class="field-label">Duração (meses)</label>
+            <input class="field-input" id="gm-meridian-duration" type="number" step="1" min="1" value="${planDuration}" placeholder="Ex: 3" />
           </div>
         </div>
         <button class="btn-invite" onclick="salvarMeridianStatus('${personalId}')">Salvar</button>
@@ -730,19 +829,30 @@ const MERIDIAN_PLANS_FRONT = {
   anual:     { label: 'Anual',     price: 289.90 },
 };
 
+function toggleMeridianDuration() {
+  const plan = document.getElementById('gm-meridian-plan').value;
+  document.getElementById('gm-meridian-duration-wrap').style.display = plan === 'outro' ? 'block' : 'none';
+}
+
 async function salvarMeridianStatus(personalId) {
   const fb = document.getElementById('gm-meridian-fb');
   fb.textContent = ''; fb.className = 'invite-feedback';
-  const status = document.getElementById('gm-meridian-status').value;
-  const plan   = document.getElementById('gm-meridian-plan').value;
-  const price  = document.getElementById('gm-meridian-price').value;
-  const started= document.getElementById('gm-meridian-started').value;
+  const status   = document.getElementById('gm-meridian-status').value;
+  const plan     = document.getElementById('gm-meridian-plan').value;
+  const price    = document.getElementById('gm-meridian-price').value;
+  const started  = document.getElementById('gm-meridian-started').value;
+  const duration = document.getElementById('gm-meridian-duration').value;
+  if (plan === 'outro' && !duration) {
+    fb.textContent = 'Informe a duração (meses) do plano Outro.'; fb.className = 'invite-feedback err';
+    return;
+  }
   try {
     await adminPatch('personal/' + personalId + '/meridian', {
       meridian_status: status,
       meridian_plan: plan || null,
       meridian_price_paid: price ? parseFloat(price) : null,
       meridian_started_at: started || null,
+      meridian_plan_duration_months: plan === 'outro' && duration ? parseInt(duration, 10) : null,
     });
     fb.textContent = 'Salvo.'; fb.className = 'invite-feedback ok';
     await loadMeridianMetrics();
