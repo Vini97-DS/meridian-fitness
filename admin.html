@@ -74,6 +74,7 @@
 
     /* ── KPI cards ───────────────────────────────────── */
     .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-row-4 { grid-template-columns: repeat(4, 1fr); }
     .kpi-card {
       background: #12121a; border: 1px solid #1e2030; border-radius: 12px; padding: 18px 20px;
     }
@@ -186,6 +187,7 @@
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
       .invite-grid { grid-template-columns: 1fr; }
       .modal-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      #meridian-secondary-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 600px) {
       .kpi-row { grid-template-columns: 1fr 1fr; }
@@ -237,19 +239,82 @@
 
   <div class="content">
 
-    <!-- KPIs -->
+    <!-- KPIs — negocio do MERIDIAN (o que EU faturo com os profissionais
+         pagando o Hub, nao o que cada profissional fatura com os alunos
+         dele — isso fica na aba BI de cada um / seção Crescimento abaixo) -->
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Meu Negócio — Meridian</div>
+        <div class="section-sub">Quanto cada profissional paga pelo Hub, não quanto ele fatura com os alunos dele</div>
+      </div>
+    </div>
     <div class="kpi-row">
       <div class="kpi-card">
-        <div class="kpi-label">Personais</div>
+        <div class="kpi-label">MRR Próprio</div>
+        <div class="kpi-val green" id="kpi-m-mrr">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Ticket Médio</div>
+        <div class="kpi-val" id="kpi-m-ticket">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">LTV Médio (estimado)</div>
+        <div class="kpi-val blue" id="kpi-m-ltv">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Profissionais Pagantes</div>
+        <div class="kpi-val purple" id="kpi-m-pagantes">—</div>
+        <div class="section-sub" id="kpi-m-pagantes-sub" style="margin-top:4px">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">CAC</div>
+        <div class="kpi-val" id="kpi-m-cac">—</div>
+      </div>
+    </div>
+
+    <!-- Meta anual do Meridian + Plano mais vendido -->
+    <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:28px" id="meridian-secondary-grid">
+      <div class="tbl-wrap" style="padding:20px 22px;margin-bottom:0;min-width:0">
+        <div class="section-title" style="margin-bottom:4px">Meta Anual — Meridian</div>
+        <div class="section-sub" style="margin-bottom:16px">Run-rate anualizado (MRR próprio × 12) vs. sua meta</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:1;min-width:160px">
+            <label class="field-label">Meta Anual (R$)</label>
+            <input class="field-input" id="meridian-meta-input" type="number" placeholder="Ex: 100000" step="1000" min="0" />
+          </div>
+          <button class="btn-invite" id="btn-save-meridian-meta" onclick="salvarMeridianMeta()">Salvar Meta</button>
+        </div>
+        <div style="font-size:20px;font-weight:700;color:#e2e8f0" id="meridian-meta-progresso">—</div>
+        <div style="height:8px;background:#1e2030;border-radius:4px;overflow:hidden;margin-top:8px">
+          <div id="meridian-meta-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#8b5cf6);transition:width .3s"></div>
+        </div>
+        <div class="section-sub" style="margin-top:6px" id="meridian-meta-pct">—</div>
+        <div class="invite-feedback" id="meridian-meta-fb"></div>
+      </div>
+      <div class="tbl-wrap" style="padding:20px 22px;margin-bottom:0;min-width:0">
+        <div class="section-title" style="margin-bottom:4px">Plano Mais Vendido</div>
+        <div class="section-sub" style="margin-bottom:14px">Por tipo de profissional, entre pagantes</div>
+        <div id="meridian-plano-tipo">
+          <div class="empty" style="padding:20px 0">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visão geral da plataforma (todos os profissionais, nao so pagantes) -->
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Visão Geral da Plataforma</div>
+        <div class="section-sub">Totais operacionais somando todos os profissionais (testers inclusos)</div>
+      </div>
+    </div>
+    <div class="kpi-row kpi-row-4">
+      <div class="kpi-card">
+        <div class="kpi-label">Profissionais</div>
         <div class="kpi-val purple" id="kpi-personais">—</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Alunos Total</div>
         <div class="kpi-val blue" id="kpi-students">—</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">MRR Consolidado</div>
-        <div class="kpi-val green" id="kpi-mrr">—</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Checkins Total</div>
@@ -259,33 +324,6 @@
         <div class="kpi-label">Convites Pendentes</div>
         <div class="kpi-val amber" id="kpi-invites">—</div>
       </div>
-    </div>
-
-    <!-- Personais table -->
-    <div class="section-hd">
-      <div>
-        <div class="section-title">Personais Cadastrados</div>
-        <div class="section-sub">Métricas por personal trainer na plataforma</div>
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Personal</th>
-            <th>Profissão</th>
-            <th>Alunos Ativos</th>
-            <th>Total Alunos</th>
-            <th>MRR (R$)</th>
-            <th>Assinaturas</th>
-            <th>Checkins</th>
-            <th>Cadastro</th>
-          </tr>
-        </thead>
-        <tbody id="tbl-personais">
-          <tr><td colspan="8" class="empty">Carregando...</td></tr>
-        </tbody>
-      </table>
     </div>
 
     <!-- Crescimento por Profissional -->
@@ -406,6 +444,19 @@ async function adminPost(path, body) {
   return res.json();
 }
 
+async function adminPatch(path, body) {
+  const res = await fetch('/api/admin/' + path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, admin_key: _adminKey }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ' + res.status);
+  }
+  return res.json();
+}
+
 async function adminDelete(path) {
   const sep = path.includes('?') ? '&' : '?';
   const res = await fetch('/api/admin/' + path + sep + 'admin_key=' + encodeURIComponent(_adminKey), { method: 'DELETE' });
@@ -456,7 +507,7 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ── Load all ──────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadOverview(), loadPersonais(), loadGrowth(_growthMonths), loadInvites()]);
+  await Promise.all([loadOverview(), loadMeridianMetrics(), loadGrowth(_growthMonths), loadInvites()]);
 }
 
 async function loadOverview() {
@@ -464,41 +515,68 @@ async function loadOverview() {
     const d = await adminGet('overview');
     document.getElementById('kpi-personais').textContent = d.total_personais ?? '0';
     document.getElementById('kpi-students').textContent  = d.total_students ?? '0';
-    document.getElementById('kpi-mrr').textContent       = fmt(d.mrr_total ?? 0);
     document.getElementById('kpi-checkins').textContent  = d.total_checkins ?? '0';
     document.getElementById('kpi-invites').textContent   = d.invites_pending ?? '0';
   } catch (e) { console.error('overview', e); }
 }
 
-async function loadPersonais() {
-  const tbody = document.getElementById('tbl-personais');
+// ── Meu Negócio — Meridian (Nível 2) ───────────────────
+const ROLE_LABELS = { personal: 'Personal Trainer', nutritionist: 'Nutricionista/Nutrólogo' };
+
+async function loadMeridianMetrics() {
   try {
-    const rows = await adminGet('personais');
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">Nenhum personal cadastrado ainda.</td></tr>';
-      return;
+    const m = await adminGet('meridian-metrics');
+    document.getElementById('kpi-m-mrr').textContent    = fmt(m.mrr);
+    document.getElementById('kpi-m-ticket').textContent = fmt(m.ticket_medio);
+    document.getElementById('kpi-m-ltv').textContent    = m.profissionais_pagantes > 0 ? fmt(m.ltv_medio) : '—';
+    document.getElementById('kpi-m-pagantes').textContent = m.profissionais_pagantes;
+    document.getElementById('kpi-m-pagantes-sub').textContent = m.profissionais_tester + ' tester(s) · ' + m.profissionais_cancelados + ' cancelado(s)';
+    document.getElementById('kpi-m-cac').textContent = m.cac == null ? 'Sem dado suficiente' : fmt(m.cac);
+
+    // Plano mais vendido por tipo — empilhado (label em cima, valor embaixo)
+    // pra nao estourar largura em cards estreitos/mobile
+    const planoEl = document.getElementById('meridian-plano-tipo');
+    const rows = Object.entries(m.plano_mais_vendido_por_tipo || {}).map(([role, info]) => {
+      const label = ROLE_LABELS[role] || role;
+      const value = !info
+        ? '<span class="empty" style="padding:0;font-size:11px;display:inline-block">sem pagante ainda</span>'
+        : `<span style="font-weight:600;color:#e2e8f0">${esc(info.label)}</span><span style="color:#64748b;font-size:11px;margin-left:8px">${info.count}/${info.total}</span>`;
+      return `<div style="margin-bottom:12px"><div style="font-size:11px;color:#94a3b8;margin-bottom:3px;overflow-wrap:break-word">${esc(label)}</div><div style="overflow-wrap:break-word">${value}</div></div>`;
+    });
+    planoEl.innerHTML = rows.length ? rows.join('') : '<div class="empty" style="padding:20px 0">Nenhum pagante ainda</div>';
+
+    // Meta anual
+    document.getElementById('meridian-meta-input').value = m.meta_anual || '';
+    if (m.meta_anual > 0) {
+      const pct = Math.min(100, m.meta_pct ?? 0);
+      document.getElementById('meridian-meta-progresso').textContent = fmt(m.run_rate_anual) + ' / ' + fmt(m.meta_anual) + '/ano';
+      document.getElementById('meridian-meta-bar').style.width = pct + '%';
+      document.getElementById('meridian-meta-pct').textContent = pct + '% da meta (run-rate anualizado: MRR próprio × 12)';
+    } else {
+      document.getElementById('meridian-meta-progresso').textContent = '—';
+      document.getElementById('meridian-meta-bar').style.width = '0%';
+      document.getElementById('meridian-meta-pct').textContent = 'Defina uma meta anual acima';
     }
-    tbody.innerHTML = rows.map(r => {
-      const activeClass = r.active_students > 0 ? 'badge-green' : 'badge-gray';
-      const roleLabel = r.role === 'nutritionist' ? 'Nutricionista' : 'Personal Trainer';
-      return `
-        <tr>
-          <td>
-            <div class="name-cell">${esc(r.name)}</div>
-            <div class="email-cell">${esc(r.email)}</div>
-          </td>
-          <td><span class="badge badge-gray">${roleLabel}</span></td>
-          <td><span class="badge ${activeClass}">${r.active_students}</span></td>
-          <td>${r.total_students}</td>
-          <td class="mrr-cell">${fmt(r.mrr)}</td>
-          <td>${r.total_subs}</td>
-          <td>${r.total_checkins}</td>
-          <td>${fmtDate(r.created_at)}</td>
-        </tr>`;
-    }).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+    console.error('meridian-metrics', e);
   }
+}
+
+async function salvarMeridianMeta() {
+  const input = document.getElementById('meridian-meta-input');
+  const fb = document.getElementById('meridian-meta-fb');
+  const btn = document.getElementById('btn-save-meridian-meta');
+  const val = parseFloat(input.value) || 0;
+  fb.textContent = ''; fb.className = 'invite-feedback';
+  btn.disabled = true;
+  try {
+    await adminPatch('platform-settings', { meta_anual: val });
+    fb.textContent = 'Meta salva.'; fb.className = 'invite-feedback ok';
+    await loadMeridianMetrics();
+  } catch (e) {
+    fb.textContent = e.message; fb.className = 'invite-feedback err';
+  }
+  btn.disabled = false;
 }
 
 // ── Crescimento por Profissional ───────────────────────
@@ -575,7 +653,15 @@ async function openGrowthModal(personalId) {
         <div class="channel-pct">${c.low_sample ? 'poucos dados' : c.rate + '%'}</div>
       </div>`).join('') || '<div class="empty">Sem leads registrados ainda.</div>';
 
+    const planOptions = Object.entries(MERIDIAN_PLANS_FRONT).map(([k,v]) =>
+      `<option value="${k}" ${m.meridian_plan===k?'selected':''}>${v.label} — R$${v.price.toFixed(2)}</option>`).join('');
+    const statusOptions = ['tester','pagante','cancelado'].map(s =>
+      `<option value="${s}" ${m.meridian_status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('');
+    const startedAt = m.meridian_started_at ? String(m.meridian_started_at).slice(0,10) : '';
+    const pricePaid = m.meridian_price_paid ?? '';
+
     document.getElementById('gm-body').innerHTML = `
+      <div class="modal-section-title">Nível 1 — Faturamento dele com os alunos dele</div>
       <div class="modal-kpi-grid">
         <div class="modal-kpi"><div class="modal-kpi-label">MRR</div><div class="modal-kpi-val">${fmt(m.mrr)}</div></div>
         <div class="modal-kpi"><div class="modal-kpi-label">Alunos Ativos</div><div class="modal-kpi-val">${m.active_students}</div></div>
@@ -584,11 +670,67 @@ async function openGrowthModal(personalId) {
         <div class="modal-kpi"><div class="modal-kpi-label">Churn Rate</div><div class="modal-kpi-val">${m.churn_rate}%</div></div>
         <div class="modal-kpi"><div class="modal-kpi-label">LTV Médio</div><div class="modal-kpi-val">${fmt(m.avg_ltv)}</div></div>
       </div>
+      <div class="modal-kpi-grid">
+        <div class="modal-kpi"><div class="modal-kpi-label">Total Alunos</div><div class="modal-kpi-val">${m.total_students ?? 0}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">Assinaturas</div><div class="modal-kpi-val">${m.total_subs ?? 0}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">Checkins</div><div class="modal-kpi-val">${m.total_checkins ?? 0}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">Cadastro</div><div class="modal-kpi-val" style="font-size:14px">${fmtDate(m.created_at)}</div></div>
+      </div>
       <div class="modal-section-title">Conversão por Canal</div>
       ${channelsHtml}
+      <div class="modal-section-title" style="margin-top:22px">Nível 2 — Plano dele com o Meridian</div>
+      <div style="background:#0d0d14;border:1px solid #1e2030;border-radius:10px;padding:14px 16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label class="field-label">Status</label>
+            <select class="field-input" id="gm-meridian-status">${statusOptions}</select>
+          </div>
+          <div>
+            <label class="field-label">Plano</label>
+            <select class="field-input" id="gm-meridian-plan"><option value="">—</option>${planOptions}</select>
+          </div>
+          <div>
+            <label class="field-label">Valor pago (R$)</label>
+            <input class="field-input" id="gm-meridian-price" type="number" step="0.01" min="0" value="${pricePaid}" />
+          </div>
+          <div>
+            <label class="field-label">Início</label>
+            <input class="field-input" id="gm-meridian-started" type="date" value="${startedAt}" />
+          </div>
+        </div>
+        <button class="btn-invite" onclick="salvarMeridianStatus('${personalId}')">Salvar</button>
+        <div class="invite-feedback" id="gm-meridian-fb"></div>
+      </div>
     `;
   } catch (e) {
     document.getElementById('gm-body').innerHTML = `<div class="empty">Erro ao carregar: ${esc(e.message)}</div>`;
+  }
+}
+
+const MERIDIAN_PLANS_FRONT = {
+  mensal:    { label: 'Mensal',    price: 119.90 },
+  semestral: { label: 'Semestral', price: 519.90 },
+  anual:     { label: 'Anual',     price: 1099.90 },
+};
+
+async function salvarMeridianStatus(personalId) {
+  const fb = document.getElementById('gm-meridian-fb');
+  fb.textContent = ''; fb.className = 'invite-feedback';
+  const status = document.getElementById('gm-meridian-status').value;
+  const plan   = document.getElementById('gm-meridian-plan').value;
+  const price  = document.getElementById('gm-meridian-price').value;
+  const started= document.getElementById('gm-meridian-started').value;
+  try {
+    await adminPatch('personal/' + personalId + '/meridian', {
+      meridian_status: status,
+      meridian_plan: plan || null,
+      meridian_price_paid: price ? parseFloat(price) : null,
+      meridian_started_at: started || null,
+    });
+    fb.textContent = 'Salvo.'; fb.className = 'invite-feedback ok';
+    await loadMeridianMetrics();
+  } catch (e) {
+    fb.textContent = e.message; fb.className = 'invite-feedback err';
   }
 }
 

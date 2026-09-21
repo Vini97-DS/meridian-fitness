@@ -187,12 +187,37 @@ def create_users_table():
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS formas_pagamento TEXT[]",
                 "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_student_id UUID REFERENCES students(id)",
                 "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_other TEXT",
+                # Nivel 2 (negocio do Meridian: quanto cada profissional paga
+                # pelo Hub) — distinto do Nivel 1 (quanto cada profissional
+                # fatura com os alunos dele, ja coberto por subscriptions)
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_plan TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_status TEXT DEFAULT 'tester'",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_started_at DATE",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_price_paid NUMERIC(10,2)",
             ]:
                 try:
                     cur2.execute(col_sql)
                     conn.commit()
                 except Exception:
                     conn.rollback()
+            # platform_settings — tabela singleton com a meta anual do
+            # proprio Meridian (nao confundir com personals.meta_anual,
+            # que e a meta de cada profissional)
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS platform_settings (
+                        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        meta_anual NUMERIC(12,2),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                conn.commit()
+                cur2.execute("SELECT COUNT(*) AS n FROM platform_settings")
+                if cur2.fetchone()[0] == 0:
+                    cur2.execute("INSERT INTO platform_settings (meta_anual) VALUES (NULL)")
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # Backfill: convite cujo e-mail já tem conta criada nunca era
             # marcado como usado (o UPDATE correspondente nunca existiu em
             # /api/auth/register) — corrige o que já ficou pra trás.
@@ -1058,6 +1083,15 @@ def _check_admin_key(admin_key: str):
     if admin_key != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Admin key inválida")
 
+# Planos que o MERIDIAN vende pros profissionais (Nivel 2 — negocio do
+# Meridian). Nao confundir com a tabela "plans", que sao os planos que CADA
+# profissional vende pros alunos DELE (Nivel 1).
+MERIDIAN_PLANS = {
+    "mensal":    {"duration_months": 1,  "price": 119.90,  "label": "Mensal"},
+    "semestral": {"duration_months": 6,  "price": 519.90,  "label": "Semestral"},
+    "anual":     {"duration_months": 12, "price": 1099.90, "label": "Anual"},
+}
+
 @app.get("/api/admin/overview")
 def admin_overview(admin_key: str, conn=Depends(get_db)):
     _check_admin_key(admin_key)
@@ -1065,39 +1099,119 @@ def admin_overview(admin_key: str, conn=Depends(get_db)):
         SELECT
             (SELECT COUNT(*) FROM personals)                                                  AS total_personais,
             (SELECT COUNT(*) FROM students)                                                   AS total_students,
-            (SELECT COALESCE(SUM(sub.price_paid / NULLIF(p.duration_months,0)),0)
-               FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
-               WHERE sub.status='active')                                                     AS mrr_total,
             (SELECT COUNT(*) FROM checkins)                                                   AS total_checkins,
             (SELECT COUNT(*) FROM invites WHERE used = false)                                 AS invites_pending
     """)
     return row[0] if row else {}
 
-@app.get("/api/admin/personais")
-def admin_personais(admin_key: str, conn=Depends(get_db)):
+@app.get("/api/admin/meridian-metrics")
+def admin_meridian_metrics(admin_key: str, conn=Depends(get_db)):
+    """KPIs do NEGOCIO DO MERIDIAN (Nivel 2): quanto cada profissional paga
+    pelo Hub, nao quanto cada profissional fatura com os alunos dele (isso
+    e Nivel 1, ja coberto por /api/admin/growth e pela aba BI de cada um)."""
     _check_admin_key(admin_key)
     rows = query(conn, """
-        SELECT
-            p.id                                                                AS personal_id,
-            u.name,
-            u.email,
-            u.role,
-            u.created_at,
-            COUNT(DISTINCT s.id)                                                AS total_students,
-            COUNT(DISTINCT s.id) FILTER (WHERE sub.status = 'active')          AS active_students,
-            COALESCE(SUM(sub.price_paid / NULLIF(pl.duration_months,0)) FILTER (WHERE sub.status='active'), 0) AS mrr,
-            COUNT(DISTINCT sub.id)                                              AS total_subs,
-            COUNT(DISTINCT c.id)                                                AS total_checkins
-        FROM personals p
-        JOIN users u ON u.id::text = p.clerk_user_id
-        LEFT JOIN students s   ON s.personal_id = p.id
-        LEFT JOIN subscriptions sub ON sub.student_id = s.id
-        LEFT JOIN plans pl      ON pl.id = sub.plan_id
-        LEFT JOIN checkins c   ON c.student_id = s.id
-        GROUP BY p.id, u.name, u.email, u.role, u.created_at
-        ORDER BY mrr DESC
+        SELECT p.id, u.role, p.meridian_plan, p.meridian_status,
+               p.meridian_started_at, p.meridian_price_paid
+        FROM personals p JOIN users u ON u.id::text = p.clerk_user_id
     """)
-    return rows
+    pagantes   = [r for r in rows if r["meridian_status"] == "pagante"]
+    testers    = [r for r in rows if r["meridian_status"] == "tester"]
+    cancelados = [r for r in rows if r["meridian_status"] == "cancelado"]
+
+    def monthly_value(r):
+        plan = MERIDIAN_PLANS.get(r["meridian_plan"])
+        price = float(r["meridian_price_paid"] or 0)
+        return (price / plan["duration_months"]) if plan else 0.0
+
+    mrr = sum(monthly_value(r) for r in pagantes)
+    ticket_medio = (sum(float(r["meridian_price_paid"] or 0) for r in pagantes) / len(pagantes)) if pagantes else 0
+
+    # Plano mais vendido, segmentado por tipo de profissional
+    plano_por_tipo = {}
+    for role_key in ("personal", "nutritionist"):
+        subset = [r["meridian_plan"] for r in pagantes if r["role"] == role_key and r["meridian_plan"]]
+        if subset:
+            counts = {}
+            for p in subset:
+                counts[p] = counts.get(p, 0) + 1
+            top_plan = max(counts, key=counts.get)
+            plano_por_tipo[role_key] = {
+                "plan": top_plan, "label": MERIDIAN_PLANS.get(top_plan, {}).get("label", top_plan),
+                "count": counts[top_plan], "total": len(subset),
+            }
+        else:
+            plano_por_tipo[role_key] = None
+
+    # LTV estimado: tempo de casa (meses desde meridian_started_at) x valor
+    # mensal normalizado. E uma ESTIMATIVA por tenure — nao existe hoje um
+    # historico de pagamentos ciclo-a-ciclo (so o estado atual), entao nao
+    # da pra somar pagamentos reais um por um.
+    ltvs = []
+    for r in pagantes:
+        if r["meridian_started_at"]:
+            months = max(1.0, (date.today() - r["meridian_started_at"]).days / 30.44)
+            ltvs.append(monthly_value(r) * months)
+    ltv_medio = (sum(ltvs) / len(ltvs)) if ltvs else 0
+
+    settings_row = query(conn, "SELECT meta_anual FROM platform_settings LIMIT 1")
+    meta_anual = float((settings_row[0] if settings_row else {}).get("meta_anual") or 0)
+    run_rate_anual = mrr * 12
+
+    return {
+        "mrr": round(mrr, 2),
+        "ticket_medio": round(ticket_medio, 2),
+        "ltv_medio": round(ltv_medio, 2),
+        "profissionais_pagantes": len(pagantes),
+        "profissionais_tester": len(testers),
+        "profissionais_cancelados": len(cancelados),
+        "profissionais_total": len(rows),
+        "plano_mais_vendido_por_tipo": plano_por_tipo,
+        "meta_anual": meta_anual,
+        "run_rate_anual": round(run_rate_anual, 2),
+        "meta_pct": round(run_rate_anual / meta_anual * 100) if meta_anual > 0 else None,
+        "cac": None,  # sem fonte de custo de aquisicao ainda — nao inventa numero
+    }
+
+@app.get("/api/admin/platform-settings")
+def get_platform_settings(admin_key: str, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    row = query(conn, "SELECT meta_anual FROM platform_settings LIMIT 1")
+    return row[0] if row else {"meta_anual": None}
+
+@app.patch("/api/admin/platform-settings")
+def update_platform_settings(data: dict, conn=Depends(get_db)):
+    _check_admin_key(data.get("admin_key", ""))
+    meta_anual = data.get("meta_anual")
+    row = query(conn, "SELECT id FROM platform_settings LIMIT 1")
+    if row:
+        execute(conn, "UPDATE platform_settings SET meta_anual=%s, updated_at=NOW() WHERE id=%s",
+                (meta_anual, row[0]["id"]))
+    else:
+        execute(conn, "INSERT INTO platform_settings (meta_anual) VALUES (%s)", (meta_anual,))
+    return {"ok": True}
+
+@app.patch("/api/admin/personal/{personal_id}/meridian")
+def update_personal_meridian(personal_id: str, data: dict, conn=Depends(get_db)):
+    """Marcacao manual (feita pelo Vinicius no Admin) de plano/status/preco
+    do profissional com o Meridian — nao existe cobranca automatica ainda."""
+    _check_admin_key(data.get("admin_key", ""))
+    plan = data.get("meridian_plan")
+    if plan is not None and plan not in MERIDIAN_PLANS and plan != "":
+        raise HTTPException(400, "Plano invalido")
+    status = data.get("meridian_status")
+    if status is not None and status not in ("tester", "pagante", "cancelado"):
+        raise HTTPException(400, "Status invalido")
+    fields, values = [], []
+    for key in ("meridian_plan", "meridian_status", "meridian_started_at", "meridian_price_paid"):
+        if key in data:
+            fields.append(f"{key}=%s")
+            values.append(data[key] if data[key] != "" else None)
+    if not fields:
+        return {"ok": True}
+    values.append(personal_id)
+    execute(conn, f"UPDATE personals SET {', '.join(fields)}, updated_at=NOW() WHERE id=%s", tuple(values))
+    return {"ok": True}
 
 def _delta_status(now: float, then: float):
     """Calcula delta% entre dois pontos no tempo, tratando os casos de borda
@@ -1176,7 +1290,22 @@ def admin_personal_metrics(personal_id: str, admin_key: str, conn=Depends(get_db
     _check_admin_key(admin_key)
     bi    = _compute_bi_metrics(conn, personal_id, 365)
     sales = _compute_sales_metrics(conn, personal_id)
-    return {**bi, **sales}
+    extra_row = query(conn, """
+        SELECT
+            p.created_at,
+            COUNT(DISTINCT s.id)   AS total_students,
+            COUNT(DISTINCT sub.id) AS total_subs,
+            COUNT(DISTINCT c.id)   AS total_checkins,
+            p.meridian_plan, p.meridian_status, p.meridian_started_at, p.meridian_price_paid
+        FROM personals p
+        LEFT JOIN students s ON s.personal_id = p.id
+        LEFT JOIN subscriptions sub ON sub.student_id = s.id
+        LEFT JOIN checkins c ON c.student_id = s.id
+        WHERE p.id = %s
+        GROUP BY p.id
+    """, (personal_id,))
+    extra = extra_row[0] if extra_row else {}
+    return {**bi, **sales, **extra}
 
 @app.get("/api/admin/invites")
 def admin_invites(admin_key: str, conn=Depends(get_db)):
