@@ -279,7 +279,7 @@
         <div class="section-sub" style="margin-bottom:16px">Run-rate anualizado (MRR próprio × 12) vs. sua meta</div>
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
           <div style="flex:1;min-width:160px">
-            <label class="field-label">Meta Anual (R$)</label>
+            <label class="field-label">Meta Anual (€)</label>
             <input class="field-input" id="meridian-meta-input" type="number" placeholder="Ex: 100000" step="1000" min="0" />
           </div>
           <button class="btn-invite" id="btn-save-meridian-meta" onclick="salvarMeridianMeta()">Salvar Meta</button>
@@ -417,7 +417,17 @@
 // ── State ────────────────────────────────────────────
 let _adminKey = '';
 
-function fmt(n)   { return 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+// Nivel 2 (meu negocio, cobranca dos profissionais pelo Hub) e sempre em
+// Euro, fixo, independente de onde o profissional atua. Nivel 1 (o que CADA
+// profissional fatura com os alunos dele) usa a moeda daquele profissional
+// especifico — nao converte nem soma entre profissionais de moedas
+// diferentes (mostra cada um na sua propria moeda, lado a lado).
+const CURRENCY_SYMBOLS = { BRL: 'R$', USD: '$', EUR: '€' };
+function fmtEUR(n) { return '€ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtCur(n, currency) {
+  const sym = CURRENCY_SYMBOLS[currency] || 'R$';
+  return sym + ' ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
 function fmtDate(s){ if (!s) return '—'; return new Date(s).toLocaleDateString('pt-BR'); }
 
 // ── Admin API ─────────────────────────────────────────
@@ -526,12 +536,12 @@ const ROLE_LABELS = { personal: 'Personal Trainer', nutritionist: 'Nutricionista
 async function loadMeridianMetrics() {
   try {
     const m = await adminGet('meridian-metrics');
-    document.getElementById('kpi-m-mrr').textContent    = fmt(m.mrr);
-    document.getElementById('kpi-m-ticket').textContent = fmt(m.ticket_medio);
-    document.getElementById('kpi-m-ltv').textContent    = m.profissionais_pagantes > 0 ? fmt(m.ltv_medio) : '—';
+    document.getElementById('kpi-m-mrr').textContent    = fmtEUR(m.mrr);
+    document.getElementById('kpi-m-ticket').textContent = fmtEUR(m.ticket_medio);
+    document.getElementById('kpi-m-ltv').textContent    = m.profissionais_pagantes > 0 ? fmtEUR(m.ltv_medio) : '—';
     document.getElementById('kpi-m-pagantes').textContent = m.profissionais_pagantes;
     document.getElementById('kpi-m-pagantes-sub').textContent = m.profissionais_tester + ' tester(s) · ' + m.profissionais_cancelados + ' cancelado(s)';
-    document.getElementById('kpi-m-cac').textContent = m.cac == null ? 'Sem dado suficiente' : fmt(m.cac);
+    document.getElementById('kpi-m-cac').textContent = m.cac == null ? 'Sem dado suficiente' : fmtEUR(m.cac);
 
     // Plano mais vendido por tipo — empilhado (label em cima, valor embaixo)
     // pra nao estourar largura em cards estreitos/mobile
@@ -549,7 +559,7 @@ async function loadMeridianMetrics() {
     document.getElementById('meridian-meta-input').value = m.meta_anual || '';
     if (m.meta_anual > 0) {
       const pct = Math.min(100, m.meta_pct ?? 0);
-      document.getElementById('meridian-meta-progresso').textContent = fmt(m.run_rate_anual) + ' / ' + fmt(m.meta_anual) + '/ano';
+      document.getElementById('meridian-meta-progresso').textContent = fmtEUR(m.run_rate_anual) + ' / ' + fmtEUR(m.meta_anual) + '/ano';
       document.getElementById('meridian-meta-bar').style.width = pct + '%';
       document.getElementById('meridian-meta-pct').textContent = pct + '% da meta (run-rate anualizado: MRR próprio × 12)';
     } else {
@@ -620,8 +630,8 @@ async function loadGrowth(months) {
           </td>
           <td>${deltaBadge(r.students_delta)}</td>
           <td>
-            <div class="mrr-cell">${fmt(r.mrr_now)}</div>
-            <div class="delta-sub">era ${fmt(r.mrr_then)}</div>
+            <div class="mrr-cell">${fmtCur(r.mrr_now, r.moeda)}</div>
+            <div class="delta-sub">era ${fmtCur(r.mrr_then, r.moeda)}</div>
           </td>
           <td>${deltaBadge(r.mrr_delta)}</td>
         </tr>`;
@@ -654,7 +664,7 @@ async function openGrowthModal(personalId) {
       </div>`).join('') || '<div class="empty">Sem leads registrados ainda.</div>';
 
     const planOptions = Object.entries(MERIDIAN_PLANS_FRONT).map(([k,v]) =>
-      `<option value="${k}" ${m.meridian_plan===k?'selected':''}>${v.label} — R$${v.price.toFixed(2)}</option>`).join('');
+      `<option value="${k}" ${m.meridian_plan===k?'selected':''}>${v.label} — €${v.price.toFixed(2)}</option>`).join('');
     const statusOptions = ['tester','pagante','cancelado'].map(s =>
       `<option value="${s}" ${m.meridian_status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('');
     const startedAt = m.meridian_started_at ? String(m.meridian_started_at).slice(0,10) : '';
@@ -663,12 +673,12 @@ async function openGrowthModal(personalId) {
     document.getElementById('gm-body').innerHTML = `
       <div class="modal-section-title">Nível 1 — Faturamento dele com os alunos dele</div>
       <div class="modal-kpi-grid">
-        <div class="modal-kpi"><div class="modal-kpi-label">MRR</div><div class="modal-kpi-val">${fmt(m.mrr)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">MRR</div><div class="modal-kpi-val">${fmtCur(m.mrr, m.moeda)}</div></div>
         <div class="modal-kpi"><div class="modal-kpi-label">Alunos Ativos</div><div class="modal-kpi-val">${m.active_students}</div></div>
-        <div class="modal-kpi"><div class="modal-kpi-label">Ticket Médio</div><div class="modal-kpi-val">${fmt(m.avg_ticket)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">Ticket Médio</div><div class="modal-kpi-val">${fmtCur(m.avg_ticket, m.moeda)}</div></div>
         <div class="modal-kpi"><div class="modal-kpi-label">Taxa Renovação</div><div class="modal-kpi-val">${m.renewal_rate}%</div></div>
         <div class="modal-kpi"><div class="modal-kpi-label">Churn Rate</div><div class="modal-kpi-val">${m.churn_rate}%</div></div>
-        <div class="modal-kpi"><div class="modal-kpi-label">LTV Médio</div><div class="modal-kpi-val">${fmt(m.avg_ltv)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-label">LTV Médio</div><div class="modal-kpi-val">${fmtCur(m.avg_ltv, m.moeda)}</div></div>
       </div>
       <div class="modal-kpi-grid">
         <div class="modal-kpi"><div class="modal-kpi-label">Total Alunos</div><div class="modal-kpi-val">${m.total_students ?? 0}</div></div>
@@ -690,7 +700,7 @@ async function openGrowthModal(personalId) {
             <select class="field-input" id="gm-meridian-plan"><option value="">—</option>${planOptions}</select>
           </div>
           <div>
-            <label class="field-label">Valor pago (R$)</label>
+            <label class="field-label">Valor pago (€)</label>
             <input class="field-input" id="gm-meridian-price" type="number" step="0.01" min="0" value="${pricePaid}" />
           </div>
           <div>
@@ -708,9 +718,9 @@ async function openGrowthModal(personalId) {
 }
 
 const MERIDIAN_PLANS_FRONT = {
-  mensal:    { label: 'Mensal',    price: 119.90 },
-  semestral: { label: 'Semestral', price: 519.90 },
-  anual:     { label: 'Anual',     price: 1099.90 },
+  mensal:    { label: 'Mensal',    price: 19.90 },
+  semestral: { label: 'Semestral', price: 149.90 },
+  anual:     { label: 'Anual',     price: 289.90 },
 };
 
 async function salvarMeridianStatus(personalId) {

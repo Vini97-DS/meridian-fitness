@@ -1314,9 +1314,10 @@ canvas{background:transparent!important}
         </div>
         <div class="v-field">
           <label class="v-label">País</label>
-          <select class="v-select" id="cfg-pais">
+          <select class="v-select" id="cfg-pais" onchange="sugerirMoedaPorPais(this.value)">
             <option value="Brasil">Brasil</option>
             <option value="Portugal">Portugal</option>
+            <option value="Outro país da Europa">Outro país da Europa</option>
             <option value="EUA">EUA</option>
             <option value="Outro">Outro</option>
           </select>
@@ -1328,6 +1329,7 @@ canvas{background:transparent!important}
             <option value="USD">USD — Dólar</option>
             <option value="EUR">EUR — Euro</option>
           </select>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">Sugerida pelo país, mas pode trocar manualmente — é a moeda que você cobra do aluno, não necessariamente a do país</div>
         </div>
         <div class="v-field">
           <label class="v-label">Formas de pagamento</label>

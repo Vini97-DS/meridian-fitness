@@ -194,6 +194,14 @@ def create_users_table():
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_status TEXT DEFAULT 'tester'",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_started_at DATE",
                 "ALTER TABLE personals ADD COLUMN IF NOT EXISTS meridian_price_paid NUMERIC(10,2)",
+                # Suporte a multiplas moedas (Nivel 1 — cada profissional opera
+                # na moeda do pais onde atua). O nome "price_brl" mentia sobre
+                # o conteudo assim que o primeiro profissional fora do Brasil
+                # existisse — vira apenas "price", sem perda de dado (RENAME).
+                # Falha (e e ignorada) em todo restart apos a primeira vez,
+                # pois price_brl deixa de existir — mesmo padrao tolerante das
+                # outras migracoes desse bloco.
+                "ALTER TABLE plans RENAME COLUMN price_brl TO price",
             ]:
                 try:
                     cur2.execute(col_sql)
@@ -880,7 +888,7 @@ def generate_lead_ai_summary(lead_id: str):
 @app.get("/api/leads/{personal_id}")
 def get_leads(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
     rows = query(conn, """
-        SELECT l.*, p.name AS plan_name, p.price_brl, st.name AS referred_by_student_name
+        SELECT l.*, p.name AS plan_name, p.price AS plan_price, st.name AS referred_by_student_name
         FROM leads l
         LEFT JOIN plans p ON p.id = l.plan_id
         LEFT JOIN students st ON st.id = l.referred_by_student_id
@@ -1012,31 +1020,31 @@ class PlanCreate(BaseModel):
     personal_id:     str
     name:            str
     duration_months: int
-    price_brl:       float
+    price:           float
 
 class PlanUpdate(BaseModel):
     name:            Optional[str]   = None
     duration_months: Optional[int]   = None
-    price_brl:       Optional[float] = None
+    price:           Optional[float] = None
     is_active:       Optional[bool]  = None
 
 @app.post("/api/plans")
 def create_plan(data: PlanCreate, conn=Depends(get_db), _=Depends(get_current_user)):
     return execute(conn, """
-        INSERT INTO plans (personal_id, name, duration_months, price_brl)
-        VALUES (%s,%s,%s,%s) RETURNING id, name, duration_months, price_brl, is_active
-    """, (data.personal_id, data.name, data.duration_months, data.price_brl))
+        INSERT INTO plans (personal_id, name, duration_months, price)
+        VALUES (%s,%s,%s,%s) RETURNING id, name, duration_months, price, is_active
+    """, (data.personal_id, data.name, data.duration_months, data.price))
 
 @app.patch("/api/plans/{plan_id}")
 def update_plan(plan_id: str, data: PlanUpdate, conn=Depends(get_db), _=Depends(get_current_user)):
     fields, values = [], []
     if data.name            is not None: fields.append("name = %s");            values.append(data.name)
     if data.duration_months is not None: fields.append("duration_months = %s"); values.append(data.duration_months)
-    if data.price_brl       is not None: fields.append("price_brl = %s");       values.append(data.price_brl)
+    if data.price            is not None: fields.append("price = %s");          values.append(data.price)
     if data.is_active       is not None: fields.append("is_active = %s");       values.append(data.is_active)
     if not fields: raise HTTPException(400, "Nenhum campo para atualizar")
     values.append(plan_id)
-    return execute(conn, f"UPDATE plans SET {', '.join(fields)} WHERE id=%s RETURNING id, name, price_brl, is_active", values)
+    return execute(conn, f"UPDATE plans SET {', '.join(fields)} WHERE id=%s RETURNING id, name, price, is_active", values)
 
 # ═══════════════════════════════════════════════════════════════
 #  ASSINATURAS
@@ -1087,10 +1095,11 @@ def _check_admin_key(admin_key: str):
 # Meridian). Nao confundir com a tabela "plans", que sao os planos que CADA
 # profissional vende pros alunos DELE (Nivel 1).
 MERIDIAN_PLANS = {
-    "mensal":    {"duration_months": 1,  "price": 119.90,  "label": "Mensal"},
-    "semestral": {"duration_months": 6,  "price": 519.90,  "label": "Semestral"},
-    "anual":     {"duration_months": 12, "price": 1099.90, "label": "Anual"},
+    "mensal":    {"duration_months": 1,  "price": 19.90,  "label": "Mensal"},
+    "semestral": {"duration_months": 6,  "price": 149.90, "label": "Semestral"},
+    "anual":     {"duration_months": 12, "price": 289.90, "label": "Anual"},
 }
+MERIDIAN_CURRENCY_SYMBOL = "€"
 
 @app.get("/api/admin/overview")
 def admin_overview(admin_key: str, conn=Depends(get_db)):
@@ -1244,7 +1253,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
             FROM subscriptions sub JOIN plans p ON p.id = sub.plan_id
         )
         SELECT
-            p.id AS personal_id, u.name, u.email, u.role,
+            p.id AS personal_id, u.name, u.email, u.role, p.moeda,
             COUNT(DISTINCT sc.student_id) FILTER (
                 WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
             ) AS active_now,
@@ -1262,7 +1271,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
         FROM personals p
         JOIN users u ON u.id::text = p.clerk_user_id
         LEFT JOIN sub_calc sc ON sc.personal_id = p.id
-        GROUP BY p.id, u.name, u.email, u.role
+        GROUP BY p.id, u.name, u.email, u.role, p.moeda
     """, (months, months, months, months))
 
     result = []
@@ -1276,6 +1285,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
                     "down": students_delta["pct"] or 0, "no_data": -(10**6)}[students_delta["status"]]
         result.append({
             "personal_id": r["personal_id"], "name": r["name"], "email": r["email"], "role": r["role"],
+            "moeda": r["moeda"] or "BRL",
             "active_now": active_now, "active_then": active_then, "students_delta": students_delta,
             "mrr_now": mrr_now, "mrr_then": mrr_then, "mrr_delta": mrr_delta,
             "_sort_key": sort_key,
@@ -1296,7 +1306,8 @@ def admin_personal_metrics(personal_id: str, admin_key: str, conn=Depends(get_db
             COUNT(DISTINCT s.id)   AS total_students,
             COUNT(DISTINCT sub.id) AS total_subs,
             COUNT(DISTINCT c.id)   AS total_checkins,
-            p.meridian_plan, p.meridian_status, p.meridian_started_at, p.meridian_price_paid
+            p.meridian_plan, p.meridian_status, p.meridian_started_at, p.meridian_price_paid,
+            p.moeda
         FROM personals p
         LEFT JOIN students s ON s.personal_id = p.id
         LEFT JOIN subscriptions sub ON sub.student_id = s.id

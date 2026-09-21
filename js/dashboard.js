@@ -298,10 +298,23 @@ async function api(path, options = {}) {
 }
 
 // ── FORMAT HELPERS ───────────────────────────────────────
-function fmtBRL(n) {
-  if (!n || n === 0) return 'R$0';
-  if (n >= 1000) return 'R$' + (n/1000).toFixed(1) + 'K';
-  return 'R$' + Math.round(n).toLocaleString('pt-BR');
+// Cada profissional opera na moeda do pais onde atua (personals.moeda) —
+// valores sao salvos nativamente naquela moeda, nunca convertidos na
+// exibicao. A UI em si continua em portugues (pt-BR), so o simbolo/valor
+// muda — isso nao e uma internacionalizacao completa do idioma.
+const CURRENCY_SYMBOLS = { BRL: 'R$', USD: '$', EUR: '€' };
+function getCurrency() {
+  const s = JSON.parse(localStorage.getItem('mf_user') || 'null');
+  return (s && s.moeda) || 'BRL';
+}
+function currencySymbol() {
+  return CURRENCY_SYMBOLS[getCurrency()] || 'R$';
+}
+function fmtMoney(n) {
+  const sym = currencySymbol();
+  if (!n || n === 0) return sym + '0';
+  if (n >= 1000) return sym + (n/1000).toFixed(1) + 'K';
+  return sym + Math.round(n).toLocaleString('pt-BR');
 }
 function calcTime(since) {
   if (!since) return '—';
@@ -392,6 +405,7 @@ async function loadDashboard() {
       session.bio                  = personalData.bio || '';
       session.especialidade        = personalData.especialidade || '';
       session.meta_anual           = personalData.meta_anual;
+      session.moeda                = personalData.moeda || 'BRL';
       session.payment_link         = personalData.payment_link;
       session.pix_key              = personalData.pix_key;
       session.payment_instruction  = personalData.payment_instruction;
@@ -401,8 +415,9 @@ async function loadDashboard() {
         if (session.bio) { bioEl.textContent = session.bio; bioEl.style.display = ''; }
         else              { bioEl.textContent = ''; bioEl.style.display = 'none'; }
       }
-      // meta_anual só chega aqui — recalcula os cards de progresso de meta com o valor real
+      // meta_anual/moeda só chegam aqui — recalcula com os valores reais
       updateKPICards(metrics);
+      updateAlertBar(metrics);
     }
   }
 
@@ -446,7 +461,7 @@ async function loadDashboard() {
       if (!sm) return;
       const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
       set('v-kpi-vendas',     sm.vendas_mes || '0');
-      set('v-kpi-receita',    fmtBRL(sm.receita_mes || 0));
+      set('v-kpi-receita',    fmtMoney(sm.receita_mes || 0));
       set('v-kpi-fechamento', (sm.taxa_fechamento || 0) + '%');
       set('v-kpi-leads',      sm.total_leads || '0');
       renderChannelConversion(sm.conversion_by_channel || []);
@@ -466,35 +481,35 @@ function updateKPICards(m) {
 
   const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   // KPI cards
-  set('kpi-mrr-val',       fmtBRL(mrr));
+  set('kpi-mrr-val',       fmtMoney(mrr));
   set('kpi-alunos-val',    alunos || '0');
-  set('kpi-ticket-val',    fmtBRL(ticket));
+  set('kpi-ticket-val',    fmtMoney(ticket));
   set('kpi-renovacao-val', renov > 0 ? renov + '%' : '—');
   set('kpi-churn-val',     m?.churn_rate != null ? churn + '%' : '—');
-  set('kpi-ltv-val',       ltv   > 0 ? fmtBRL(ltv) : '—');
+  set('kpi-ltv-val',       ltv   > 0 ? fmtMoney(ltv) : '—');
   // Subs
   set('kpi-alunos-sub', alunos > 0 ? alunos + ' alunos ativos' : 'Nenhum aluno ainda');
   set('kpi-ticket-sub', ticket > 0 ? 'Ticket médio atual' : 'Sem assinaturas ativas');
   // Header pills (IDs diferentes para evitar conflito)
   set('pill-alunos-val', alunos || '0');
-  set('pill-mrr-val',    fmtBRL(mrr));
+  set('pill-mrr-val',    fmtMoney(mrr));
   // Top bar
-  set('top-bar-mrr', fmtBRL(mrr));
+  set('top-bar-mrr', fmtMoney(mrr));
 
   // Header pills
   const pills = document.querySelectorAll('.meta-pill span');
   if (pills[0]) pills[0].textContent = alunos;
-  if (pills[1]) pills[1].textContent = fmtBRL(mrr);
+  if (pills[1]) pills[1].textContent = fmtMoney(mrr);
   // Pill IDs
   const pillA = document.getElementById('pill-alunos-val');
   const pillM = document.getElementById('pill-mrr-val');
   if (pillA) pillA.textContent = alunos;
-  if (pillM) pillM.textContent = fmtBRL(mrr);
+  if (pillM) pillM.textContent = fmtMoney(mrr);
 
   // Outros KPIs — zerados até ter dados
   set('kpi-renovacao-val', m?.renewal_rate ? m.renewal_rate + '%' : '—');
   set('kpi-churn-val',     m?.churn_rate != null ? m.churn_rate + '%' : '—');
-  set('kpi-ltv-val',       m?.avg_ltv      ? fmtBRL(m.avg_ltv)   : '—');
+  set('kpi-ltv-val',       m?.avg_ltv      ? fmtMoney(m.avg_ltv)   : '—');
 
   // Meta mensal
   const session3   = JSON.parse(localStorage.getItem('mf_user')||'null');
@@ -503,15 +518,15 @@ function updateKPICards(m) {
   const mrrAtual   = m?.mrr || 0;
   if (metaMensal > 0) {
     const pct = Math.min(100, Math.round(mrrAtual / metaMensal * 100));
-    set('kpi-meta-val', fmtBRL(metaMensal));
-    set('kpi-meta-sub', pct + '% atingido · ' + fmtBRL(mrrAtual) + ' de ' + fmtBRL(metaMensal));
+    set('kpi-meta-val', fmtMoney(metaMensal));
+    set('kpi-meta-sub', pct + '% atingido · ' + fmtMoney(mrrAtual) + ' de ' + fmtMoney(metaMensal));
     const bar = document.getElementById('kpi-meta-bar');
     if (bar) bar.style.width = pct + '%';
     // Progresso mensal na aba config
     const prog = document.getElementById('cfg-meta-progresso');
     const pctEl = document.getElementById('cfg-meta-pct');
     const cfgBar = document.getElementById('cfg-meta-bar');
-    if (prog)   prog.textContent   = fmtBRL(mrrAtual) + ' / ' + fmtBRL(metaMensal) + '/mês';
+    if (prog)   prog.textContent   = fmtMoney(mrrAtual) + ' / ' + fmtMoney(metaMensal) + '/mês';
     if (pctEl)  pctEl.textContent  = pct + '% da meta mensal';
     if (cfgBar) cfgBar.style.width = pct + '%';
   }
@@ -524,7 +539,7 @@ function updateKPICards(m) {
     const pctAnoEl = document.getElementById('cfg-meta-anual-pct');
     const barAno = document.getElementById('cfg-meta-anual-bar');
     const anoLabel = document.getElementById('cfg-meta-ano-label');
-    if (progAno)  progAno.textContent  = fmtBRL(receitaAno) + ' / ' + fmtBRL(metaAnual) + '/ano';
+    if (progAno)  progAno.textContent  = fmtMoney(receitaAno) + ' / ' + fmtMoney(metaAnual) + '/ano';
     if (pctAnoEl) pctAnoEl.textContent = pctAno + '% da meta anual';
     if (barAno)   barAno.style.width   = pctAno + '%';
     if (anoLabel) anoLabel.textContent = new Date().getFullYear();
@@ -541,7 +556,7 @@ function updateAlertBar(m) {
   let   show  = false;
   if (e7 > 0) {
     if (expEl) expEl.style.display = 'flex';
-    if (expTx) expTx.textContent   = e7 + ' alunos — R$ ' + Math.round(e7v).toLocaleString('pt-BR') + ' em risco';
+    if (expTx) expTx.textContent   = e7 + ' alunos — ' + currencySymbol() + ' ' + Math.round(e7v).toLocaleString('pt-BR') + ' em risco';
     show = true;
   } else if (expEl) expEl.style.display = 'none';
   if (bar) bar.style.display = show ? 'flex' : 'none';
@@ -565,12 +580,12 @@ function initBICharts(m) {
       type:'line',
       data:{
         labels: m.mrr_history.map(r => r.month),
-        datasets:[{label:'MRR (R$)',data:m.mrr_history.map(r=>parseFloat(r.mrr)||0),
+        datasets:[{label:'MRR ('+currencySymbol()+')',data:m.mrr_history.map(r=>parseFloat(r.mrr)||0),
           borderColor:GOLD,backgroundColor:'rgba(201,168,76,0.08)',fill:true,tension:0.4,borderWidth:2.5,pointRadius:3,pointBackgroundColor:GOLD}]
       },
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{...tt,callbacks:{label:ctx=>'R$ '+ctx.parsed.y.toLocaleString()}}},
-        scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:8}}},y:{grid,ticks:{color:SILV,callback:v=>'R$'+(v/1000).toFixed(0)+'K'}}}}
+        plugins:{legend:{display:false},tooltip:{...tt,callbacks:{label:ctx=>currencySymbol()+' '+ctx.parsed.y.toLocaleString()}}},
+        scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:8}}},y:{grid,ticks:{color:SILV,callback:v=>currencySymbol()+(v/1000).toFixed(0)+'K'}}}}
     });
   } else { mkEmptyChart('mrrChart', empty); }
 
@@ -671,11 +686,11 @@ function initBICharts(m) {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } },
-          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label + ': R$ ' + ctx.parsed.y.toLocaleString('pt-BR') } }
+          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label + ': ' + currencySymbol() + ' ' + ctx.parsed.y.toLocaleString('pt-BR') } }
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: SILV, font: { size: 8 } } },
-          y: { grid, ticks: { color: SILV, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } }
+          y: { grid, ticks: { color: SILV, callback: v => currencySymbol() + (v/1000).toFixed(0) + 'K' } }
         }
       }
     });
@@ -710,7 +725,7 @@ function initBICharts(m) {
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: SILV } },
-          y: { grid, ticks: { color: SILV, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } }
+          y: { grid, ticks: { color: SILV, callback: v => currencySymbol() + (v/1000).toFixed(0) + 'K' } }
         }
       }
     });
@@ -758,7 +773,7 @@ function initBICharts(m) {
         labels: _roiLabels,
         datasets: [
           {
-            label: 'Receita (R$)',
+            label: 'Receita (' + currencySymbol() + ')',
             data: m.revenue_by_channel.map(r => parseFloat(r.revenue) || 0),
             backgroundColor: _roiColors.map(c => c + '55'),
             borderColor: _roiColors,
@@ -782,13 +797,13 @@ function initBICharts(m) {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { labels: { color: SILV, usePointStyle: true, font: { size: 9 } } },
-          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label === 'Receita (R$)'
-            ? 'Receita: R$ ' + ctx.parsed.y.toLocaleString('pt-BR')
+          tooltip: { ...tt, callbacks: { label: ctx => ctx.dataset.label === 'Receita (' + currencySymbol() + ')'
+            ? 'Receita: ' + currencySymbol() + ' ' + ctx.parsed.y.toLocaleString('pt-BR')
             : 'Alunos: ' + ctx.parsed.y } }
         },
         scales: {
           x:  { grid: { display: false }, ticks: { color: SILV, font: { size: 9 } } },
-          y:  { grid, ticks: { color: GOLD, callback: v => 'R$' + (v/1000).toFixed(0) + 'K' } },
+          y:  { grid, ticks: { color: GOLD, callback: v => currencySymbol() + (v/1000).toFixed(0) + 'K' } },
           y2: { position: 'right', grid: { display: false }, ticks: { color: SILV } }
         }
       }
@@ -990,9 +1005,9 @@ function loadStudentsFromAPI(data) {
       name:     s.name,
       time:     calcTime(s.student_since),
       sinceRaw: s.student_since || null,
-      plan:     (s.plan_name || '—') + (s.price_paid ? ' — R$'+Math.round(s.price_paid)+'/mês' : ''),
+      plan:     (s.plan_name || '—') + (s.price_paid ? ' — '+currencySymbol()+Math.round(s.price_paid)+'/mês' : ''),
       channel:  capitalize(s.channel),
-      ltv:      fmtBRL(s.ltv_total || 0),
+      ltv:      fmtMoney(s.ltv_total || 0),
       sk1: '—', sk2: '—', sk3: '—', sk4: '—',
       weightWeek:  { labels:[], kg:[] },
       weightMonth: { labels:[], kg:[], checkinIds:[], hasPhoto:[] },
@@ -1402,7 +1417,7 @@ function renderChurnListFromAPI(data) {
   }
   el.innerHTML = atRisk.map(s => {
     const level  = s.days_to_expire <= 7 ? 'high' : 'med';
-    const detail = 'Plano vence em ' + s.days_to_expire + ' dias · R$' + Math.round(s.price_paid||0);
+    const detail = 'Plano vence em ' + s.days_to_expire + ' dias · ' + currencySymbol() + Math.round(s.price_paid||0);
     const init   = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
     return '<div class="churn-item"><div class="churn-avatar">'+init+'</div><div><div class="churn-name">'+s.name+'</div><div class="churn-detail">'+detail+'</div></div><div class="churn-badge '+level+'">'+(level==='high'?'CRÍTICO':'MÉDIO')+'</div></div>';
   }).join('');
@@ -1419,7 +1434,7 @@ function renderTopTableFromAPI(data) {
   if (!el) return;
   const sorted = [...data].sort((a,b)=>(b.ltv_total||0)-(a.ltv_total||0)).slice(0,5);
   el.innerHTML = '<thead><tr><th>#</th><th>Nome</th><th>Plano</th><th>Tempo</th><th>Canal</th><th style="text-align:right">LTV</th><th style="text-align:right">Renovações</th></tr></thead><tbody>'
-    + sorted.map((s,i)=>'<tr><td class="num">'+(i+1)+'</td><td>'+s.name+'</td><td>'+(s.plan_name||'—')+'</td><td>'+calcTime(s.student_since)+'</td><td>'+capitalize(s.channel)+'</td><td class="num">'+fmtBRL(s.ltv_total||0)+'</td><td class="num">'+((s.renewals_count||0)+'×')+'</td></tr>').join('')
+    + sorted.map((s,i)=>'<tr><td class="num">'+(i+1)+'</td><td>'+s.name+'</td><td>'+(s.plan_name||'—')+'</td><td>'+calcTime(s.student_since)+'</td><td>'+capitalize(s.channel)+'</td><td class="num">'+fmtMoney(s.ltv_total||0)+'</td><td class="num">'+((s.renewals_count||0)+'×')+'</td></tr>').join('')
     + '</tbody>';
 }
 
@@ -1453,7 +1468,7 @@ function loadLeadsFromAPI(pipeline) {
         id:          l.id,
         name:        l.name,
         sub,
-        val:         l.plan_name ? l.plan_name + ' · R$'+Math.round(l.price_brl||0) : '',
+        val:         l.plan_name ? l.plan_name + ' · '+currencySymbol()+Math.round(l.plan_price||0) : '',
         days:        calcDays(l.created_at),
         phone:       l.phone || '',
         email:       l.email || '',
@@ -1470,7 +1485,7 @@ function loadLeadsFromAPI(pipeline) {
         aiSummary:   l.ai_summary || '',
         planId:      l.plan_id || '',
         planName:    l.plan_name || '',
-        planPrice:   l.price_brl || 0,
+        planPrice:   l.plan_price || 0,
         convertedTo: l.converted_to || null,
       };
       KDATA[status] = KDATA[status] || [];
@@ -1652,7 +1667,7 @@ async function abrirModalConversao(lead) {
   const resumoEl = document.getElementById('mconv-resumo');
   if (resumoEl) {
     resumoEl.textContent = lead.planName
-      ? lead.name + ' → ' + lead.planName + ' · R$' + Math.round(lead.planPrice || 0)
+      ? lead.name + ' → ' + lead.planName + ' · ' + currencySymbol() + Math.round(lead.planPrice || 0)
       : lead.name + ' → plano não definido no lead';
   }
 
@@ -1752,7 +1767,7 @@ async function salvarConversaoAluno() {
     try {
       await api('/subscriptions', { method:'POST', body:JSON.stringify({
         student_id: aluno.id, personal_id: personalId, plan_id: lead.planId,
-        price_paid: _convPlan.price_brl || lead.planPrice || 0,
+        price_paid: _convPlan.price || lead.planPrice || 0,
         starts_at: inicio, expires_at: fim, payment_method: pagamento, status: 'active',
       })});
     } catch (e) {
@@ -1820,12 +1835,12 @@ function loadPlansFromAPI(plans) {
   if (!grid||!plans.length) return;
   const colors = ['var(--red)','var(--amber)','var(--gold)','var(--green)'];
   grid.innerHTML = plans.map((p,i)=>`
-    <div class="plan-card-v${i===0?' sel':''}" data-id="${p.id}" data-dur="${p.duration_months}m" data-price="${p.price_brl}" onclick="vSelectPlan(this)">
+    <div class="plan-card-v${i===0?' sel':''}" data-id="${p.id}" data-dur="${p.duration_months}m" data-price="${p.price}" onclick="vSelectPlan(this)">
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:${colors[Math.min(i,3)]};text-transform:uppercase;margin-bottom:6px">${p.name}</div>
-      <div class="plan-price" style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--white)">R$${Math.round(p.price_brl)}</div>
+      <div class="plan-price" style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--white)">${currencySymbol()}${Math.round(p.price)}</div>
       <div class="plan-dur" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">${p.duration_months} meses</div>
     </div>`).join('');
-  if (plans.length) vSelectedPlan = {dur:plans[0].duration_months+'m', price:plans[0].price_brl, id:plans[0].id};
+  if (plans.length) vSelectedPlan = {dur:plans[0].duration_months+'m', price:plans[0].price, id:plans[0].id};
 }
 
 async function vSaveLead() {
@@ -1909,7 +1924,7 @@ function paymentMethodById(id) { return paymentMethods.find(m => m.id === id) ||
 function buildPaymentMessage(name, planLabel, planPrice, method) {
   let msg = `Olá ${name}! 😊\n\n`;
   if (planLabel && planPrice) {
-    msg += `Tudo certo para você começar com o *${planLabel}* — *R$ ${planPrice}*!\n\n`;
+    msg += `Tudo certo para você começar com o *${planLabel}* — *${currencySymbol()} ${planPrice}*!\n\n`;
   } else {
     msg += `Segue a forma de pagamento:\n\n`;
   }
@@ -1986,7 +2001,7 @@ function renderSalesTable(data, emptyMsg) {
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.name||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.plan_name||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${capitalize(s.channel||'—')}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);text-align:right;padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">R$${Math.round(s.price_paid||0)}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);text-align:right;padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${currencySymbol()}${Math.round(s.price_paid||0)}</td>
     <td style="padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)"><span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;${SC[s.statusKey]||SC.ativo}">${SL[s.statusKey]||SL.ativo}</span></td>
   </tr>`).join('');
 }
@@ -2089,6 +2104,8 @@ async function initConfig() {
       setVal('cfg-meta-anual', personalData.meta_anual);
       atualizarDisplayMeta(personalData.meta_anual);
     }
+    setVal('cfg-pais', personalData.pais);
+    setVal('cfg-moeda', personalData.moeda);
     (personalData.formas_pagamento || []).forEach(v => { const el = document.getElementById('cfg-pgto-'+v); if (el) el.checked = true; });
     (personalData.canais_atendimento || []).forEach(v => { const el = document.getElementById('cfg-canal-'+v); if (el) el.checked = true; });
 
@@ -2096,6 +2113,7 @@ async function initConfig() {
     const s2 = JSON.parse(localStorage.getItem('mf_user')||'null');
     if (s2) {
       s2.meta_anual = personalData.meta_anual;
+      s2.moeda      = personalData.moeda || 'BRL';
       localStorage.setItem('mf_user', JSON.stringify(s2));
     }
   }
@@ -2115,7 +2133,7 @@ function renderPlanosList(planos) {
   }
   const rows = planos.map(function(p) {
     const dur    = p.duration_months+(p.duration_months===1?' mês':' meses');
-    const preco  = 'R$'+parseFloat(p.price_brl).toFixed(2);
+    const preco  = currencySymbol()+parseFloat(p.price).toFixed(2);
     const status = p.is_active
       ? '<span style="font-size:8px;padding:3px 8px;background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)">ATIVO</span>'
       : '<span style="font-size:8px;padding:3px 8px;background:rgba(168,178,189,0.08);color:var(--dim);border:1px solid rgba(168,178,189,0.1)">INATIVO</span>';
@@ -2157,7 +2175,7 @@ function editarPlano(planId) {
   if (!p) return;
   document.getElementById('cfg-plano-form-title').textContent='EDITAR PLANO';
   document.getElementById('cfg-plano-nome').value=p.name;
-  document.getElementById('cfg-plano-preco').value=p.price_brl;
+  document.getElementById('cfg-plano-preco').value=p.price;
   document.getElementById('cfg-plano-duracao').value=p.duration_months;
   document.getElementById('cfg-plano-id').value=planId;
   document.getElementById('cfg-plano-ok').style.display='none';
@@ -2179,8 +2197,8 @@ async function salvarPlano() {
   const btn=document.getElementById('cfg-plano-save-btn');
   btn.disabled=true; btn.textContent='Salvando...';
   try {
-    if(planId) { await api('/plans/'+planId,{method:'PATCH',body:JSON.stringify({name:nome,duration_months:dur,price_brl:preco})}); }
-    else       { await api('/plans',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,duration_months:dur,price_brl:preco})}); }
+    if(planId) { await api('/plans/'+planId,{method:'PATCH',body:JSON.stringify({name:nome,duration_months:dur,price:preco})}); }
+    else       { await api('/plans',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,duration_months:dur,price:preco})}); }
     const planos=await api('/plans/'+personalId+'?all=true').catch(()=>[]);
     cfgPlanos=planos||[];
     renderPlanosList(cfgPlanos);
@@ -2203,7 +2221,7 @@ function populatePlanoSelect(planos) {
   const sel=document.getElementById('cfg-aluno-plano');
   if(!sel) return;
   sel.innerHTML='<option value="">Selecione o plano...</option>'
-    +planos.filter(p=>p.is_active).map(p=>'<option value="'+p.id+'" data-price="'+p.price_brl+'">'+p.name+' — R$'+parseFloat(p.price_brl).toFixed(0)+'</option>').join('');
+    +planos.filter(p=>p.is_active).map(p=>'<option value="'+p.id+'" data-price="'+p.price+'">'+p.name+' — '+currencySymbol()+parseFloat(p.price).toFixed(0)+'</option>').join('');
 }
 function toggleCadastroAluno() {
   const form=document.getElementById('cfg-aluno-form');
@@ -2244,7 +2262,7 @@ async function cadastrarAluno() {
     const cidadeAluno=document.getElementById('cfg-aluno-cidade-aluno')?.value || null;
     const restricao  =document.getElementById('cfg-aluno-restricao')?.value.trim() || null;
     const aluno=await api('/students',{method:'POST',body:JSON.stringify({personal_id:personalId,name:nome,phone,email:email||null,goal:obj,channel:canal,weight_initial:peso,bf_initial:bf,notes:obs||null,gender:genero||null,birth_date:nascimento||null,country:paisAluno||null,state:estadoAluno||null,city:cidadeAluno||null,dietary_restrictions:restricao})});
-    await api('/subscriptions',{method:'POST',body:JSON.stringify({student_id:aluno.id,personal_id:personalId,plan_id:planId,price_paid:plano?.price_brl||0,starts_at:inicio,expires_at:fim,payment_method:pgto,status:'active'})});
+    await api('/subscriptions',{method:'POST',body:JSON.stringify({student_id:aluno.id,personal_id:personalId,plan_id:planId,price_paid:plano?.price||0,starts_at:inicio,expires_at:fim,payment_method:pgto,status:'active'})});
     // Salvar fotos iniciais (4 poses)
     async function fotoParaBase64(inputId) {
       const input = document.getElementById(inputId);
@@ -2308,7 +2326,7 @@ function renderAlunosList(alunos) {
     const sid=a.id, sname=a.name.replace(/'/g,'\'');
     const renovBtn='<button data-action="renovar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(201,168,76,0.25);color:var(--gold);cursor:pointer;margin-right:6px">Renovar</button>';
     const encBtn='<button data-action="encerrar" data-id="'+sid+'" data-name="'+sname+'" style="font-size:8px;padding:4px 10px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(248,113,113,0.25);color:var(--red);cursor:pointer">Encerrar</button>';
-    return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtBRL(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
+    return '<tr><td>'+a.name+'</td><td>'+(a.plan_name||'—')+'</td><td style="color:'+daysColor+'">'+daysText+'</td><td style="text-transform:capitalize">'+(a.channel||'—')+'</td><td style="text-align:right;color:var(--gold)">'+fmtMoney(a.ltv_total||0)+'</td><td style="text-align:right;white-space:nowrap">'+renovBtn+encBtn+'</td></tr>';
   }).join('');
   const pagerHtml = totalPages > 1
     ? '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-family:\'DM Mono\',monospace;font-size:9px;color:var(--dim)">'
@@ -2368,7 +2386,7 @@ function abrirRenovacao(studentId, name) {
   // Populate plan select
   const sel = document.getElementById('cfg-renov-plano');
   sel.innerHTML = cfgPlanos.filter(p=>p.is_active).map(p =>
-    '<option value="'+p.id+'" data-months="'+p.duration_months+'">'+p.name+' — R$'+parseFloat(p.price_brl).toFixed(0)+'</option>'
+    '<option value="'+p.id+'" data-months="'+p.duration_months+'">'+p.name+' — '+currencySymbol()+parseFloat(p.price).toFixed(0)+'</option>'
   ).join('');
   form.style.display = 'block';
   form.scrollIntoView({ behavior:'smooth', block:'nearest' });
@@ -2403,7 +2421,7 @@ async function confirmarRenovacao() {
       student_id:     studentId,
       personal_id:    personalId,
       plan_id:        planId,
-      price_paid:     plano ? plano.price_brl : 0,
+      price_paid:     plano ? plano.price : 0,
       starts_at:      inicio,
       expires_at:     fim,
       payment_method: 'pix',
@@ -2455,6 +2473,7 @@ async function salvarPerfil(){
     session.name = nome;
     session.bio           = bio;
     session.especialidade = esp;
+    session.moeda          = moeda;
     localStorage.setItem('mf_user', JSON.stringify(session));
   }
   const h1 = document.getElementById('dash-user-h1');
@@ -2482,6 +2501,10 @@ async function salvarPerfil(){
   }
   okEl.style.display='block';
   setTimeout(()=>okEl.style.display='none',2500);
+  // Moeda pode ter mudado — recalcula os cards/gráficos que já estão na tela
+  // sem precisar recarregar a página inteira
+  if (_lastMetrics) { updateKPICards(_lastMetrics); initBICharts(_lastMetrics); }
+  if (cfgPlanos.length) { renderPlanosList(cfgPlanos); populatePlanoSelect(cfgPlanos); loadPlansFromAPI(cfgPlanos.filter(p=>p.is_active)); }
 }
 
 // ── WHATSAPP INTELIGENTE ──────────────────────────────────
@@ -2642,10 +2665,20 @@ async function salvarMeta() {
   } catch(err) { alert('Erro ao salvar meta: ' + err.message); }
 }
 
+// Sugere a moeda pelo pais (Brasil->BRL, Europa->EUR, EUA->USD) — so um
+// ponto de partida, o profissional pode trocar manualmente depois, ja que
+// "pais onde mora" e "moeda que cobra do aluno" podem nao ser a mesma coisa.
+function sugerirMoedaPorPais(pais) {
+  const sugestao = { 'Brasil': 'BRL', 'Portugal': 'EUR', 'Outro país da Europa': 'EUR', 'EUA': 'USD' }[pais];
+  if (!sugestao) return; // "Outro" — deixa como esta, escolha manual
+  const sel = document.getElementById('cfg-moeda');
+  if (sel) sel.value = sugestao;
+}
+
 function atualizarDisplayMeta(metaAnual) {
   const metaMensal = metaAnual / 12;
   const calcEl = document.getElementById('cfg-meta-mensal-calc');
-  if (calcEl) calcEl.textContent = 'R$ ' + Math.round(metaMensal).toLocaleString('pt-BR') + '/mês';
+  if (calcEl) calcEl.textContent = currencySymbol() + ' ' + Math.round(metaMensal).toLocaleString('pt-BR') + '/mês';
 }
 
 document.addEventListener('input', (e) => {
@@ -2810,7 +2843,7 @@ async function loadResumoTab() {
   const countEl = document.getElementById('resumo-renovacoes-count');
   const valEl   = document.getElementById('resumo-renovacoes-val');
   if (countEl) countEl.textContent = e7count || '0';
-  if (valEl)   valEl.textContent   = e7count > 0 ? fmtBRL(e7val) + ' em risco' : 'Nenhuma renovação urgente';
+  if (valEl)   valEl.textContent   = e7count > 0 ? fmtMoney(e7val) + ' em risco' : 'Nenhuma renovação urgente';
 
   // Leads quentes sem contato há 3+ dias (proposta há 3+ dias)
   const quentes = (KDATA.proposta || []).filter(c => c.dp >= 3);
@@ -2826,7 +2859,7 @@ async function loadResumoTab() {
   const acaoBtnEl = document.getElementById('resumo-acao-btn');
   if (acaoEl) {
     if (e7count > 0) {
-      acaoEl.textContent = 'Você tem ' + e7count + ' renovação(ões) nos próximos 7 dias gerando ' + fmtBRL(e7val) + '. Entre em contato agora para garantir a retenção.';
+      acaoEl.textContent = 'Você tem ' + e7count + ' renovação(ões) nos próximos 7 dias gerando ' + fmtMoney(e7val) + '. Entre em contato agora para garantir a retenção.';
       if (acaoBtnEl) {
         acaoBtnEl.textContent = 'Ver Alunos →';
         acaoBtnEl.onclick = () => switchTab('config', document.querySelector('[onclick*="config"]'));
@@ -2851,10 +2884,10 @@ async function loadResumoTab() {
   const compEl = document.getElementById('resumo-comparativo');
   if (compEl && m) {
     const items = [
-      { label:'MRR Atual',       val: fmtBRL(m.mrr||0),          color:'var(--gold)'  },
+      { label:'MRR Atual',       val: fmtMoney(m.mrr||0),          color:'var(--gold)'  },
       { label:'Alunos Ativos',   val: (m.active_students||0)+'', color:'var(--green)' },
       { label:'Taxa Renovação',  val: (m.renewal_rate||0)+'%',   color:'var(--blue)'  },
-      { label:'LTV Médio',       val: fmtBRL(m.avg_ltv||0),       color:'var(--amber)' },
+      { label:'LTV Médio',       val: fmtMoney(m.avg_ltv||0),       color:'var(--amber)' },
     ];
     compEl.innerHTML = items.map(i => `
       <div style="background:var(--navy2);border:1px solid rgba(168,178,189,0.08);padding:18px;text-align:center">
