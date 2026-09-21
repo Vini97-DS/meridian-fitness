@@ -1254,6 +1254,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
         )
         SELECT
             p.id AS personal_id, u.name, u.email, u.role, p.moeda,
+            p.created_at, p.meridian_started_at,
             COUNT(DISTINCT sc.student_id) FILTER (
                 WHERE sc.starts_at <= CURRENT_DATE AND sc.effective_end >= CURRENT_DATE
             ) AS active_now,
@@ -1271,7 +1272,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
         FROM personals p
         JOIN users u ON u.id::text = p.clerk_user_id
         LEFT JOIN sub_calc sc ON sc.personal_id = p.id
-        GROUP BY p.id, u.name, u.email, u.role, p.moeda
+        GROUP BY p.id, u.name, u.email, u.role, p.moeda, p.created_at, p.meridian_started_at
     """, (months, months, months, months))
 
     result = []
@@ -1286,6 +1287,7 @@ def admin_growth(admin_key: str, months: int = 1, conn=Depends(get_db)):
         result.append({
             "personal_id": r["personal_id"], "name": r["name"], "email": r["email"], "role": r["role"],
             "moeda": r["moeda"] or "BRL",
+            "created_at": r["created_at"], "meridian_started_at": r["meridian_started_at"],
             "active_now": active_now, "active_then": active_then, "students_delta": students_delta,
             "mrr_now": mrr_now, "mrr_then": mrr_then, "mrr_delta": mrr_delta,
             "_sort_key": sort_key,
