@@ -679,10 +679,10 @@ canvas{background:transparent!important}
     <div class="kpi-sub" id="kpi-ticket-sub">—</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">Taxa de Renovação</div>
-    <div class="kpi-value"><span id="kpi-renovacao-val">—</span></div>
-    <div class="kpi-sub" id="kpi-renovacao-sub">—</div>
-    
+    <div class="kpi-label">CAC</div>
+    <div class="kpi-value"><span id="kpi-cac-val">—</span></div>
+    <div class="kpi-sub" id="kpi-cac-sub">Custo de aquisição por aluno</div>
+
   </div>
   <div class="kpi-card">
     <div class="kpi-label">Churn Rate</div>
@@ -1462,6 +1462,59 @@ canvas{background:transparent!important}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px" id="cfg-meta-anual-pct">0% da meta anual</div>
       </div>
       <div id="cfg-meta-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Meta salva com sucesso</div>
+    </div>
+  </div>
+
+  <!-- ── CUSTO DE AQUISIÇÃO DE ALUNO ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Custo de Aquisição de Aluno</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Registrar Custo de Aquisição</div>
+          <div class="panel-sub">Lançamento manual — alimenta o CAC na aba BI (custos ÷ alunos novos no período)</div>
+        </div>
+        <button class="vbtn vbtn-green" onclick="abrirModalCustoAquisicao()">+ Adicionar Custo</button>
+      </div>
+
+      <!-- Lista de custos lançados -->
+      <div id="cfg-custos-lista" style="margin-top:8px">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Carregando...</div>
+      </div>
+
+      <!-- Form novo custo -->
+      <div id="cfg-custo-form" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid rgba(168,178,189,0.08)">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:0.1em;margin-bottom:14px">NOVO CUSTO</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="v-field">
+            <label class="v-label">Valor *</label>
+            <input class="v-input" id="cfg-custo-valor" type="number" placeholder="Ex: 50.00" step="0.01" min="0" />
+          </div>
+          <div class="v-field">
+            <label class="v-label">Categoria *</label>
+            <select class="v-select" id="cfg-custo-categoria">
+              <option value="trafego_pago">Tráfego pago</option>
+              <option value="conteudo">Conteúdo</option>
+              <option value="indicacao_paga">Indicação paga</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="v-field">
+            <label class="v-label">Data *</label>
+            <input class="v-input" id="cfg-custo-data" type="date" />
+          </div>
+        </div>
+        <div class="v-field" style="margin-top:14px">
+          <label class="v-label">Descrição (opcional)</label>
+          <input class="v-input" id="cfg-custo-descricao" type="text" placeholder="Ex: campanha Instagram Ads semana 3" />
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="vbtn vbtn-green" onclick="salvarCustoAquisicao()" id="cfg-custo-save-btn">Salvar Custo</button>
+          <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="fecharModalCustoAquisicao()">Cancelar</button>
+        </div>
+        <div id="cfg-custo-ok" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Custo lançado com sucesso</div>
+        <div id="cfg-custo-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+      </div>
     </div>
   </div>
 

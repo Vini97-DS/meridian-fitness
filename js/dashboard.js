@@ -476,7 +476,6 @@ function updateKPICards(m) {
   const mrr    = m?.mrr            || 0;
   const alunos = m?.active_students || 0;
   const ticket = m?.avg_ticket      || 0;
-  const renov  = m?.renewal_rate    || 0;
   const churn  = m?.churn_rate      || 0;
   const ltv    = m?.avg_ltv         || 0;
 
@@ -485,7 +484,7 @@ function updateKPICards(m) {
   set('kpi-mrr-val',       fmtMoney(mrr));
   set('kpi-alunos-val',    alunos || '0');
   set('kpi-ticket-val',    fmtMoney(ticket));
-  set('kpi-renovacao-val', renov > 0 ? renov + '%' : '—');
+  set('kpi-cac-val',       m?.cac != null ? fmtMoney(m.cac) : '—');
   set('kpi-churn-val',     m?.churn_rate != null ? churn + '%' : '—');
   set('kpi-ltv-val',       ltv   > 0 ? fmtMoney(ltv) : '—');
   // Subs
@@ -508,7 +507,7 @@ function updateKPICards(m) {
   if (pillM) pillM.textContent = fmtMoney(mrr);
 
   // Outros KPIs — zerados até ter dados
-  set('kpi-renovacao-val', m?.renewal_rate ? m.renewal_rate + '%' : '—');
+  set('kpi-cac-val',       m?.cac != null ? fmtMoney(m.cac) : '—');
   set('kpi-churn-val',     m?.churn_rate != null ? m.churn_rate + '%' : '—');
   set('kpi-ltv-val',       m?.avg_ltv      ? fmtMoney(m.avg_ltv)   : '—');
 
@@ -2207,6 +2206,79 @@ async function initConfig() {
   await loadPaymentMethods();
   renderPaymentMethodsList();
   populatePaymentMethodSelect(document.getElementById('v-lead-payment'));
+
+  // Custos de aquisição de aluno (alimenta o CAC na aba BI)
+  loadCustosAquisicao();
+}
+
+// ── CUSTO DE AQUISIÇÃO DE ALUNO (Nível 1 — alimenta o CAC na aba BI) ──
+let cfgCustos = [];
+const CUSTO_CATEGORY_LABELS = { trafego_pago:'Tráfego pago', conteudo:'Conteúdo', indicacao_paga:'Indicação paga', outro:'Outro' };
+
+async function loadCustosAquisicao() {
+  const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session && (session.personal_id||session.id);
+  if (!personalId) return;
+  try { cfgCustos = await api('/acquisition-costs/'+personalId) || []; }
+  catch { cfgCustos = []; }
+  renderCustosList(cfgCustos);
+}
+
+function renderCustosList(custos) {
+  const el = document.getElementById('cfg-custos-lista');
+  if (!el) return;
+  if (!custos.length) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--dim);padding:20px 0;text-align:center">Nenhum custo lançado. Clique em + Adicionar Custo para começar.</div>';
+    return;
+  }
+  const rows = custos.map(function(c) {
+    const data = new Date(c.date).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const valor = currencySymbol()+parseFloat(c.amount).toFixed(2);
+    return '<tr><td>'+data+'</td><td>'+(CUSTO_CATEGORY_LABELS[c.category]||c.category)+'</td><td>'+(c.description||'—')+'</td><td style="text-align:right;color:var(--gold)">'+valor+'</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="data-table" style="width:100%"><thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function abrirModalCustoAquisicao() {
+  document.getElementById('cfg-custo-valor').value='';
+  document.getElementById('cfg-custo-categoria').value='trafego_pago';
+  document.getElementById('cfg-custo-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('cfg-custo-descricao').value='';
+  document.getElementById('cfg-custo-ok').style.display='none';
+  document.getElementById('cfg-custo-erro').style.display='none';
+  document.getElementById('cfg-custo-form').style.display='block';
+  document.getElementById('cfg-custo-valor').focus();
+}
+function fecharModalCustoAquisicao() {
+  document.getElementById('cfg-custo-form').style.display='none';
+}
+async function salvarCustoAquisicao() {
+  const valor     = parseFloat(document.getElementById('cfg-custo-valor').value);
+  const categoria = document.getElementById('cfg-custo-categoria').value;
+  const data      = document.getElementById('cfg-custo-data').value;
+  const descricao = document.getElementById('cfg-custo-descricao').value.trim();
+  const erroEl = document.getElementById('cfg-custo-erro');
+  const okEl   = document.getElementById('cfg-custo-ok');
+  erroEl.style.display='none';
+  if (!valor || valor<=0) { erroEl.textContent='Informe um valor válido.'; erroEl.style.display='block'; return; }
+  const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session && (session.personal_id||session.id);
+  const btn = document.getElementById('cfg-custo-save-btn');
+  btn.disabled=true; btn.textContent='Salvando...';
+  try {
+    await api('/acquisition-costs', { method:'POST', body: JSON.stringify({
+      personal_id: personalId, amount: valor, category: categoria,
+      date: data || null, description: descricao || null,
+    })});
+    await loadCustosAquisicao();
+    okEl.style.display='block';
+    setTimeout(()=>{fecharModalCustoAquisicao(); okEl.style.display='none';},2000);
+    // Custo novo pode mudar o CAC — recalcula os KPIs da aba BI se ja carregados
+    if (_lastMetrics && personalId) {
+      api('/metrics/'+personalId+'?period='+_biPeriod).then(m=>{ _lastMetrics=m; updateKPICards(m); }).catch(()=>{});
+    }
+  } catch(err) { erroEl.textContent = err.message||'Erro.'; erroEl.style.display='block'; }
+  btn.disabled=false; btn.textContent='Salvar Custo';
 }
 
 function renderPlanosList(planos) {

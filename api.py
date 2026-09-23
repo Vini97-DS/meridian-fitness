@@ -249,6 +249,27 @@ def create_users_table():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # student_acquisition_costs — custo de CADA PROFISSIONAL adquirir
+            # um ALUNO (Nivel 1), nao confundir com acquisition_costs acima
+            # (custo do Meridian adquirir um PROFISSIONAL, Nivel 2). "amount"
+            # e salvo na moeda do proprio profissional (personals.moeda),
+            # sem conversao automatica — mesma regra do multi-moeda.
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS student_acquisition_costs (
+                        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        personal_id UUID NOT NULL REFERENCES personals(id),
+                        amount      NUMERIC(10,2) NOT NULL,
+                        currency    TEXT DEFAULT 'BRL',
+                        category    TEXT NOT NULL,
+                        description TEXT,
+                        date        DATE NOT NULL DEFAULT CURRENT_DATE,
+                        created_at  TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # Backfill: convite cujo e-mail já tem conta criada nunca era
             # marcado como usado (o UPDATE correspondente nunca existiu em
             # /api/auth/register) — corrige o que já ficou pra trás.
@@ -541,6 +562,27 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
     churned_students = int(cd.get("churned_students") or 0)
     churn_rate = round(churned_students / total_students * 100) if total_students > 0 else 0
 
+    # CAC (Nivel 1): custo de aquisicao lancado no periodo / novos alunos no
+    # mesmo periodo. "Novo aluno" = MIN(starts_at) da 1a assinatura dele cai
+    # dentro do periodo (mesma definicao ja usada em student_since/BI) — nao
+    # conta renovacao como aquisicao nova.
+    custo_periodo_row = query(conn, f"""
+        SELECT COALESCE(SUM(amount),0) AS total FROM student_acquisition_costs
+        WHERE personal_id = %s AND date >= CURRENT_DATE - INTERVAL '{period} days'
+    """, (personal_id,))
+    novos_alunos_row = query(conn, f"""
+        WITH first_sub AS (
+            SELECT student_id, MIN(starts_at) AS first_start
+            FROM subscriptions WHERE personal_id = %s
+            GROUP BY student_id
+        )
+        SELECT COUNT(*) AS n FROM first_sub
+        WHERE first_start >= CURRENT_DATE - INTERVAL '{period} days'
+    """, (personal_id,))
+    custo_periodo  = float((custo_periodo_row[0] if custo_periodo_row else {}).get("total") or 0)
+    novos_alunos   = int((novos_alunos_row[0] if novos_alunos_row else {}).get("n") or 0)
+    cac = round(custo_periodo / novos_alunos, 2) if custo_periodo > 0 and novos_alunos > 0 else None
+
     # Receita acumulada no ano corrente (pra progresso da meta anual em Config)
     receita_ano_data = query(conn, """
         SELECT COALESCE(SUM(price_paid),0) AS receita_ano
@@ -556,6 +598,7 @@ def _compute_bi_metrics(conn, personal_id: str, period: int = 365):
         "avg_ticket":      float(m.get("avg_ticket") or 0),
         "renewal_rate":    renewal_rate,
         "churn_rate":      churn_rate,
+        "cac":             cac,
         "avg_ltv":         round(avg_ltv, 2),
         "receita_ano":     round(receita_ano, 2),
         "expiring_7d":     {"count": int((e7[0] if e7 else {}).get("count") or 0),
@@ -681,6 +724,44 @@ def _compute_sales_metrics(conn, personal_id: str):
         "conversion_by_channel": conversion_by_channel,
         "tempo_medio_dias":      tempo_medio_dias,
     }
+
+# ═══════════════════════════════════════════════════════════════
+#  CUSTO DE AQUISIÇÃO DE ALUNO (Nivel 1 — custo do profissional pra
+#  adquirir alunos dele, alimenta o CAC da aba BI. Nao confundir com
+#  acquisition_costs, que e o custo do Meridian pra adquirir PROFISSIONAIS)
+# ═══════════════════════════════════════════════════════════════
+STUDENT_ACQUISITION_CATEGORIES = ("trafego_pago", "conteudo", "indicacao_paga", "outro")
+
+class AcquisitionCostCreate(BaseModel):
+    personal_id: str
+    amount:      float
+    category:    str
+    currency:    Optional[str] = None
+    description: Optional[str] = None
+    date:        Optional[str] = None
+
+@app.get("/api/acquisition-costs/{personal_id}")
+def list_student_acquisition_costs(personal_id: str, conn=Depends(get_db), _=Depends(get_current_user)):
+    return query(conn, """
+        SELECT * FROM student_acquisition_costs
+        WHERE personal_id = %s ORDER BY date DESC, created_at DESC LIMIT 100
+    """, (personal_id,))
+
+@app.post("/api/acquisition-costs")
+def create_student_acquisition_cost(data: AcquisitionCostCreate, conn=Depends(get_db), _=Depends(get_current_user)):
+    if data.amount <= 0:
+        raise HTTPException(400, "Valor deve ser maior que zero")
+    if data.category not in STUDENT_ACQUISITION_CATEGORIES:
+        raise HTTPException(400, "Categoria invalida")
+    currency = data.currency
+    if not currency:
+        personal = query(conn, "SELECT moeda FROM personals WHERE id=%s", (data.personal_id,))
+        currency = (personal[0]["moeda"] if personal else None) or "BRL"
+    return execute(conn, """
+        INSERT INTO student_acquisition_costs (personal_id, amount, currency, category, description, date)
+        VALUES (%s, %s, %s, %s, %s, COALESCE(%s, CURRENT_DATE))
+        RETURNING id
+    """, (data.personal_id, data.amount, currency, data.category, data.description, data.date))
 
 # ═══════════════════════════════════════════════════════════════
 #  ALUNOS
