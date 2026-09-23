@@ -642,6 +642,19 @@ def _compute_sales_metrics(conn, personal_id: str):
         WHERE personal_id = %s
         GROUP BY channel
     """, (personal_id,))
+    # Tempo medio entre 1o contato e desfecho final (fechado OU perdido —
+    # qualquer resultado conta, nao so venda). Nao existe historico de
+    # mudanca de status, entao usa created_at (criacao do lead) ate
+    # updated_at (ultima alteracao do registro) como aproximacao — se
+    # alguem editar notas de um lead ja fechado, o tempo desse lead fica
+    # inflado, mas e o unico dado disponivel sem criar rastreamento novo.
+    tempo_medio_row = query(conn, """
+        SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) AS avg_seconds
+        FROM leads
+        WHERE personal_id = %s AND status IN ('fechado', 'perdido')
+    """, (personal_id,))
+    avg_seconds = (tempo_medio_row[0] or {}).get('avg_seconds') if tempo_medio_row else None
+    tempo_medio_dias = round(avg_seconds / 86400, 1) if avg_seconds is not None else None
     cm = current_month[0] if current_month else {}
     pl = pipeline[0] if pipeline else {}
     total_leads = int(pl.get('total_leads') or 0)
@@ -666,6 +679,7 @@ def _compute_sales_metrics(conn, personal_id: str):
         "taxa_fechamento":       round(propostas / total_leads * 100) if total_leads > 0 else 0,
         "total_leads":           total_leads,
         "conversion_by_channel": conversion_by_channel,
+        "tempo_medio_dias":      tempo_medio_dias,
     }
 
 # ═══════════════════════════════════════════════════════════════

@@ -194,6 +194,17 @@ body::before{content:'';position:fixed;inset:0;
 .student-select{background:var(--navy2);border:1px solid rgba(201,168,76,0.2);color:var(--white);
   font-family:'DM Mono',monospace;font-size:11px;padding:8px 14px;min-height:44px;outline:none;cursor:pointer;min-width:220px}
 .student-select option{background:var(--navy2)}
+.student-search-wrap{position:relative;min-width:240px}
+.student-search-input{background:var(--navy2);border:1px solid rgba(201,168,76,0.2);color:var(--white);
+  font-family:'DM Mono',monospace;font-size:11px;padding:8px 14px;min-height:44px;outline:none;width:100%;box-sizing:border-box}
+.student-search-input::placeholder{color:var(--dim)}
+.student-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:10;
+  background:var(--navy2);border:1px solid rgba(201,168,76,0.25);max-height:186px;overflow-y:auto;display:none;box-shadow:0 8px 20px rgba(0,0,0,0.3)}
+.student-search-results.open{display:block}
+.student-search-item{padding:9px 14px;font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);cursor:pointer;border-bottom:1px solid rgba(168,178,189,0.06)}
+.student-search-item:last-child{border-bottom:none}
+.student-search-item:hover{background:rgba(201,168,76,0.08);color:var(--white)}
+.student-search-empty{padding:12px 14px;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
 .filter-btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
   padding:8px 18px;min-height:44px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);color:var(--gold);cursor:pointer;transition:all 0.2s}
 .filter-btn:hover{background:rgba(201,168,76,0.15)}
@@ -920,7 +931,7 @@ canvas{background:transparent!important}
     <div class="kpi-card">
       <div class="kpi-label">Tempo Médio</div>
       <div class="kpi-value" id="v-kpi-tempo">—</div>
-      <div class="kpi-sub">1º contato → pagamento</div>
+      <div class="kpi-sub">1º contato → desfecho final</div>
     </div>
   </div>
 
@@ -1054,6 +1065,7 @@ canvas{background:transparent!important}
         <tbody id="v-sales-body"></tbody>
       </table>
     </div>
+    <div id="v-sales-pager" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)"></div>
   </div>
 
   <!-- Mix de planos + Conversão por canal -->
@@ -1112,7 +1124,12 @@ canvas{background:transparent!important}
   <!-- STUDENT FILTER -->
   <div class="student-filter" style="position:sticky;top:49px;z-index:90;background:var(--navy);padding:12px 40px;margin:0 -40px;border-bottom:1px solid rgba(201,168,76,0.08)">
     <span class="filter-label">Selecionar Aluno:</span>
-    <select class="student-select" id="studentSelect" onchange="updateStudent()"></select>
+    <div class="student-search-wrap">
+      <input class="student-search-input" id="studentSearchInput" type="text" placeholder="Buscar aluno por nome..." autocomplete="off"
+        oninput="filterStudentSearch(this.value)" onfocus="filterStudentSearch(this.value)" />
+      <div class="student-search-results" id="studentSearchResults"></div>
+    </div>
+    <select class="student-select" id="studentSelect" onchange="updateStudent()" style="display:none"></select>
     <button class="filter-btn">Filtrar</button>
     <button class="filter-btn" style="border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.05)">Ver Apenas Churn Risk</button>
   </div>

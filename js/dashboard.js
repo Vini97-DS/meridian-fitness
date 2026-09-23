@@ -464,6 +464,7 @@ async function loadDashboard() {
       set('v-kpi-receita',    fmtMoney(sm.receita_mes || 0));
       set('v-kpi-fechamento', (sm.taxa_fechamento || 0) + '%');
       set('v-kpi-leads',      sm.total_leads || '0');
+      set('v-kpi-tempo',      sm.tempo_medio_dias != null ? sm.tempo_medio_dias + 'd' : '—');
       renderChannelConversion(sm.conversion_by_channel || []);
     }).catch(() => {});
   }
@@ -1038,7 +1039,58 @@ function loadStudentsFromAPI(data) {
   renderChurnListFromAPI(data);
   renderTopTableFromAPI(data);
   updateStudent();
+  syncStudentSearchInput();
 }
+
+// ── BUSCA DE ALUNO (substitui o dropdown gigante por campo de texto) ──
+// O <select id="studentSelect"> continua existindo (escondido) e sendo a
+// fonte de verdade que updateStudent()/loadStudentCheckins()/etc ja leem —
+// esse bloco so adiciona uma camada de busca por cima, sem duplicar estado.
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function syncStudentSearchInput() {
+  const sel   = document.getElementById('studentSelect');
+  const input = document.getElementById('studentSearchInput');
+  if (!input) return;
+  input.value = sel?.value && students[sel.value] ? students[sel.value].name : '';
+}
+
+function filterStudentSearch(query) {
+  const box = document.getElementById('studentSearchResults');
+  if (!box) return;
+  const q = (query || '').trim().toLowerCase();
+  const all = Object.keys(students).map(id => ({ id, name: students[id].name }));
+  const matches = q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
+  box.innerHTML = matches.length
+    ? matches.map(s => '<div class="student-search-item" data-id="'+s.id+'">'+escHtml(s.name)+'</div>').join('')
+    : '<div class="student-search-empty">Nenhum aluno encontrado</div>';
+  box.classList.add('open');
+}
+
+function selectStudentFromSearch(id) {
+  const sel = document.getElementById('studentSelect');
+  if (!sel || !students[id]) return;
+  sel.value = id;
+  closeStudentSearch();
+  syncStudentSearchInput();
+  updateStudent();
+}
+
+function closeStudentSearch() {
+  document.getElementById('studentSearchResults')?.classList.remove('open');
+}
+
+document.getElementById('studentSearchResults')?.addEventListener('click', e => {
+  const item = e.target.closest('.student-search-item[data-id]');
+  if (item) selectStudentFromSearch(item.dataset.id);
+});
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('studentSearchInput');
+  if (wrap && !wrap.closest('.student-search-wrap')?.contains(e.target)) closeStudentSearch();
+});
 
 function buildStats(s) {
   const lost    = s.weight_initial && s.weight_current ? (s.weight_current - s.weight_initial).toFixed(1) : null;
@@ -1983,20 +2035,31 @@ function vCopyLink() {
 }
 
 // ── SALES TABLE — vazia até ter dados ───────────────────
+let _vendasHistPage = 1;
+let _vendasHistRaw = [];
+const VENDAS_HIST_PER_PAGE = 12;
+
 function renderSalesTable(data, emptyMsg) {
   const el = document.getElementById('v-sales-body');
+  const pagerEl = document.getElementById('v-sales-pager');
   if (!el) return;
-  if (!data?.length) {
+  _vendasHistRaw = data || [];
+  if (!_vendasHistRaw.length) {
     el.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:20px;font-family:\'DM Mono\',monospace;font-size:10px">'+(emptyMsg||'Nenhuma venda registrada ainda')+'</td></tr>';
+    if (pagerEl) pagerEl.innerHTML = '';
     return;
   }
+  const totalPages = Math.max(1, Math.ceil(_vendasHistRaw.length / VENDAS_HIST_PER_PAGE));
+  _vendasHistPage = Math.min(Math.max(1, _vendasHistPage), totalPages);
+  const pageStart = (_vendasHistPage - 1) * VENDAS_HIST_PER_PAGE;
+  const pageItems = _vendasHistRaw.slice(pageStart, pageStart + VENDAS_HIST_PER_PAGE);
   const SC = {
     ativo:          'background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2)',
     vence_em_breve: 'background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)',
     vencido:        'background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2)',
   };
   const SL = { ativo:'ATIVO', vence_em_breve:'VENCE EM BREVE', vencido:'VENCIDO' };
-  el.innerHTML = data.map(s=>`<tr>
+  el.innerHTML = pageItems.map(s=>`<tr>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${new Date(s.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.name||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${s.plan_name||'—'}</td>
@@ -2004,6 +2067,28 @@ function renderSalesTable(data, emptyMsg) {
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);text-align:right;padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)">${currencySymbol()}${Math.round(s.price_paid||0)}</td>
     <td style="padding:9px 10px;border-bottom:1px solid rgba(168,178,189,0.04)"><span style="font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;${SC[s.statusKey]||SC.ativo}">${SL[s.statusKey]||SL.ativo}</span></td>
   </tr>`).join('');
+
+  if (pagerEl) {
+    pagerEl.innerHTML = '<div style="margin-top:8px">'+_vendasHistRaw.length+' venda(s)'+(totalPages>1?' · mostrando '+(pageStart+1)+'–'+Math.min(pageStart+VENDAS_HIST_PER_PAGE,_vendasHistRaw.length):'')+'</div>'
+      + (totalPages > 1
+        ? '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">'
+          +'<button data-action="prev-page" '+(_vendasHistPage<=1?'disabled':'')+' style="padding:6px 12px;min-height:36px;background:transparent;border:1px solid rgba(168,178,189,0.2);color:'+(_vendasHistPage<=1?'var(--dim)':'var(--white)')+';cursor:'+(_vendasHistPage<=1?'default':'pointer')+';opacity:'+(_vendasHistPage<=1?'0.4':'1')+'">‹ Anterior</button>'
+          +'<span>Página '+_vendasHistPage+' de '+totalPages+'</span>'
+          +'<button data-action="next-page" '+(_vendasHistPage>=totalPages?'disabled':'')+' style="padding:6px 12px;min-height:36px;background:transparent;border:1px solid rgba(168,178,189,0.2);color:'+(_vendasHistPage>=totalPages?'var(--dim)':'var(--white)')+';cursor:'+(_vendasHistPage>=totalPages?'default':'pointer')+';opacity:'+(_vendasHistPage>=totalPages?'0.4':'1')+'">Próxima ›</button>'
+        +'</div>'
+        : '');
+    // Event delegation — mesma logica de Config, liga UMA vez so no container
+    // (que nunca e recriado, so seu innerHTML muda), evita empilhar listeners
+    if (!pagerEl.dataset.listenerBound) {
+      pagerEl.dataset.listenerBound = '1';
+      pagerEl.addEventListener('click', function(e) {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        if (btn.dataset.action === 'prev-page') { _vendasHistPage--; renderSalesTable(_vendasHistRaw, emptyMsg); }
+        if (btn.dataset.action === 'next-page') { _vendasHistPage++; renderSalesTable(_vendasHistRaw, emptyMsg); }
+      });
+    }
+  }
 }
 
 // ── FORMULÁRIO ────────────────────────────────────────────
@@ -2768,6 +2853,7 @@ function setSalesPeriod(btn, days) {
   document.querySelectorAll('#v-sales-period [data-period]').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   _salesPeriod = days;
+  _vendasHistPage = 1;
   updateSalesPeriodLabel(days);
   const rows = buildSalesRows(_lastSalesData || [], days);
   renderSalesTable(rows, (_lastSalesData||[]).length ? 'Nenhuma venda nesse período' : undefined);
