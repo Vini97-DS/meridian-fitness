@@ -795,7 +795,12 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
             p.name AS plan_name, p.duration_months,
             (sub.expires_at - CURRENT_DATE) AS days_to_expire,
             COALESCE((SELECT SUM(s2.price_paid) FROM subscriptions s2 WHERE s2.student_id=s.id),0) AS ltv_total,
-            GREATEST((SELECT COUNT(*) FROM subscriptions s3 WHERE s3.student_id=s.id)-1,0) AS renewals_count
+            GREATEST((SELECT COUNT(*) FROM subscriptions s3 WHERE s3.student_id=s.id)-1,0) AS renewals_count,
+            (SELECT MAX(c.created_at) FROM checkins c WHERE c.student_id=s.id) AS last_checkin_at,
+            (SELECT COUNT(*) = 2 FROM (
+                SELECT used, expires_at FROM form_tokens
+                WHERE student_id=s.id ORDER BY created_at DESC LIMIT 2
+            ) t WHERE t.used = false AND t.expires_at < NOW()) AS missed_last_2_forms
         FROM students s
         JOIN subscriptions sub ON sub.student_id = s.id
         JOIN plans p ON p.id = sub.plan_id

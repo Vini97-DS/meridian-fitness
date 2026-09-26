@@ -147,6 +147,7 @@ body::before{content:'';position:fixed;inset:0;
 .churn-risk{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;padding:3px 10px;border-radius:2px}
 .churn-risk.high{background:rgba(248,113,113,0.12);color:var(--red);border:1px solid rgba(248,113,113,0.2)}
 .churn-risk.med{background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.2)}
+.churn-risk.atraso{background:rgba(167,139,250,0.1);color:var(--purple);border:1px solid rgba(167,139,250,0.25)}
 
 /* ── RENEWAL COUNTDOWN ── */
 .renew-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px}
@@ -1131,7 +1132,7 @@ canvas{background:transparent!important}
     </div>
     <select class="student-select" id="studentSelect" onchange="updateStudent()" style="display:none"></select>
     <button class="filter-btn">Filtrar</button>
-    <button class="filter-btn" style="border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.05)">Ver Apenas Churn Risk</button>
+    <button class="filter-btn" id="btn-churn-risk-filter" onclick="toggleChurnRiskFilter(this)" style="border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.05)">Ver Apenas Churn Risk</button>
   </div>
 
   <!-- GERAR LINK DE FORMULÁRIO -->
@@ -1742,7 +1743,7 @@ canvas{background:transparent!important}
   <!-- Alertas Prioritários -->
   <div style="margin-bottom:20px">
     <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--red);margin-bottom:12px">Alertas Prioritários</div>
-    <div id="resumo-alertas" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div id="resumo-alertas" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
       <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.2);padding:16px 20px">
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">RENOVAÇÕES EM 7 DIAS</div>
         <div id="resumo-renovacoes-count" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--red)">—</div>
@@ -1753,6 +1754,12 @@ canvas{background:transparent!important}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">LEADS QUENTES SEM CONTATO (3+ DIAS)</div>
         <div id="resumo-leads-quentes" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--amber)">—</div>
         <div id="resumo-leads-quentes-names" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:4px">—</div>
+      </div>
+      <div style="background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.25);padding:16px 20px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">ATRASO DE FEEDBACK</div>
+        <div id="resumo-atraso-feedback" style="font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--purple)">—</div>
+        <div id="resumo-atraso-feedback-names" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-top:4px">—</div>
+        <button class="vbtn" style="margin-top:10px;padding:5px 12px;min-height:44px;font-size:8px;background:transparent;border:1px solid rgba(167,139,250,0.3);color:var(--purple)" onclick="switchTab('acompanhamento',document.querySelector('[onclick*=acompanhamento]'))">Ver Alunos →</button>
       </div>
     </div>
   </div>

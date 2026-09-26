@@ -1005,6 +1005,9 @@ function loadStudentsFromAPI(data) {
       name:     s.name,
       time:     calcTime(s.student_since),
       sinceRaw: s.student_since || null,
+      daysToExpire: s.days_to_expire ?? null,
+      lastCheckinAt: s.last_checkin_at || null,
+      missedLast2Forms: !!s.missed_last_2_forms,
       plan:     (s.plan_name || '—') + (s.price_paid ? ' — '+currencySymbol()+Math.round(s.price_paid)+'/mês' : ''),
       channel:  capitalize(s.channel),
       ltv:      fmtMoney(s.ltv_total || 0),
@@ -1056,15 +1059,41 @@ function syncStudentSearchInput() {
   input.value = sel?.value && students[sel.value] ? students[sel.value].name : '';
 }
 
+let _churnRiskFilterActive = false;
+
+function toggleChurnRiskFilter(btn) {
+  _churnRiskFilterActive = !_churnRiskFilterActive;
+  if (btn) {
+    btn.style.background = _churnRiskFilterActive ? 'rgba(248,113,113,0.2)' : 'rgba(248,113,113,0.05)';
+    btn.textContent = _churnRiskFilterActive ? 'Mostrando Apenas Risco ✕' : 'Ver Apenas Churn Risk';
+  }
+  const input = document.getElementById('studentSearchInput');
+  filterStudentSearch(input ? input.value : '');
+}
+
+// Risco combinado (vencimento OU atraso de feedback) pra filtro/badges na busca
+function studentRiskInfo(st) {
+  const expiry  = isExpiryRisk(st.daysToExpire);
+  const delayed = isFeedbackDelayed(st.lastCheckinAt, st.sinceRaw, st.missedLast2Forms);
+  return { expiry, delayed, any: expiry || delayed };
+}
+
 function filterStudentSearch(query) {
   const box = document.getElementById('studentSearchResults');
   if (!box) return;
   const q = (query || '').trim().toLowerCase();
-  const all = Object.keys(students).map(id => ({ id, name: students[id].name }));
+  let all = Object.keys(students).map(id => ({ id, name: students[id].name, risk: studentRiskInfo(students[id]) }));
+  if (_churnRiskFilterActive) all = all.filter(s => s.risk.any);
   const matches = q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   box.innerHTML = matches.length
-    ? matches.map(s => '<div class="student-search-item" data-id="'+s.id+'">'+escHtml(s.name)+'</div>').join('')
-    : '<div class="student-search-empty">Nenhum aluno encontrado</div>';
+    ? matches.map(s => {
+        const tags = [];
+        if (s.risk.expiry)  tags.push('<span style="color:var(--red)">● vencimento</span>');
+        if (s.risk.delayed) tags.push('<span style="color:var(--purple)">● atraso</span>');
+        const riskHtml = tags.length ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;margin-left:6px">'+tags.join(' ')+'</span>' : '';
+        return '<div class="student-search-item" data-id="'+s.id+'">'+escHtml(s.name)+riskHtml+'</div>';
+      }).join('')
+    : (_churnRiskFilterActive ? '<div class="student-search-empty">Nenhum aluno em risco ✓</div>' : '<div class="student-search-empty">Nenhum aluno encontrado</div>');
   box.classList.add('open');
 }
 
@@ -1458,19 +1487,43 @@ function fmtPhotoWeight(photo) {
 }
 
 // ── CHURN LIST — do banco ────────────────────────────────
+// ── Risco de expiração (financeiro/contratual) vs atraso de feedback
+// (engajamento/comportamento) — sinais de natureza diferente, não são
+// mutuamente exclusivos: um aluno pode estar com plano ok mas sumido,
+// ou plano vencendo e ainda respondendo normal.
+function isExpiryRisk(daysToExpire) {
+  return daysToExpire !== null && daysToExpire !== undefined && daysToExpire >= 0 && daysToExpire <= 21;
+}
+// So sinaliza com EVIDENCIA real de estagnacao (ja respondeu antes e parou,
+// ou 2 links de formulario reais vencidos sem resposta) — aluno que nunca
+// teve nenhum checkin nem nenhum link enviado fica de fora: sem contato
+// nenhum ainda nao e a mesma coisa que "sumiu", so falta de dado.
+function isFeedbackDelayed(lastCheckinAt, studentSince, missedLast2Forms) {
+  const DAY = 86400000;
+  if (missedLast2Forms) return true;
+  if (lastCheckinAt) return (Date.now() - new Date(lastCheckinAt).getTime()) >= 14*DAY;
+  return false;
+}
+
 function renderChurnListFromAPI(data) {
   const el = document.getElementById('churn-list');
   if (!el) return;
-  const atRisk = data.filter(s => s.days_to_expire !== null && s.days_to_expire >= 0 && s.days_to_expire <= 21);
+  const atRisk = data.filter(s => isExpiryRisk(s.days_to_expire) || isFeedbackDelayed(s.last_checkin_at, s.student_since, s.missed_last_2_forms));
   if (!atRisk.length) {
     el.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:16px 0">Nenhum aluno em risco de churn ✓</div>';
     return;
   }
   el.innerHTML = atRisk.map(s => {
-    const level  = s.days_to_expire <= 7 ? 'high' : 'med';
-    const detail = 'Plano vence em ' + s.days_to_expire + ' dias · ' + currencySymbol() + Math.round(s.price_paid||0);
-    const init   = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    return '<div class="churn-item"><div class="churn-avatar">'+init+'</div><div><div class="churn-name">'+s.name+'</div><div class="churn-detail">'+detail+'</div></div><div class="churn-badge '+level+'">'+(level==='high'?'CRÍTICO':'MÉDIO')+'</div></div>';
+    const expiry  = isExpiryRisk(s.days_to_expire);
+    const delayed = isFeedbackDelayed(s.last_checkin_at, s.student_since, s.missed_last_2_forms);
+    const badges = [];
+    if (expiry)  badges.push('<div class="churn-risk '+(s.days_to_expire<=7?'high':'med')+'">'+(s.days_to_expire<=7?'CRÍTICO':'MÉDIO')+'</div>');
+    if (delayed) badges.push('<div class="churn-risk atraso">⚠️ ATRASO</div>');
+    const detailParts = [];
+    if (expiry)  detailParts.push('Plano vence em ' + s.days_to_expire + ' dias · ' + currencySymbol() + Math.round(s.price_paid||0));
+    if (delayed) detailParts.push(s.last_checkin_at ? 'Sem check-in há ' + Math.floor((Date.now()-new Date(s.last_checkin_at).getTime())/86400000) + ' dias' : 'Nunca respondeu um check-in');
+    const init = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return '<div class="churn-item"><div class="churn-avatar">'+init+'</div><div><div class="churn-name">'+s.name+'</div><div class="churn-detail">'+detailParts.join(' · ')+'</div></div><div style="display:flex;flex-direction:column;gap:4px">'+badges.join('')+'</div></div>';
   }).join('');
 }
 
@@ -3011,6 +3064,16 @@ async function loadResumoTab() {
   if (qtNames) qtNames.textContent = quentes.length
     ? quentes.slice(0,3).map(c=>c.name).join(', ') + (quentes.length>3?' +mais':'')
     : 'Todos os leads foram contatados';
+
+  // Alunos com atraso de feedback (2+ semanas sem check-in OU 2 últimos
+  // links de formulário vencidos sem resposta)
+  const atrasados = s.filter(st => isFeedbackDelayed(st.last_checkin_at, st.student_since, st.missed_last_2_forms));
+  const afEl    = document.getElementById('resumo-atraso-feedback');
+  const afNames = document.getElementById('resumo-atraso-feedback-names');
+  if (afEl)    afEl.textContent    = atrasados.length || '0';
+  if (afNames) afNames.textContent = atrasados.length
+    ? atrasados.slice(0,3).map(c=>c.name).join(', ') + (atrasados.length>3?' +mais':'')
+    : 'Todos os alunos em dia';
 
   // Ação recomendada
   const acaoEl    = document.getElementById('resumo-acao');
