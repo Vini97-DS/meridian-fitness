@@ -305,6 +305,54 @@ def create_users_table():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # Treino (2.2): biblioteca de exercícios do personal e fichas.
+            # Tudo escopado por personal_id; seed global não existe — o seed é
+            # copiado pra biblioteca de cada personal (editável por ele).
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS exercises (
+                        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        personal_id  UUID NOT NULL REFERENCES personals(id),
+                        name         TEXT NOT NULL,
+                        muscle_group TEXT NOT NULL,
+                        instructions TEXT,
+                        video_url    TEXT,
+                        created_at   TIMESTAMPTZ DEFAULT NOW(),
+                        UNIQUE (personal_id, name)
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS workouts (
+                        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        personal_id UUID NOT NULL REFERENCES personals(id),
+                        name        TEXT NOT NULL,
+                        created_at  TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS workout_days (
+                        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        workout_id UUID NOT NULL REFERENCES workouts(id),
+                        label      TEXT NOT NULL,
+                        position   INT NOT NULL
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS workout_exercises (
+                        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        day_id       UUID NOT NULL REFERENCES workout_days(id),
+                        exercise_id  UUID NOT NULL REFERENCES exercises(id),
+                        position     INT NOT NULL,
+                        sets         INT NOT NULL DEFAULT 3,
+                        reps         TEXT NOT NULL DEFAULT '8-12',
+                        target_load  TEXT,
+                        rest_seconds INT NOT NULL DEFAULT 60,
+                        notes        TEXT
+                    )
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # student_acquisition_costs — custo de CADA PROFISSIONAL adquirir
             # um ALUNO (Nivel 1), nao confundir com acquisition_costs acima
             # (custo do Meridian adquirir um PROFISSIONAL, Nivel 2). "amount"
@@ -998,6 +1046,205 @@ def serve_aluno(personal_id: str = ""):
 @app.get("/sw.js")
 def serve_sw():
     return FileResponse("sw.js", media_type="application/javascript")
+
+# ═══════════════════════════════════════════════════════════════
+#  TREINO — biblioteca de exercícios e fichas (2.2)
+#  Toda rota abaixo confere que o personal_id pertence ao token logado.
+# ═══════════════════════════════════════════════════════════════
+EXERCISE_SEED = [
+    ("Peito", ["Supino reto com barra", "Supino reto com halteres", "Supino inclinado com barra",
+               "Supino inclinado com halteres", "Supino declinado", "Crucifixo reto", "Crucifixo inclinado",
+               "Crossover polia alta", "Crossover polia baixa", "Peck deck", "Flexão de braço"]),
+    ("Costas", ["Puxada frontal", "Puxada atrás da nuca", "Remada curvada com barra", "Remada unilateral com halter",
+                "Remada baixa no triângulo", "Remada cavalinho (T-bar)", "Barra fixa pronada", "Barra fixa supinada",
+                "Levantamento terra", "Serrote", "Pullover", "Hiperextensão lombar"]),
+    ("Pernas", ["Agachamento livre", "Agachamento no Smith", "Agachamento goblet", "Leg press 45°",
+                "Cadeira extensora", "Afundo", "Afundo búlgaro", "Avanço caminhando", "Stiff",
+                "Mesa flexora", "Cadeira flexora", "Levantamento terra romeno", "Cadeira adutora",
+                "Cadeira abdutora", "Agachamento hack", "Step-up"]),
+    ("Glúteos", ["Hip thrust", "Elevação pélvica", "Glúteo de quatro na polia", "Abdução na polia",
+                 "Agachamento sumô", "Hiperextensão de quadril"]),
+    ("Ombros", ["Desenvolvimento com barra", "Desenvolvimento com halteres", "Desenvolvimento Arnold",
+                "Elevação lateral", "Elevação frontal", "Elevação lateral na polia", "Crucifixo inverso",
+                "Remada alta", "Encolhimento com halteres", "Face pull"]),
+    ("Bíceps", ["Rosca direta com barra", "Rosca alternada com halteres", "Rosca martelo",
+                "Rosca concentrada", "Rosca Scott", "Rosca na polia", "Rosca inversa"]),
+    ("Tríceps", ["Tríceps testa", "Tríceps corda", "Tríceps francês", "Tríceps no banco",
+                 "Tríceps coice", "Mergulho nas paralelas", "Tríceps na polia com barra"]),
+    ("Abdômen", ["Abdominal supra", "Abdominal infra", "Prancha", "Prancha lateral", "Abdominal oblíquo",
+                 "Abdominal na roda", "Elevação de pernas suspenso"]),
+    ("Panturrilha", ["Panturrilha em pé", "Panturrilha sentado", "Panturrilha no leg press"]),
+    ("Cardio/Funcional", ["Burpee"]),
+]
+assert sum(len(names) for _, names in EXERCISE_SEED) == 80
+assert len({n for _, names in EXERCISE_SEED for n in names}) == 80
+
+def _assert_own_personal(conn, personal_id: str, current: dict) -> None:
+    rows = query(conn, "SELECT clerk_user_id FROM personals WHERE id=%s", (personal_id,))
+    if not rows or rows[0]["clerk_user_id"] != current.get("sub"):
+        raise HTTPException(403, "Acesso negado a este profissional")
+
+def _assert_own_exercise(conn, exercise_id: str, current: dict) -> str:
+    rows = query(conn, "SELECT personal_id FROM exercises WHERE id=%s", (exercise_id,))
+    if not rows:
+        raise HTTPException(404, "Exercício não encontrado")
+    _assert_own_personal(conn, str(rows[0]["personal_id"]), current)
+    return str(rows[0]["personal_id"])
+
+def _assert_own_workout(conn, workout_id: str, current: dict) -> None:
+    rows = query(conn, "SELECT personal_id FROM workouts WHERE id=%s", (workout_id,))
+    if not rows:
+        raise HTTPException(404, "Ficha não encontrada")
+    _assert_own_personal(conn, str(rows[0]["personal_id"]), current)
+
+def _valid_video_url(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    if not re.match(r"^https://(www\.)?(youtube\.com|youtu\.be|vimeo\.com)/", url):
+        raise HTTPException(400, "Vídeo precisa ser link https do YouTube ou Vimeo")
+    return url
+
+class ExerciseCreate(BaseModel):
+    personal_id:  str
+    name:         str
+    muscle_group: str
+    instructions: Optional[str] = None
+    video_url:    Optional[str] = None
+
+class ExerciseUpdate(BaseModel):
+    name:         Optional[str] = None
+    muscle_group: Optional[str] = None
+    instructions: Optional[str] = None
+    video_url:    Optional[str] = None
+
+class WorkoutExerciseIn(BaseModel):
+    exercise_id:  str
+    sets:         int = 3
+    reps:         str = "8-12"
+    target_load:  Optional[str] = None
+    rest_seconds: int = 60
+    notes:        Optional[str] = None
+
+class WorkoutDayIn(BaseModel):
+    label:     str
+    exercises: list[WorkoutExerciseIn] = []
+
+class WorkoutCreate(BaseModel):
+    personal_id: str
+    name:        str
+    days:        list[WorkoutDayIn] = []
+
+@app.get("/api/treino/exercicios/{personal_id}")
+def list_exercises(personal_id: str, q: Optional[str] = None, group: Optional[str] = None,
+                   conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, personal_id, current)
+    sql = "SELECT id, name, muscle_group, instructions, video_url FROM exercises WHERE personal_id=%s"
+    params = [personal_id]
+    if q:
+        sql += " AND name ILIKE %s"; params.append(f"%{q}%")
+    if group:
+        sql += " AND muscle_group=%s"; params.append(group)
+    sql += " ORDER BY muscle_group, name"
+    return query(conn, sql, tuple(params))
+
+@app.post("/api/treino/exercicios/{personal_id}/seed")
+def seed_exercises(personal_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, personal_id, current)
+    values, params = [], []
+    for group, names in EXERCISE_SEED:
+        for name in names:
+            values.append("(%s, %s, %s)")
+            params.extend([personal_id, name, group])
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO exercises (personal_id, name, muscle_group) VALUES "
+            + ", ".join(values)
+            + " ON CONFLICT (personal_id, name) DO NOTHING RETURNING id",
+            tuple(params),
+        )
+        added = len(cur.fetchall())
+    conn.commit()
+    return {"added": added}
+
+@app.post("/api/treino/exercicios")
+def create_exercise(data: ExerciseCreate, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, data.personal_id, current)
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(400, "Nome obrigatório")
+    return execute(conn, """
+        INSERT INTO exercises (personal_id, name, muscle_group, instructions, video_url)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (personal_id, name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id, name, muscle_group
+    """, (data.personal_id, name, data.muscle_group.strip(), data.instructions,
+          _valid_video_url(data.video_url)))
+
+@app.patch("/api/treino/exercicios/{exercise_id}")
+def update_exercise(exercise_id: str, data: ExerciseUpdate, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_exercise(conn, exercise_id, current)
+    fields, values = [], []
+    if data.name is not None:         fields.append("name = %s");         values.append(data.name.strip())
+    if data.muscle_group is not None: fields.append("muscle_group = %s"); values.append(data.muscle_group.strip())
+    if data.instructions is not None: fields.append("instructions = %s"); values.append(data.instructions)
+    if data.video_url is not None:    fields.append("video_url = %s");    values.append(_valid_video_url(data.video_url))
+    if not fields:
+        raise HTTPException(400, "Nada para atualizar")
+    values.append(exercise_id)
+    return execute(conn, f"UPDATE exercises SET {', '.join(fields)} WHERE id=%s RETURNING id", tuple(values))
+
+@app.get("/api/treino/fichas/{personal_id}")
+def list_workouts(personal_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, personal_id, current)
+    workouts = query(conn, "SELECT id, name, created_at FROM workouts WHERE personal_id=%s ORDER BY created_at DESC", (personal_id,))
+    for w in workouts:
+        w["days"] = query(conn, """
+            SELECT d.id, d.label, d.position FROM workout_days d
+            WHERE d.workout_id=%s ORDER BY d.position
+        """, (w["id"],))
+        for d in w["days"]:
+            d["exercises"] = query(conn, """
+                SELECT we.id, we.exercise_id, e.name AS exercise_name, e.muscle_group,
+                       we.position, we.sets, we.reps, we.target_load, we.rest_seconds, we.notes
+                FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
+                WHERE we.day_id=%s ORDER BY we.position
+            """, (d["id"],))
+    return workouts
+
+@app.post("/api/treino/fichas")
+def create_workout(data: WorkoutCreate, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, data.personal_id, current)
+    if not data.name.strip():
+        raise HTTPException(400, "Nome da ficha obrigatório")
+    if not data.days:
+        raise HTTPException(400, "A ficha precisa de pelo menos um dia")
+    for day in data.days:
+        for ex in day.exercises:
+            _assert_own_exercise(conn, ex.exercise_id, current)
+    workout = execute(conn, """
+        INSERT INTO workouts (personal_id, name) VALUES (%s, %s) RETURNING id
+    """, (data.personal_id, data.name.strip()))
+    for pos, day in enumerate(data.days):
+        d = execute(conn, """
+            INSERT INTO workout_days (workout_id, label, position) VALUES (%s, %s, %s) RETURNING id
+        """, (workout["id"], day.label.strip() or f"Dia {pos+1}", pos))
+        for epos, ex in enumerate(day.exercises):
+            execute(conn, """
+                INSERT INTO workout_exercises (day_id, exercise_id, position, sets, reps, target_load, rest_seconds, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (d["id"], ex.exercise_id, epos, ex.sets, ex.reps, ex.target_load, ex.rest_seconds, ex.notes))
+    return {"id": str(workout["id"])}
+
+@app.delete("/api/treino/fichas/{workout_id}")
+def delete_workout(workout_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_workout(conn, workout_id, current)
+    execute(conn, """
+        DELETE FROM workout_exercises WHERE day_id IN
+          (SELECT id FROM workout_days WHERE workout_id=%s)
+    """, (workout_id,))
+    execute(conn, "DELETE FROM workout_days WHERE workout_id=%s", (workout_id,))
+    execute(conn, "DELETE FROM workouts WHERE id=%s", (workout_id,))
+    return {"ok": True}
 
 # ═══════════════════════════════════════════════════════════════
 #  ALUNOS

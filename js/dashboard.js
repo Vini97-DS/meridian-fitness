@@ -239,6 +239,9 @@ function switchTab(tab, btn) {
   if (tab === 'resumo') {
     loadResumoTab();
   }
+  if (tab === 'treinos') {
+    loadTreinoTab();
+  }
   setTimeout(() => {
     try { Object.values(charts).forEach(ch => ch && ch.resize()); } catch {}
   }, 150);
@@ -3171,4 +3174,194 @@ async function salvarMarcaAluno() {
     erroEl.textContent = err.message || 'Erro ao salvar.';
     erroEl.style.display='block';
   }
+}
+
+// ── TREINOS (2.2): biblioteca de exercícios + montagem de fichas ──
+let _trExercicios = [];
+let _trFichas = [];
+let _trDraft = null;
+
+function _trPersonalId() {
+  const s = JSON.parse(localStorage.getItem('mf_user')||'null');
+  return s && (s.personal_id || s.id);
+}
+
+async function loadTreinoTab() {
+  const pid = _trPersonalId();
+  if (!pid) return;
+  try {
+    _trExercicios = await api('/treino/exercicios/' + pid);
+    if (!_trExercicios.length) {
+      await api('/treino/exercicios/' + pid + '/seed', { method:'POST' });
+      _trExercicios = await api('/treino/exercicios/' + pid);
+    }
+    const grupos = [...new Set(_trExercicios.map(e => e.muscle_group))].sort();
+    const sel = document.getElementById('tr-grupo');
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Todos os grupos</option>' + grupos.map(g => '<option>'+escHtml(g)+'</option>').join('');
+    sel.value = atual;
+    renderBiblioteca();
+    _trFichas = await api('/treino/fichas/' + pid);
+    renderFichas();
+  } catch (e) {
+    document.getElementById('tr-biblioteca').innerHTML = '<div style="color:var(--red);font-size:11px">Erro ao carregar: '+escHtml(e.message)+'</div>';
+  }
+}
+
+function renderBiblioteca() {
+  const el = document.getElementById('tr-biblioteca');
+  if (!el) return;
+  const q = (document.getElementById('tr-busca').value || '').trim().toLowerCase();
+  const g = document.getElementById('tr-grupo').value;
+  const lista = _trExercicios.filter(e => (!q || e.name.toLowerCase().includes(q)) && (!g || e.muscle_group === g));
+  if (!lista.length) { el.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:12px 0">Nenhum exercício encontrado.</div>'; return; }
+  el.innerHTML = lista.map(e => `
+    <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(168,178,189,0.08)">
+      <div style="min-width:0">
+        <div style="font-size:12px;color:var(--white)">${escHtml(e.name)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">${escHtml(e.muscle_group)}${e.video_url ? ' · <a href="'+escHtml(e.video_url)+'" target="_blank" rel="noopener" style="color:var(--gold)">vídeo</a>' : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleFormExercicio() {
+  const f = document.getElementById('tr-form-exercicio');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function salvarExercicio() {
+  const erro = document.getElementById('tr-ex-erro');
+  erro.style.display = 'none';
+  const nome = document.getElementById('tr-ex-nome').value.trim();
+  const grupo = document.getElementById('tr-ex-grupo').value.trim();
+  if (!nome || !grupo) { erro.textContent = 'Nome e grupo são obrigatórios.'; erro.style.display = 'block'; return; }
+  try {
+    await api('/treino/exercicios', { method:'POST', body: JSON.stringify({
+      personal_id: _trPersonalId(), name: nome, muscle_group: grupo,
+      video_url: document.getElementById('tr-ex-video').value.trim() || null,
+      instructions: document.getElementById('tr-ex-instr').value.trim() || null,
+    })});
+    ['tr-ex-nome','tr-ex-grupo','tr-ex-video','tr-ex-instr'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('tr-form-exercicio').style.display = 'none';
+    await loadTreinoTab();
+  } catch (e) { erro.textContent = e.message; erro.style.display = 'block'; }
+}
+
+function abrirNovaFicha() {
+  _trDraft = { dias: [ { label: 'A', exercicios: [] } ] };
+  document.getElementById('tr-ficha-nome').value = '';
+  document.getElementById('tr-form-ficha').style.display = 'block';
+  renderDraft();
+}
+
+function fecharNovaFicha() {
+  _trDraft = null;
+  document.getElementById('tr-form-ficha').style.display = 'none';
+}
+
+function adicionarDia() {
+  const letras = 'ABCDEFGHIJ';
+  const label = letras[_trDraft.dias.length] || ('Dia ' + (_trDraft.dias.length + 1));
+  _trDraft.dias.push({ label, exercicios: [] });
+  renderDraft();
+}
+
+function removerDia(i) {
+  _trDraft.dias.splice(i, 1);
+  renderDraft();
+}
+
+function adicionarExercicioAoDia(i) {
+  const sel = document.getElementById('tr-draft-ex-' + i);
+  const exId = sel.value;
+  if (!exId) return;
+  const ex = _trExercicios.find(e => e.id === exId);
+  _trDraft.dias[i].exercicios.push({ exercise_id: exId, name: ex.name, sets: 3, reps: '8-12', target_load: '', rest_seconds: 60 });
+  renderDraft();
+}
+
+function removerExercicioDraft(i, j) {
+  _trDraft.dias[i].exercicios.splice(j, 1);
+  renderDraft();
+}
+
+function atualizarCampoDraft(i, j, campo, valor) {
+  const ex = _trDraft.dias[i].exercicios[j];
+  ex[campo] = (campo === 'sets' || campo === 'rest_seconds') ? parseInt(valor, 10) || 0 : valor;
+}
+
+function renderDraft() {
+  const el = document.getElementById('tr-ficha-dias');
+  const opts = _trExercicios.map(e => '<option value="'+e.id+'">'+escHtml(e.name)+' ('+escHtml(e.muscle_group)+')</option>').join('');
+  el.innerHTML = _trDraft.dias.map((d, i) => `
+    <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="v-field" style="width:120px"><label class="v-label">Dia</label><input class="v-input" value="${escHtml(d.label)}" oninput="_trDraft.dias[${i}].label=this.value" /></div>
+        ${_trDraft.dias.length > 1 ? '<button onclick="removerDia('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">remover dia</button>' : ''}
+      </div>
+      ${d.exercicios.map((ex, j) => `
+        <div style="border-top:1px solid rgba(168,178,189,0.08);padding:8px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+            <div style="font-size:12px;color:var(--white);min-width:0;overflow-wrap:break-word">${escHtml(ex.name)}</div>
+            <button onclick="removerExercicioDraft(${i},${j})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0">✕</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px">
+            <div><label class="v-label">Séries</label><input class="v-input" type="number" min="1" value="${ex.sets}" onchange="atualizarCampoDraft(${i},${j},'sets',this.value)" /></div>
+            <div><label class="v-label">Repetições</label><input class="v-input" type="text" value="${escHtml(ex.reps)}" onchange="atualizarCampoDraft(${i},${j},'reps',this.value)" /></div>
+            <div><label class="v-label">Carga</label><input class="v-input" type="text" value="${escHtml(ex.target_load)}" placeholder="kg" onchange="atualizarCampoDraft(${i},${j},'target_load',this.value)" /></div>
+            <div><label class="v-label">Descanso (s)</label><input class="v-input" type="number" min="0" value="${ex.rest_seconds}" onchange="atualizarCampoDraft(${i},${j},'rest_seconds',this.value)" /></div>
+          </div>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <select class="v-select" id="tr-draft-ex-${i}" style="flex:1">${opts}</select>
+        <button class="vbtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold)" onclick="adicionarExercicioAoDia(${i})">+ Exercício</button>
+      </div>
+    </div>`).join('');
+}
+
+async function salvarFicha() {
+  const erro = document.getElementById('tr-ficha-erro');
+  erro.style.display = 'none';
+  const nome = document.getElementById('tr-ficha-nome').value.trim();
+  if (!nome) { erro.textContent = 'Dê um nome à ficha.'; erro.style.display = 'block'; return; }
+  if (!_trDraft.dias.some(d => d.exercicios.length)) { erro.textContent = 'Adicione pelo menos um exercício.'; erro.style.display = 'block'; return; }
+  try {
+    await api('/treino/fichas', { method:'POST', body: JSON.stringify({
+      personal_id: _trPersonalId(), name: nome,
+      days: _trDraft.dias.map(d => ({ label: d.label, exercises: d.exercicios.map(ex => ({
+        exercise_id: ex.exercise_id, sets: ex.sets, reps: ex.reps,
+        target_load: ex.target_load || null, rest_seconds: ex.rest_seconds,
+      })) })),
+    })});
+    fecharNovaFicha();
+    _trFichas = await api('/treino/fichas/' + _trPersonalId());
+    renderFichas();
+  } catch (e) { erro.textContent = e.message; erro.style.display = 'block'; }
+}
+
+function renderFichas() {
+  const el = document.getElementById('tr-fichas-lista');
+  if (!el) return;
+  if (!_trFichas.length) { el.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:12px 0">Nenhuma ficha ainda. Clique em + Nova ficha.</div>'; return; }
+  el.innerHTML = _trFichas.map(w => `
+    <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;color:var(--white)">${escHtml(w.name)}</div>
+        <button onclick="excluirFicha('${w.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">excluir</button>
+      </div>
+      ${w.days.map(d => `
+        <div style="margin-bottom:6px">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.1em">DIA ${escHtml(d.label)}</div>
+          ${d.exercises.map(ex => `<div style="font-size:11px;color:var(--silver)">${escHtml(ex.exercise_name)} · ${ex.sets}× ${escHtml(ex.reps)}${ex.target_load ? ' · '+escHtml(ex.target_load) : ''} · descanso ${ex.rest_seconds}s</div>`).join('')}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+async function excluirFicha(id) {
+  if (!confirm('Excluir esta ficha?')) return;
+  try {
+    await api('/treino/fichas/' + id, { method:'DELETE' });
+    _trFichas = await api('/treino/fichas/' + _trPersonalId());
+    renderFichas();
+  } catch (e) { alert('Erro: ' + e.message); }
 }
