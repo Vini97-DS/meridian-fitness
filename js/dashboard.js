@@ -2242,6 +2242,10 @@ async function initConfig() {
       atualizarDisplayMeta(personalData.meta_anual);
     }
     setVal('cfg-pais', personalData.pais);
+    setVal('cfg-marca-nome', personalData.brand_name);
+    setVal('cfg-marca-logo', personalData.brand_logo_url);
+    setVal('cfg-marca-primary', personalData.brand_primary || '#c9a84c');
+    setVal('cfg-marca-accent', personalData.brand_accent || '#4f46e5');
     setVal('cfg-moeda', personalData.moeda);
     (personalData.formas_pagamento || []).forEach(v => { const el = document.getElementById('cfg-pgto-'+v); if (el) el.checked = true; });
     (personalData.canais_atendimento || []).forEach(v => { const el = document.getElementById('cfg-canal-'+v); if (el) el.checked = true; });
@@ -3148,3 +3152,23 @@ async function loadResumoTab() {
 }
 
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
+// ── IDENTIDADE DO APP DO ALUNO (white-label) ──────────────
+async function salvarMarcaAluno() {
+  const session = JSON.parse(localStorage.getItem('mf_user')||'null');
+  const personalId = session && (session.personal_id||session.id);
+  const okEl = document.getElementById('cfg-marca-ok');
+  const erroEl = document.getElementById('cfg-marca-erro');
+  okEl.style.display='none'; erroEl.style.display='none';
+  try {
+    await api('/personals/'+personalId, { method:'PATCH', body: JSON.stringify({
+      brand_name: document.getElementById('cfg-marca-nome').value.trim() || null,
+      brand_logo_url: document.getElementById('cfg-marca-logo').value.trim() || null,
+      brand_primary: document.getElementById('cfg-marca-primary').value,
+      brand_accent: document.getElementById('cfg-marca-accent').value,
+    })});
+    okEl.style.display='block';
+  } catch (err) {
+    erroEl.textContent = err.message || 'Erro ao salvar.';
+    erroEl.style.display='block';
+  }
+}

@@ -1371,6 +1371,40 @@ canvas{background:transparent!important}
     </div>
   </div>
 
+  <!-- ── APP DO ALUNO (marca) ── -->
+  <div style="margin-bottom:28px">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">App do Aluno</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Identidade do app do aluno</div>
+          <div class="panel-sub">Nome, cores e logo que o aluno vê no celular. Cores precisam de contraste mínimo para leitura.</div>
+        </div>
+        <button class="vbtn vbtn-gold" onclick="salvarMarcaAluno()">Salvar Identidade</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
+        <div class="v-field">
+          <label class="v-label">Nome exibido</label>
+          <input class="v-input" id="cfg-marca-nome" type="text" placeholder="Ex: Vinicius Araujo Personal" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Logo (URL https, opcional)</label>
+          <input class="v-input" id="cfg-marca-logo" type="url" placeholder="https://..." />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Cor principal</label>
+          <input class="v-input" id="cfg-marca-primary" type="color" value="#c9a84c" />
+        </div>
+        <div class="v-field">
+          <label class="v-label">Cor de destaque</label>
+          <input class="v-input" id="cfg-marca-accent" type="color" value="#4f46e5" />
+        </div>
+      </div>
+      <div id="cfg-marca-ok" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">✓ Identidade salva</div>
+      <div id="cfg-marca-erro" style="display:none;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>
+    </div>
+  </div>
+
   <!-- ── PAGAMENTO ── -->
   <div style="margin-bottom:28px">
     <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Configurações de Pagamento</div>

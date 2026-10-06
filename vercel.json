@@ -40,18 +40,72 @@
     {
       "src": "js/**",
       "use": "@vercel/static"
+    },
+    {
+      "src": "aluno.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "sw.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "icon.svg",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api.py" },
-    { "src": "/form/(.*)", "dest": "api.py" },
-    { "src": "/css/(.*)", "dest": "/css/$1" },
-    { "src": "/js/(.*)",  "dest": "/js/$1"  },
-    { "src": "/dashboard",       "dest": "/dashboard.html" },
-    { "src": "/primeiro-acesso", "dest": "/primeiro-acesso.html" },
-    { "src": "/recuperar-senha", "dest": "/recuperar-senha.html" },
-    { "src": "/minha-conta",     "dest": "/minha-conta.html" },
-    { "src": "/admin",           "dest": "/admin.html" },
-    { "src": "/",                "dest": "/index.html" }
+    {
+      "src": "/api/(.*)",
+      "dest": "api.py"
+    },
+    {
+      "src": "/aluno(/.*)?",
+      "dest": "api.py"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/sw.js"
+    },
+    {
+      "src": "/icon.svg",
+      "dest": "/icon.svg"
+    },
+    {
+      "src": "/form/(.*)",
+      "dest": "api.py"
+    },
+    {
+      "src": "/css/(.*)",
+      "dest": "/css/$1"
+    },
+    {
+      "src": "/js/(.*)",
+      "dest": "/js/$1"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/dashboard.html"
+    },
+    {
+      "src": "/primeiro-acesso",
+      "dest": "/primeiro-acesso.html"
+    },
+    {
+      "src": "/recuperar-senha",
+      "dest": "/recuperar-senha.html"
+    },
+    {
+      "src": "/minha-conta",
+      "dest": "/minha-conta.html"
+    },
+    {
+      "src": "/admin",
+      "dest": "/admin.html"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
+    }
   ]
 }

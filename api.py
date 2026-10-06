@@ -15,8 +15,15 @@ from datetime import date, datetime, timedelta, timezone
 import psycopg2
 import psycopg2.extras
 import os
+import re
+import json
+import hmac
+import hashlib
 import secrets
+import urllib.request
+from html import escape as html_escape
 import bcrypt
+from fastapi.responses import Response
 from jose import jwt, JWTError
 from dotenv import load_dotenv
 import anthropic
@@ -106,7 +113,18 @@ security = HTTPBearer(auto_error=False)
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
         raise HTTPException(status_code=401, detail="Token nao fornecido")
-    return verify_token(credentials.credentials)
+    payload = verify_token(credentials.credentials)
+    if payload.get("typ") == "student":
+        raise HTTPException(status_code=403, detail="Token de aluno nao acessa area do profissional")
+    return payload
+
+def get_current_student(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Token nao fornecido")
+    payload = verify_token(credentials.credentials)
+    if payload.get("typ") != "student":
+        raise HTTPException(status_code=403, detail="Apenas contas de aluno")
+    return payload
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -205,6 +223,11 @@ def create_users_table():
                 # pois price_brl deixa de existir — mesmo padrao tolerante das
                 # outras migracoes desse bloco.
                 "ALTER TABLE plans RENAME COLUMN price_brl TO price",
+                # Tema do profissional no app do aluno (white-label)
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS brand_name TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS brand_logo_url TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS brand_primary TEXT",
+                "ALTER TABLE personals ADD COLUMN IF NOT EXISTS brand_accent TEXT",
             ]:
                 try:
                     cur2.execute(col_sql)
@@ -246,6 +269,39 @@ def create_users_table():
                         created_at  TIMESTAMPTZ DEFAULT NOW()
                     )
                 """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+            # Conta do aluno (login sem senha por código de e-mail). Separada
+            # de students: uma conta pode ser vinculada a registros de students.
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS student_accounts (
+                        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        email      TEXT UNIQUE NOT NULL,
+                        name       TEXT,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS student_account_links (
+                        student_id UUID PRIMARY KEY REFERENCES students(id),
+                        account_id UUID NOT NULL REFERENCES student_accounts(id),
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS login_codes (
+                        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        email      TEXT NOT NULL,
+                        code_hash  TEXT NOT NULL,
+                        expires_at TIMESTAMPTZ NOT NULL,
+                        attempts   INT DEFAULT 0,
+                        used       BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("CREATE INDEX IF NOT EXISTS login_codes_email_idx ON login_codes(email, created_at DESC)")
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -764,6 +820,186 @@ def create_student_acquisition_cost(data: AcquisitionCostCreate, conn=Depends(ge
     """, (data.personal_id, data.amount, currency, data.category, data.description, data.date))
 
 # ═══════════════════════════════════════════════════════════════
+#  CONTA DO ALUNO — login sem senha (código por e-mail), tema do
+#  profissional (white-label) e manifest do PWA
+# ═══════════════════════════════════════════════════════════════
+LOGIN_CODE_TTL_MIN = 10
+LOGIN_CODE_MAX_ATTEMPTS = 5
+LOGIN_CODE_MAX_PER_HOUR = 5
+STUDENT_TOKEN_DAYS = 30
+RESEND_FROM = os.getenv("RESEND_FROM", "Meridian <acesso@meridianstrategy.de>")
+DEFAULT_BRAND_PRIMARY = "#C9A84C"
+DEFAULT_BRAND_ACCENT = "#4F46E5"
+
+def _rel_luminance(hex_color: str) -> float:
+    h = hex_color.lstrip("#")
+    def ch(c):
+        c = c / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (ch(int(h[i:i+2], 16)) for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+def _contrast(a: str, b: str) -> float:
+    la, lb = sorted((_rel_luminance(a), _rel_luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+def validate_brand_color(color: str, label: str) -> str:
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(color)):
+        raise HTTPException(400, f"{label}: use o formato #RRGGBB")
+    best_text = max(_contrast(color, "#ffffff"), _contrast(color, "#111111"))
+    if best_text < 4.5:
+        raise HTTPException(400, f"{label}: contraste insuficiente para texto (mínimo 4.5:1)")
+    return color.lower()
+
+def _login_code_hash(email: str, code: str) -> str:
+    return hashlib.sha256(f"{email}:{code}:{JWT_SECRET}".encode()).hexdigest()
+
+def create_student_token(account_id: str, email: str, name: str) -> str:
+    payload = {
+        "sub": account_id, "email": email, "name": name, "typ": "student",
+        "exp": datetime.utcnow() + timedelta(days=STUDENT_TOKEN_DAYS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def _send_login_code_email(to: str, code: str, brand_name: Optional[str]) -> None:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        raise HTTPException(500, "Envio de e-mail nao configurado")
+    who = html_escape(brand_name or "Meridian")
+    body_html = (
+        f"<p>Seu código de acesso ao app de treino de <strong>{who}</strong>:</p>"
+        f"<p style='font-size:28px;letter-spacing:6px;font-weight:700'>{code}</p>"
+        f"<p>Válido por {LOGIN_CODE_TTL_MIN} minutos. Se você não pediu este código, ignore este e-mail.</p>"
+    )
+    payload = json.dumps({
+        "from": RESEND_FROM, "to": [to],
+        "subject": f"Seu código de acesso: {code}", "html": body_html,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=payload, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req, timeout=10).read()
+
+class StudentCodeRequest(BaseModel):
+    email: str
+
+class StudentCodeVerify(BaseModel):
+    email: str
+    code:  str
+
+@app.post("/api/aluno/auth/request-code")
+def aluno_request_code(data: StudentCodeRequest, conn=Depends(get_db)):
+    email = data.email.strip().lower()
+    generic = {"ok": True}
+    owner = query(conn, """
+        SELECT p.name AS personal_name, p.brand_name
+        FROM students s JOIN personals p ON p.id = s.personal_id
+        WHERE lower(s.email) = %s AND COALESCE(s.status,'active') != 'cancelled'
+        LIMIT 1
+    """, (email,))
+    if not owner:
+        return generic
+    recent = query(conn,
+        "SELECT COUNT(*) AS n FROM login_codes WHERE email=%s AND created_at > NOW() - INTERVAL '1 hour'",
+        (email,))
+    if int(recent[0]["n"]) >= LOGIN_CODE_MAX_PER_HOUR:
+        return generic
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    execute(conn, """
+        INSERT INTO login_codes (email, code_hash, expires_at)
+        VALUES (%s, %s, NOW() + (%s * INTERVAL '1 minute'))
+    """, (email, _login_code_hash(email, code), LOGIN_CODE_TTL_MIN))
+    _send_login_code_email(email, code, owner[0]["brand_name"] or owner[0]["personal_name"])
+    return generic
+
+@app.post("/api/aluno/auth/verify-code")
+def aluno_verify_code(data: StudentCodeVerify, conn=Depends(get_db)):
+    email = data.email.strip().lower()
+    code = data.code.strip()
+    invalid = HTTPException(401, "Código inválido ou expirado")
+    rows = query(conn, """
+        SELECT id, code_hash, attempts FROM login_codes
+        WHERE email=%s AND used=false AND expires_at > NOW()
+        ORDER BY created_at DESC LIMIT 1
+    """, (email,))
+    if not rows or rows[0]["attempts"] >= LOGIN_CODE_MAX_ATTEMPTS:
+        raise invalid
+    row = rows[0]
+    execute(conn, "UPDATE login_codes SET attempts = attempts + 1 WHERE id=%s", (row["id"],))
+    if not hmac.compare_digest(row["code_hash"], _login_code_hash(email, code)):
+        raise invalid
+    execute(conn, "UPDATE login_codes SET used=true WHERE id=%s", (row["id"],))
+    account = execute(conn, """
+        INSERT INTO student_accounts (email) VALUES (%s)
+        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+        RETURNING id, email, name
+    """, (email,))
+    execute(conn, """
+        INSERT INTO student_account_links (student_id, account_id)
+        SELECT s.id, %s FROM students s WHERE lower(s.email) = %s
+        ON CONFLICT (student_id) DO NOTHING
+    """, (account["id"], email))
+    return {"token": create_student_token(str(account["id"]), email, account.get("name") or email)}
+
+@app.get("/api/aluno/me")
+def aluno_me(current=Depends(get_current_student), conn=Depends(get_db)):
+    students_rows = query(conn, """
+        SELECT s.id, s.name, s.personal_id,
+               p.name AS personal_name, p.brand_name, p.brand_logo_url,
+               p.brand_primary, p.brand_accent
+        FROM student_account_links l
+        JOIN students s ON s.id = l.student_id
+        JOIN personals p ON p.id = s.personal_id
+        WHERE l.account_id = %s
+    """, (current["sub"],))
+    return {"email": current["email"], "name": current.get("name"), "students": students_rows}
+
+@app.get("/api/aluno/brand/{personal_id}")
+def aluno_brand(personal_id: str, conn=Depends(get_db)):
+    rows = query(conn, """
+        SELECT name, brand_name, brand_logo_url, brand_primary, brand_accent
+        FROM personals WHERE id = %s
+    """, (personal_id,))
+    if not rows:
+        raise HTTPException(404, "Profissional nao encontrado")
+    r = rows[0]
+    return {
+        "display_name": r["brand_name"] or r["name"],
+        "logo_url":     r["brand_logo_url"],
+        "primary":      r["brand_primary"] or DEFAULT_BRAND_PRIMARY,
+        "accent":       r["brand_accent"]  or DEFAULT_BRAND_ACCENT,
+    }
+
+@app.get("/api/aluno/manifest/{personal_id}.json")
+def aluno_manifest(personal_id: str, conn=Depends(get_db)):
+    brand = aluno_brand(personal_id, conn)
+    name = brand["display_name"]
+    icons = ([{"src": brand["logo_url"], "sizes": "512x512", "purpose": "any"}]
+             if brand["logo_url"] else
+             [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}])
+    manifest = {
+        "name": name,
+        "short_name": name[:12],
+        "start_url": f"/aluno/{personal_id}",
+        "scope": f"/aluno/{personal_id}",
+        "display": "standalone",
+        "background_color": "#0b0b10",
+        "theme_color": brand["primary"],
+        "icons": icons,
+    }
+    return Response(content=json.dumps(manifest), media_type="application/manifest+json")
+
+@app.get("/aluno")
+@app.get("/aluno/{personal_id}")
+def serve_aluno(personal_id: str = ""):
+    return FileResponse("aluno.html")
+
+@app.get("/sw.js")
+def serve_sw():
+    return FileResponse("sw.js", media_type="application/javascript")
+
+# ═══════════════════════════════════════════════════════════════
 #  ALUNOS
 # ═══════════════════════════════════════════════════════════════
 class StudentCreate(BaseModel):
@@ -831,7 +1067,14 @@ def update_personal(personal_id: str, data: dict, conn=Depends(get_db), _=Depend
     allowed = ['name','bio','especialidade','whatsapp','instagram','site',
                'cidade','pais','moeda','payment_link','pix_key',
                'payment_instruction','meta_anual',
-               'canais_atendimento','formas_pagamento']
+               'canais_atendimento','formas_pagamento',
+               'brand_name','brand_logo_url','brand_primary','brand_accent']
+    if data.get("brand_primary"):
+        data["brand_primary"] = validate_brand_color(data["brand_primary"], "Cor principal")
+    if data.get("brand_accent"):
+        data["brand_accent"] = validate_brand_color(data["brand_accent"], "Cor de destaque")
+    if data.get("brand_logo_url") and not str(data["brand_logo_url"]).startswith("https://"):
+        raise HTTPException(400, "Logo precisa ser uma URL https")
     fields, values = [], []
     for k in allowed:
         if k in data and data[k] is not None:
