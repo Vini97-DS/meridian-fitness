@@ -3285,17 +3285,117 @@ function toggleWeekdayDraft(i, dia) {
   renderDraft();
 }
 
-function adicionarExercicioASessao(i) {
-  const sel = document.getElementById('tr-draft-ex-' + i);
-  const exId = sel.value;
-  if (!exId) return;
-  const ex = _trExercicios.find(e => e.id === exId);
+// ── Combobox de busca de exercício (sem diferenciar maiúsculas/acentos) ──
+let _exComboState = {};
+
+function normalizeText(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function adicionarExercicioObjAoDraft(i, ex) {
   _trDraft.sessoes[i].exercicios.push({
-    exercise_id: exId, name: ex.name, sets: 3, reps_min: 8, reps_max: 12,
+    exercise_id: ex.id, name: ex.name, sets: 3, reps_min: 8, reps_max: 12,
     load_value: '', load_unit: 'kg', rest_seconds: 60,
   });
+  delete _exComboState[i];
   renderDraft();
 }
+
+function filterExerciseCombo(i, query) {
+  const q = normalizeText(query.trim());
+  const matches = q ? _trExercicios.filter(e => normalizeText(e.name).includes(q)) : _trExercicios;
+  _exComboState[i] = { query, activeIdx: -1, matches };
+  renderExerciseCombo(i);
+}
+
+function renderExerciseCombo(i) {
+  const box = document.getElementById('ex-combo-results-' + i);
+  if (!box) return;
+  const st = _exComboState[i] || { query: '', activeIdx: -1, matches: _trExercicios };
+  const rows = st.matches.map((e, idx) => `
+    <div class="ex-combo-item${idx === st.activeIdx ? ' active' : ''}" onclick="selecionarExercicioCombo(${i},${idx})">
+      <div class="nm">${escHtml(e.name)}</div><div class="grp">${escHtml(e.muscle_group)}</div>
+    </div>`).join('');
+  const createIdx = st.matches.length;
+  const createRow = st.query.trim()
+    ? `<div class="ex-combo-create${st.activeIdx === createIdx ? ' active' : ''}" onclick="iniciarCriarExercicioCombo(${i})">+ Criar exercício "${escHtml(st.query.trim())}"</div>`
+    : '';
+  box.innerHTML = (rows || (st.query.trim() ? '' : '<div class="ex-combo-empty">Nenhum exercício encontrado</div>')) + createRow;
+  box.classList.add('open');
+}
+
+function handleExerciseComboKey(e, i) {
+  const st = _exComboState[i];
+  if (!st) return;
+  const total = st.matches.length + (st.query.trim() ? 1 : 0);
+  if (e.key === 'ArrowDown') { e.preventDefault(); st.activeIdx = Math.min(st.activeIdx + 1, total - 1); renderExerciseCombo(i); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); st.activeIdx = Math.max(st.activeIdx - 1, 0); renderExerciseCombo(i); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (st.activeIdx < 0) return;
+    if (st.activeIdx === st.matches.length) iniciarCriarExercicioCombo(i);
+    else selecionarExercicioCombo(i, st.activeIdx);
+  } else if (e.key === 'Escape') {
+    document.getElementById('ex-combo-results-' + i)?.classList.remove('open');
+  }
+}
+
+function selecionarExercicioCombo(i, idx) {
+  const st = _exComboState[i];
+  const ex = st && st.matches[idx];
+  if (ex) adicionarExercicioObjAoDraft(i, ex);
+}
+
+function iniciarCriarExercicioCombo(i) {
+  const st = _exComboState[i] || { query: '' };
+  const box = document.getElementById('ex-combo-results-' + i);
+  const nome = st.query.trim();
+  if (!box || !nome) return;
+  box.innerHTML = `
+    <div style="padding:10px 14px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--white);margin-bottom:8px">Criar "${escHtml(nome)}"</div>
+      <input class="v-input" id="ex-combo-novo-grupo-${i}" type="text" placeholder="Grupo muscular (ex: Costas)" style="margin-bottom:8px" />
+      <div style="display:flex;gap:8px">
+        <button class="vbtn vbtn-green" style="padding:6px 12px;min-height:44px" onclick="confirmarCriarExercicioCombo(${i})">Adicionar</button>
+        <button class="vbtn" style="padding:6px 12px;min-height:44px;background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="cancelarCriarExercicioCombo(${i})">Cancelar</button>
+      </div>
+      <div id="ex-combo-novo-erro-${i}" style="color:var(--red);font-size:9px;margin-top:6px"></div>
+    </div>`;
+  box.classList.add('open');
+  document.getElementById('ex-combo-novo-grupo-' + i)?.focus();
+}
+
+function cancelarCriarExercicioCombo(i) {
+  const st = _exComboState[i];
+  filterExerciseCombo(i, st ? st.query : '');
+}
+
+async function confirmarCriarExercicioCombo(i) {
+  const st = _exComboState[i];
+  const nome = (st ? st.query : '').trim();
+  const grupoEl = document.getElementById('ex-combo-novo-grupo-' + i);
+  const grupo = grupoEl.value.trim();
+  const erroEl = document.getElementById('ex-combo-novo-erro-' + i);
+  if (!grupo) { erroEl.textContent = 'Informe o grupo muscular.'; return; }
+  try {
+    const novo = await api('/treino/exercicios', { method: 'POST', body: JSON.stringify({
+      personal_id: _trPersonalId(), name: nome, muscle_group: grupo,
+    })});
+    _trExercicios.push({ id: novo.id, name: novo.name, muscle_group: novo.muscle_group, video_url: null, instructions: null });
+    adicionarExercicioObjAoDraft(i, { id: novo.id, name: novo.name });
+  } catch (e) { erroEl.textContent = e.message; }
+}
+
+document.addEventListener('click', (e) => {
+  // composedPath (nao e.target) pq o proprio clique dentro do dropdown pode
+  // trocar o innerHTML (ex: abrir o form de "criar exercicio"), desconectando
+  // o elemento original do DOM antes deste handler rodar
+  const path = e.composedPath ? e.composedPath() : [e.target];
+  Object.keys(_exComboState).forEach((i) => {
+    const wrap = document.getElementById('ex-combo-results-' + i)?.closest('.ex-combo-wrap');
+    if (wrap && !path.includes(wrap)) document.getElementById('ex-combo-results-' + i)?.classList.remove('open');
+  });
+});
 
 function removerExercicioDraft(i, j) {
   _trDraft.sessoes[i].exercicios.splice(j, 1);
@@ -3311,7 +3411,6 @@ function atualizarCampoDraft(i, j, campo, valor) {
 
 function renderDraft() {
   const el = document.getElementById('tr-ficha-sessoes');
-  const opts = _trExercicios.map(e => '<option value="'+e.id+'">'+escHtml(e.name)+' ('+escHtml(e.muscle_group)+')</option>').join('');
   el.innerHTML = _trDraft.sessoes.map((s, i) => `
     <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
@@ -3338,9 +3437,12 @@ function renderDraft() {
             <div><label class="v-label">Descanso (s)</label><input class="v-input" type="number" min="0" value="${ex.rest_seconds}" onchange="atualizarCampoDraft(${i},${j},'rest_seconds',this.value)" /></div>
           </div>
         </div>`).join('')}
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <select class="v-select" id="tr-draft-ex-${i}" style="flex:1">${opts}</select>
-        <button class="vbtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold)" onclick="adicionarExercicioASessao(${i})">+ Exercício</button>
+      <div class="ex-combo-wrap" style="position:relative;margin-top:6px">
+        <input class="v-input ex-combo-input" type="text" autocomplete="off" placeholder="Buscar exercício..."
+          oninput="filterExerciseCombo(${i}, this.value)"
+          onfocus="filterExerciseCombo(${i}, this.value)"
+          onkeydown="handleExerciseComboKey(event, ${i})" />
+        <div class="ex-combo-results" id="ex-combo-results-${i}"></div>
       </div>
     </div>`).join('');
 }

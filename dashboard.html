@@ -206,6 +206,23 @@ body::before{content:'';position:fixed;inset:0;
 .student-search-item:last-child{border-bottom:none}
 .student-search-item:hover{background:rgba(201,168,76,0.08);color:var(--white)}
 .student-search-empty{padding:12px 14px;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
+/* Combobox de busca de exercício (montagem de ficha) — mesmo padrão
+   visual do widget de busca de aluno, com itens de 44px (alvo de toque
+   mobile) e ~6 visíveis antes do scroll interno (6*44=264px) */
+.ex-combo-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;
+  background:var(--navy2);border:1px solid rgba(201,168,76,0.25);max-height:264px;overflow-y:auto;display:none;box-shadow:0 8px 20px rgba(0,0,0,0.3)}
+.ex-combo-results.open{display:block}
+.ex-combo-item{min-height:44px;padding:8px 14px;display:flex;flex-direction:column;justify-content:center;
+  font-family:'DM Mono',monospace;cursor:pointer;border-bottom:1px solid rgba(168,178,189,0.06)}
+.ex-combo-item:last-child{border-bottom:none}
+.ex-combo-item .nm{font-size:11px;color:var(--silver)}
+.ex-combo-item .grp{font-size:9px;color:var(--dim);margin-top:2px}
+.ex-combo-item:hover,.ex-combo-item.active{background:rgba(201,168,76,0.1)}
+.ex-combo-item:hover .nm,.ex-combo-item.active .nm{color:var(--white)}
+.ex-combo-create{min-height:44px;padding:8px 14px;display:flex;align-items:center;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);cursor:pointer;border-top:1px solid rgba(201,168,76,0.15)}
+.ex-combo-create:hover,.ex-combo-create.active{background:rgba(201,168,76,0.12)}
+.ex-combo-empty{padding:12px 14px;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
 .filter-btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
   padding:8px 18px;min-height:44px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);color:var(--gold);cursor:pointer;transition:all 0.2s}
 .filter-btn:hover{background:rgba(201,168,76,0.15)}
