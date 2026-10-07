@@ -5,7 +5,7 @@ Banco: Neon (Postgres)
 Rodar: uvicorn api:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -302,6 +302,18 @@ def create_users_table():
                     )
                 """)
                 cur2.execute("CREATE INDEX IF NOT EXISTS login_codes_email_idx ON login_codes(email, created_at DESC)")
+                # Limite por IP nas rotas de login do aluno — login_codes so
+                # grava linha pra e-mail valido, entao um e-mail invalido
+                # repetido nao tinha nenhum freio antes disso. Testado antes
+                # num branch do Neon (br-patient-sunset-aqxbtk23, deletado).
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS auth_rate_limit (
+                        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        rl_key     TEXT NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("CREATE INDEX IF NOT EXISTS auth_rate_limit_key_idx ON auth_rate_limit(rl_key, created_at DESC)")
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -922,6 +934,22 @@ def create_student_acquisition_cost(data: AcquisitionCostCreate, conn=Depends(ge
 LOGIN_CODE_TTL_MIN = 10
 LOGIN_CODE_MAX_ATTEMPTS = 5
 LOGIN_CODE_MAX_PER_HOUR = 5
+IP_REQUEST_CODE_MAX_PER_HOUR = 10
+IP_VERIFY_CODE_MAX_PER_HOUR = 30
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _rate_limited(conn, key: str, max_per_hour: int) -> bool:
+    """True se o limite ja foi atingido — e sempre REGISTRA a tentativa
+    atual (mesmo quando o resultado e sim), pra nao dar brecha de contar
+    so chamadas bem-sucedidas."""
+    n = query(conn, "SELECT COUNT(*) AS n FROM auth_rate_limit WHERE rl_key=%s AND created_at > NOW() - INTERVAL '1 hour'", (key,))
+    execute(conn, "INSERT INTO auth_rate_limit (rl_key) VALUES (%s)", (key,))
+    return int(n[0]["n"]) >= max_per_hour
 STUDENT_TOKEN_DAYS = 30
 RESEND_FROM = os.getenv("RESEND_FROM", "Meridian <acesso@meridianstrategy.de>")
 DEFAULT_BRAND_PRIMARY = "#C9A84C"
@@ -985,9 +1013,14 @@ class StudentCodeVerify(BaseModel):
     code:  str
 
 @app.post("/api/aluno/auth/request-code")
-def aluno_request_code(data: StudentCodeRequest, conn=Depends(get_db)):
+def aluno_request_code(data: StudentCodeRequest, request: Request, conn=Depends(get_db)):
     email = data.email.strip().lower()
     generic = {"ok": True}
+    # Limite por IP ANTES de olhar se o e-mail existe — sem isso, e-mail
+    # invalido repetido nao tinha freio nenhum (login_codes so grava pra
+    # e-mail valido, entao o contador por e-mail nunca entrava em jogo)
+    if _rate_limited(conn, "req:" + _client_ip(request), IP_REQUEST_CODE_MAX_PER_HOUR):
+        return generic
     owner = query(conn, """
         SELECT p.name AS personal_name, p.brand_name
         FROM students s JOIN personals p ON p.id = s.personal_id
@@ -1010,10 +1043,12 @@ def aluno_request_code(data: StudentCodeRequest, conn=Depends(get_db)):
     return generic
 
 @app.post("/api/aluno/auth/verify-code")
-def aluno_verify_code(data: StudentCodeVerify, conn=Depends(get_db)):
+def aluno_verify_code(data: StudentCodeVerify, request: Request, conn=Depends(get_db)):
     email = data.email.strip().lower()
     code = data.code.strip()
     invalid = HTTPException(401, "Código inválido ou expirado")
+    if _rate_limited(conn, "verify:" + _client_ip(request), IP_VERIFY_CODE_MAX_PER_HOUR):
+        raise invalid
     rows = query(conn, """
         SELECT id, code_hash, attempts FROM login_codes
         WHERE email=%s AND used=false AND expires_at > NOW()
@@ -1050,6 +1085,28 @@ def aluno_me(current=Depends(get_current_student), conn=Depends(get_db)):
         WHERE l.account_id = %s
     """, (current["sub"],))
     return {"email": current["email"], "name": current.get("name"), "students": students_rows}
+
+@app.get("/api/aluno/treino")
+def aluno_treino(personal_id: str, current=Depends(get_current_student), conn=Depends(get_db)):
+    """Ficha ATIVA do aluno logado, escopada ao personal_id da URL do app
+    (aluno.html e sempre /aluno/{personal_id}). So retorna dado do
+    student vinculado a ESSA conta E a ESSE profissional — uma conta
+    pode estar ligada a alunos de profissionais diferentes, mas cada
+    carregamento do app so enxerga um."""
+    link = query(conn, """
+        SELECT s.id AS student_id, s.name AS student_name FROM student_account_links l
+        JOIN students s ON s.id = l.student_id
+        WHERE l.account_id = %s AND s.personal_id = %s
+    """, (current["sub"], personal_id))
+    if not link:
+        raise HTTPException(403, "Esta conta nao esta vinculada a um aluno deste profissional")
+    student_id = link[0]["student_id"]
+    ativa = query(conn, "SELECT * FROM workouts WHERE student_id=%s AND status='ativa'", (student_id,))
+    if ativa:
+        _attach_sessions(conn, ativa)
+        return {"active": ativa[0], "had_previous": True, "student_name": link[0]["student_name"]}
+    any_before = query(conn, "SELECT id FROM workouts WHERE student_id=%s LIMIT 1", (student_id,))
+    return {"active": None, "had_previous": bool(any_before), "student_name": link[0]["student_name"]}
 
 @app.get("/api/aluno/brand/{personal_id}")
 def aluno_brand(personal_id: str, conn=Depends(get_db)):

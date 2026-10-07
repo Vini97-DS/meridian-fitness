@@ -62,6 +62,10 @@
   .pill { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px;
     border: 1px solid var(--brand-accent); color: var(--brand-accent); margin-top: 6px; }
   .placeholder { color: var(--muted); font-size: 14px; text-align: center; padding: 28px 0; }
+  .session-pill { font-size: 12px; padding: 9px 14px; min-height: 40px; border-radius: 999px; border: 1px solid; cursor: pointer; font-family: inherit; }
+  .ex-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  .ex-method { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: rgba(167,139,250,0.16); color: #8B5CF6; white-space: nowrap; flex-shrink: 0; }
+  .ex-video { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--brand-accent); text-decoration: none; font-weight: 600; min-height: 44px; align-items: center; }
 </style>
 </head>
 <body>
@@ -93,12 +97,30 @@
     <div class="msg" id="msg-code"></div>
   </section>
 
-  <!-- Área logada (o treino do dia entra na sub-entrega 2.3) -->
-  <section id="step-home" class="card hidden">
-    <h1 id="home-title">Olá</h1>
-    <p id="home-sub">Seu treino aparece aqui.</p>
-    <div class="placeholder">Em breve: seu treino do dia.</div>
-    <button class="btn btn-ghost" id="btn-logout">Sair</button>
+  <!-- Área logada -->
+  <section id="step-home" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="min-width:0">
+        <h1 id="home-title" style="margin:0 0 4px">Olá</h1>
+        <p id="home-sub" style="margin:0;font-size:13px">Seu treino aparece aqui.</p>
+      </div>
+      <button class="btn btn-ghost" id="btn-logout" style="width:auto;min-height:40px;padding:0 16px;font-size:13px;margin-top:0;flex-shrink:0">Sair</button>
+    </div>
+
+    <div class="card" id="treino-vazio" style="display:none"></div>
+    <div class="card" id="treino-erro" style="display:none">
+      <p style="margin:0 0 14px">Não consegui carregar seu treino agora.</p>
+      <button class="btn" id="btn-retry-treino">Tentar de novo</button>
+    </div>
+
+    <div id="treino-ativo" style="display:none">
+      <div class="card" id="treino-dia-card"></div>
+      <div class="card" id="treino-picker-card">
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Treinos desta ficha</div>
+        <div id="treino-picker" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
+      <div id="treino-detalhe"></div>
+    </div>
   </section>
 
   <!-- Link inválido -->
@@ -204,15 +226,143 @@
 
   async function enterHome() {
     const me = await api('/api/aluno/me');
-    const mine = me.students || [];
-    const fullName = (me.name && me.name !== me.email) ? me.name : (mine[0] ? mine[0].name : '');
+    const mine = (me.students || []).filter(s => s.personal_id === personalId);
+    const fullName = mine[0] ? mine[0].name : ((me.name && me.name !== me.email) ? me.name : '');
     const name = (fullName || 'aluno').split(' ')[0];
     $('home-title').textContent = 'Olá, ' + name;
-    $('home-sub').textContent = mine.length
-      ? 'Seus treinos com ' + mine.map(s => s.personal_name).join(', ') + '.'
-      : 'Nenhum treino vinculado a este e-mail ainda.';
+    $('home-sub').textContent = mine.length ? 'Confira seu treino abaixo.' : 'Nenhum vínculo com este profissional ainda.';
     show('step-home');
+    loadTreino();
   }
+
+  // ── Treino de hoje ──────────────────────────────────────
+  const WEEKDAY_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const METHOD_LABELS = {
+    drop_set:'Drop set', cluster_set:'Cluster set', rest_pause:'Rest-pause', bi_set:'Bi-set',
+    tri_set:'Tri-set', super_serie:'Super-série', pre_exaustao:'Pré-exaustão', pos_exaustao:'Pós-exaustão',
+    ate_falha:'Até a falha', negativa:'Negativa (excêntrica)', isometria:'Isometria',
+    reps_parciais:'Repetições parciais', piramide_crescente:'Pirâmide crescente',
+    piramide_decrescente:'Pirâmide decrescente', metodo_21:'Método 21',
+    cadencia_controlada:'Cadência controlada', outro:'Outro',
+  };
+  let _selectedSessionId = null;
+
+  function isoWeekday(d) { return (d.getDay() + 6) % 7; } // 0=Seg...6=Dom
+
+  // Sem dias definidos na ficha: ainda não há registro de conclusão (isso
+  // chega na 2.4), então por enquanto mostra sempre o 1º treino da
+  // sequência — o aluno troca manualmente pelos pills abaixo.
+  function pickTodaySession(sessions) {
+    const today = isoWeekday(new Date());
+    const comDias = sessions.filter(s => s.weekdays && s.weekdays.length);
+    if (comDias.length) {
+      const hoje = comDias.find(s => s.weekdays.includes(today));
+      if (hoje) return { session: hoje, rest: false };
+      for (let i = 1; i <= 7; i++) {
+        const d = (today + i) % 7;
+        const prox = comDias.find(s => s.weekdays.includes(d));
+        if (prox) return { session: null, rest: true, next: prox, nextLabel: WEEKDAY_LABELS[d] };
+      }
+      return { session: null, rest: true, next: null };
+    }
+    return { session: sessions[0] || null, rest: false, sequential: true };
+  }
+
+  function renderExercicio(ex) {
+    const reps = ex.reps_min === ex.reps_max ? ex.reps_min : (ex.reps_min + '–' + ex.reps_max);
+    const metodoLabel = ex.method ? (ex.method === 'outro' ? (ex.method_other || 'Outro') : (METHOD_LABELS[ex.method] || ex.method)) : '';
+    return `
+      <div class="ex-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
+          <div style="min-width:0">
+            <div style="font-weight:700;font-size:15px;overflow-wrap:break-word">${esc(ex.exercise_name)}</div>
+            <div style="font-size:12px;color:var(--muted)">${esc(ex.muscle_group)}</div>
+          </div>
+          ${metodoLabel ? `<span class="ex-method">${esc(metodoLabel)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">
+          <div><strong>${ex.sets}×</strong> ${reps}</div>
+          ${ex.load_value ? `<div>${ex.load_value}${esc(ex.load_unit||'kg')}</div>` : ''}
+          <div>descanso ${ex.rest_seconds}s</div>
+        </div>
+        ${ex.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">${esc(ex.notes)}</div>` : ''}
+        ${ex.video_url ? `<div style="margin-top:8px"><a class="ex-video" href="${esc(ex.video_url)}" target="_blank" rel="noopener">▶ Ver vídeo</a></div>` : ''}
+      </div>`;
+  }
+
+  function renderSessionDetalhe(session) {
+    const el = $('treino-detalhe');
+    if (!session) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin:18px 0 10px">' + esc(session.name) + '</div>'
+      + (session.exercises || []).map(renderExercicio).join('');
+  }
+
+  function renderPicker(sessions, selectedId) {
+    const el = $('treino-picker');
+    const onBrand = getComputedStyle(document.documentElement).getPropertyValue('--on-brand').trim() || '#111111';
+    el.innerHTML = sessions.map(s => {
+      const active = s.id === selectedId;
+      const style = active
+        ? 'background:var(--brand);color:' + onBrand + ';border-color:var(--brand)'
+        : 'background:var(--surface);color:var(--muted);border-color:var(--border)';
+      const dias = s.weekdays && s.weekdays.length ? ' · ' + s.weekdays.map(d => WEEKDAY_LABELS[d]).join('/') : '';
+      return '<button type="button" class="session-pill" data-id="' + s.id + '" style="' + style + '">' + esc(s.name) + dias + '</button>';
+    }).join('');
+    el.querySelectorAll('.session-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _selectedSessionId = btn.dataset.id;
+        renderPicker(sessions, _selectedSessionId);
+        renderSessionDetalhe(sessions.find(s => s.id === _selectedSessionId));
+      });
+    });
+  }
+
+  function renderTreinoDia(sessions) {
+    const card = $('treino-dia-card');
+    const pick = pickTodaySession(sessions);
+    if (pick.rest) {
+      card.innerHTML = '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Hoje</div>'
+        + '<div style="font-size:17px;font-weight:700;margin-bottom:4px">Hoje é dia de descanso</div>'
+        + (pick.next ? '<div style="font-size:13px;color:var(--muted)">Próximo treino: ' + esc(pick.next.name) + ' (' + pick.nextLabel + ')</div>' : '');
+      _selectedSessionId = null;
+    } else if (pick.session) {
+      card.innerHTML = '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">' + (pick.sequential ? 'Seu treino' : 'Treino de hoje') + '</div>'
+        + '<div style="font-size:17px;font-weight:700">' + esc(pick.session.name) + '</div>';
+      _selectedSessionId = pick.session.id;
+    } else {
+      card.innerHTML = '<div style="font-size:14px;color:var(--muted)">Nenhum treino cadastrado nesta ficha ainda.</div>';
+    }
+  }
+
+  async function loadTreino() {
+    $('treino-vazio').style.display = 'none';
+    $('treino-erro').style.display = 'none';
+    $('treino-ativo').style.display = 'none';
+    try {
+      const r = await api('/api/aluno/treino?personal_id=' + personalId);
+      if (!r.active) {
+        $('treino-vazio').textContent = r.had_previous
+          ? 'Sua ficha anterior foi encerrada. Aguarde seu personal atribuir uma nova.'
+          : 'Seu personal ainda não montou seu treino.';
+        $('treino-vazio').style.display = 'block';
+        return;
+      }
+      const sessions = r.active.sessions || [];
+      if (!sessions.length) {
+        $('treino-vazio').textContent = 'Sua ficha ainda não tem treinos cadastrados.';
+        $('treino-vazio').style.display = 'block';
+        return;
+      }
+      $('treino-ativo').style.display = 'block';
+      renderTreinoDia(sessions);
+      renderPicker(sessions, _selectedSessionId);
+      renderSessionDetalhe(sessions.find(s => s.id === _selectedSessionId) || null);
+    } catch (e) {
+      $('treino-erro').style.display = 'block';
+    }
+  }
+
+  $('btn-retry-treino').addEventListener('click', loadTreino);
 
   async function start() {
     if (!personalId || !UUID_RE.test(personalId)) return show('step-invalid');
