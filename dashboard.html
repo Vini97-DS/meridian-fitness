@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Performance Hub — Personal Trainer · Meridian Labs</title>
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/icons/favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#111A2E" />
+<link rel="manifest" href="/manifest.json" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
 <style>
@@ -2181,6 +2186,28 @@ canvas{background:transparent!important}
     </div>
   </div>
 </div>
+
+  <!-- Instalação do app (profissional) -->
+  <div id="modal-instalar-prof" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;z-index:999;padding:20px">
+    <div style="background:#0d1420;border:1px solid rgba(201,168,76,0.2);border-radius:14px;padding:24px;max-width:380px;width:100%">
+      <div id="instalar-prof-android" style="display:none">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--white);margin:0 0 10px">Instale o Hub</h2>
+        <p style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);line-height:1.5;margin:0 0 18px">Acesso rápido direto da tela inicial do seu celular ou computador — BI, vendas, acompanhamento e treinos num app só.</p>
+        <button class="vbtn vbtn-green" style="width:100%;margin-bottom:8px" id="btn-instalar-prof-confirmar">Instalar app</button>
+        <button style="width:100%;background:none;border:none;color:var(--dim);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;padding:8px" id="btn-instalar-prof-dispensar">Agora não</button>
+      </div>
+      <div id="instalar-prof-ios" style="display:none">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--white);margin:0 0 10px">Adicione à tela de início</h2>
+        <p style="font-family:'DM Mono',monospace;font-size:11px;color:var(--silver);line-height:1.5;margin:0 0 16px">BI, vendas, acompanhamento e treinos num app só, com acesso rápido:</p>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white);line-height:1.8;margin-bottom:18px">
+          <div><strong style="color:var(--gold)">1.</strong> Toque no ícone de Compartilhar ⬆️ no Safari</div>
+          <div><strong style="color:var(--gold)">2.</strong> Role e toque em "Adicionar à Tela de Início"</div>
+          <div><strong style="color:var(--gold)">3.</strong> Toque em "Adicionar"</div>
+        </div>
+        <button class="vbtn vbtn-green" style="width:100%" id="btn-instalar-prof-entendi">Entendi</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/dashboard.js"></script>
   <script src="js/auth.js"></script>

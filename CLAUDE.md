@@ -58,7 +58,8 @@ meridian-fitness/
 ├── admin.html             # Painel interno do Meridian em /admin
 ├── form.html              # Formulário público de check-in (via token)
 ├── sw.js                  # Service worker do PWA do aluno
-├── icon.svg                # Ícone do PWA
+├── icon.svg                # Ícone antigo, órfão (nada mais referencia) — mantido só por compat com cache de instalações antigas
+├── icons/                   # Ícones oficiais Meridian (favicon, apple-touch, manifest) — ver icons/LEIA-ME.md
 ├── vercel.json              # Config de deploy (builds + routes)
 ├── requirements.txt
 ├── docs/
@@ -206,6 +207,38 @@ Antes de ver qualquer treino, o aluno passa pelo gate de **Termos de
 Uso versionados** (`student_consents` × `TERMS_VERSION` em `api.py`) —
 ver seção Privacidade abaixo.
 
+### Um app só, dois perfis
+`index.html` (`/`) é o front door único e instalável: mostra um
+**chooser** ("Sou profissional" / "Sou aluno") antes de qualquer form —
+se já existe sessão de profissional salva, pula direto pro `/dashboard`
+(`initLogin()` em `js/auth.js`). "Sou profissional" revela o form de
+e-mail+senha de sempre. "Sou aluno" manda pra `/aluno` **sem**
+`personal_id` na URL — um **modo resolver** em `aluno.html`
+(`_resolverMode`, ativado quando a URL não tem id): faz o login por
+código normalmente (sem marca nenhuma carregada, só a Meridian padrão)
+e, depois do código, chama `/api/aluno/me` pra descobrir sozinho a
+qual(is) profissional(is) aquele e-mail está vinculado —
+`resolverEContinuar()` redireciona pra `/aluno/{personal_id}` quando só
+tem um, mostra uma lista pra escolher (`#step-escolher-profissional`)
+quando tem mais de um, e uma mensagem amigável quando não tem nenhum
+(esse último caso, na prática, não acontece em uso normal — o
+`verify-code` já auto-vincula a conta a qualquer `students` row com
+aquele e-mail — é só rede de segurança). A URL com `personal_id` (que o
+aluno recebe do profissional, ou pra onde o resolver manda) continua
+sendo a app "de verdade" dele — com a marca do profissional, cache
+offline, etc.
+
+O profissional também tem PWA instalável: `/manifest.json` (fixo,
+ícones/cores Meridian, `start_url`/`scope: "/"`) linkado em `index.html`
+e `dashboard.html`; `sw.js` registrado em `js/dashboard.js`
+(`registrarPWAProfissional()`, chamado no início de `loadDashboard()`);
+prompt de instalação (Android via `beforeinstallprompt`, iOS com os 3
+passos manuais) igual ao do aluno, 1x por aparelho. **Não cobre uso
+offline do dashboard** — BI/Vendas dependem de dado ao vivo do Neon e
+de libs externas (Chart.js via CDN) que o service worker não cacheia;
+é só instalação/ícone/acesso rápido, não uma Entrega 1 (offline real)
+pro lado do profissional.
+
 ### Admin (`/admin`)
 Não é JWT — é uma `ADMIN_KEY` fixa enviada em query param (`GET`) ou no
 corpo (`POST`/`PATCH`) via `_check_admin_key()`. Guardada em
@@ -246,6 +279,7 @@ abas/sessões novas).
 
 ### App do Aluno (`typ: student`)
 - `POST /api/aluno/auth/request-code`, `POST /api/aluno/auth/verify-code`
+- `POST /api/aluno/auth/refresh` — renovação silenciosa de sessão (ver "Sessão persistente" abaixo)
 - `GET /api/aluno/me` — contas vinculadas + branding do(s) profissional(is)
 - `GET /api/aluno/brand/{personal_id}` (pública), `GET /api/aluno/manifest/{personal_id}.json` (manifest do PWA)
 - `GET /api/aluno/treino?personal_id=` — ficha ativa + sessões/exercícios aninhados
@@ -311,10 +345,15 @@ Gerenciar alunos (cadastrar, renovar, encerrar) · Formas de pagamento
 ---
 
 ## App do Aluno (`aluno.html`, PWA em `/aluno/{personal_id}`)
-White-label: `personals.brand_name/brand_logo_url/brand_primary/brand_accent`
-aplicados em runtime (cor validada por contraste WCAG ≥4.5:1 no backend).
-Login por código de 6 dígitos → **gate de Termos de Uso** (se não
-aceitos na versão atual) → home:
+**Ícone/splash/instalação são SEMPRE a marca Meridian, iguais pra todo
+profissional** — nunca gerados a partir da logo de ninguém (ver pasta
+`icons/`, `icons/LEIA-ME.md`). White-label (`personals.brand_name/
+brand_logo_url/brand_primary/brand_accent`, cor validada por contraste
+WCAG ≥4.5:1 no backend) só aparece **dentro do app**, a partir da home —
+login, termos e splash mostram só "Meridian" (é o default do HTML/CSS;
+`applyBrand()` só é chamado depois do login, em `aplicarBrandingProfissional()`,
+nunca antes). Login por código de 6 dígitos → **gate de Termos de Uso**
+(se não aceitos na versão atual) → home:
 - **Treino de hoje**: casa o dia da semana atual com `weekdays` das
   sessões; sem match, mostra o próximo dia com treino e avisa "dia de
   descanso"; sem nenhum `weekdays` definido, cai no 1º treino da
@@ -325,12 +364,56 @@ aceitos na versão atual) → home:
   contagem), Wake Lock com fallback silencioso, avaliação pós-treino
   obrigatória (esforço 1-5, humor 1-5, comentário opcional), resumo
   final com tonelagem e comparação divertida, peso semanal opcional.
-  **Offline**: fila local (`localStorage`) com idempotência por
-  `client_key`, resolve tudo por client_key (não por id do servidor)
-  pra nunca depender de uma resposta anterior — sincroniza sozinho ao
-  reconectar, sem duplicar.
+  **Offline**: fila de sincronização em **IndexedDB** (`meridian_aluno_db`,
+  stores `queue`/`kv`, helpers `idbQueueAdd/All/Remove`/`idbKvGet/Set` em
+  `aluno.html`) com idempotência por `client_key`, resolve tudo por
+  client_key (não por id do servidor) pra nunca depender de uma resposta
+  anterior — sincroniza sozinho ao reconectar (`window.online` + retry a
+  cada 15s), sem duplicar. `exec_state` (estado efêmero da tela em
+  andamento) continua em `localStorage`, decisão deliberada (ver
+  comentário em `aluno.html`).
 - **Meus treinos**: histórico simples das execuções concluídas
 - **Privacidade e meus dados**: solicitar exportação/exclusão, ver status
+- **App instalado / PWA real**: `sw.js` versionado (`SW_VERSION`) cacheia
+  o shell e a própria página (`/aluno/{id}` se cacheia sozinha logo após
+  login online — o SW só controla a partir da navegação SEGUINTE à que o
+  registrou, então sem isso a primeira instalação nunca ficava disponível
+  offline). Atualização nunca é automática: fica em "waiting" até o
+  aluno clicar "Atualizar" no banner (nunca no meio de um treino sem
+  avisar). Ficha ativa e dados do perfil (`/api/aluno/me`,
+  `/api/aluno/brand`) têm fallback de cache (IndexedDB `kv`) quando a
+  rede falha, com nota "atualizado em `<data/hora>`". Banner "Sem
+  conexão" via `navigator.onLine`. Vídeo de exercício mostra "indisponível
+  offline" em vez do link quando sem rede. Logout (e qualquer falha real
+  de autenticação — 401/403) limpa IndexedDB + localStorage por completo
+  (`wipeLocalAppData()`), pra nunca vazar dado de um aluno pro próximo
+  que usar o mesmo aparelho/navegador compartilhado.
+- **Instalação**: manifest dinâmico (`/api/aluno/manifest/{id}.json`) só
+  varia `name`/`short_name`(≤12 car.)/`start_url`/`scope` — ícones,
+  `background_color` e `theme_color` são fixos (`#111A2E`, ícones de
+  `/icons/*`, entradas `any`/`maskable`/`monochrome` separadas, nunca
+  combinadas). Prompt de instalação (modal `#modal-instalar`): Android/
+  Chrome usa `beforeinstallprompt` (botão "Instalar app"); iOS/Safari
+  (sem esse evento) mostra os 3 passos manuais (Compartilhar → Adicionar
+  à Tela de Início → Adicionar) com a explicação de que isso é
+  necessário pros dados ficarem salvos no aparelho. Detecta app já
+  instalado via `display-mode: standalone`/`navigator.standalone` e
+  nunca mostra o prompt nesse caso. Aparece 1x após o primeiro login e
+  1x após o primeiro treino concluído (flags em `localStorage`,
+  `INSTALL_FLAG_LOGIN`/`INSTALL_FLAG_WORKOUT`) — nunca mais que isso,
+  "sem insistir" é por aparelho (localStorage), não por conta.
+- **Sessão persistente**: token do aluno dura `STUDENT_TOKEN_DAYS = 180`
+  dias (era 30) + renovação silenciosa automática (`POST
+  /api/aluno/auth/refresh`) sempre que o app abre online com menos de 30
+  dias de validade restante — na prática quem usa o app com alguma
+  regularidade nunca chega a expirar. **Revogação de sessão** (celular
+  perdido) ainda NÃO está implementada — proposta (pendente de
+  aprovação): coluna `token_version` em `student_accounts` (default 0),
+  token passa a carregar essa versão numa claim (`tv`), `get_current_student`
+  passa a conferir que bate com o valor atual no banco; "sair de todos os
+  aparelhos" (pelo aluno) ou "revogar acesso" (pelo profissional, no
+  perfil do aluno) só incrementam essa coluna — invalida todo token já
+  emitido na hora, sem precisar de blacklist.
 
 ---
 
@@ -471,3 +554,4 @@ opcionais). Deploy automático a cada push em `main` (GitHub integration).
 - IDs duplicados em `dashboard.html`: `kpi-mrr-val` e `kpi-ticket-val` apareciam tanto no `<div>` externo quanto no `<span>` interno (copy-paste) — removido do `<div>`, só o `<span>` carrega o id agora (mesmo padrão dos cards de CAC/LTV).
 - MRR e demais valores monetários não abreviam mais em notação "K" — `fmtMoney()` sempre mostra o valor exato. Decisão explícita: dado financeiro/de negócio exige clareza total, nunca arredondamento visual.
 - Acompanhamento de Alunos ganhou os dados reais do app (frequência, qualidade/aderência, evolução de carga, últimas sessões, peso mesclado, adesão/convite ao app, sinal de risco por inatividade) — sem tocar na aba BI & Negócio nem em métrica financeira. Formulário semanal removido pra quem já tem login no app (frequência/peso/humor já vêm de lá); nutrição/dieta cruzada com o app fica pra uma fase futura.
+- App do aluno virou PWA de verdade: offline real (IndexedDB, fila de sync idempotente, cache da ficha/marca/perfil, timer/avaliação/registro de série funcionando sem rede), ícone/instalação sempre Meridian (nunca gerado da logo de ninguém), marca do profissional só dentro do app (nunca no login/splash). Profissional também ganhou PWA instalável (manifest + service worker + prompt, sem offline de BI). `index.html` virou um chooser único ("Sou profissional" / "Sou aluno") — aluno sem saber o link do profissional de cor entra por `/aluno` (modo resolver, sem personal_id) e é redirecionado sozinho a partir do e-mail.

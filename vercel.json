@@ -52,6 +52,14 @@
     {
       "src": "icon.svg",
       "use": "@vercel/static"
+    },
+    {
+      "src": "icons/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.json",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -70,6 +78,14 @@
     {
       "src": "/icon.svg",
       "dest": "/icon.svg"
+    },
+    {
+      "src": "/icons/(.*)",
+      "dest": "/icons/$1"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/manifest.json"
     },
     {
       "src": "/form/(.*)",

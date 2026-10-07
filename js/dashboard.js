@@ -345,10 +345,57 @@ function truncate(str, max) {
 }
 
 // ── LOAD DASHBOARD ───────────────────────────────────────
+// ── PWA do profissional: instalação do Hub como app ──────────────────
+// Mesmo padrão do app do aluno (aluno.html): ícone/manifest fixos da
+// Meridian, Android via beforeinstallprompt, iOS com passo-a-passo
+// manual, nunca insiste (1x por aparelho, via localStorage), detecta
+// app já instalado. NÃO cobre uso offline do dashboard (BI/vendas
+// dependem de dados ao vivo do Neon e de libs externas tipo Chart.js
+// que não são cacheadas) — é só instalação/acesso rápido.
+let _deferredInstallPromptProf = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredInstallPromptProf = e;
+});
+function _isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function _isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function registrarPWAProfissional() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const FLAG = 'mf_prof_install_prompt_shown';
+  setTimeout(() => {
+    if (_isStandaloneApp()) return;
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) {}
+    const ios = _isIOSDevice();
+    if (!ios && !_deferredInstallPromptProf) return;
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+    const elAndroid = document.getElementById('instalar-prof-android');
+    const elIos = document.getElementById('instalar-prof-ios');
+    const elModal = document.getElementById('modal-instalar-prof');
+    if (elAndroid) elAndroid.style.display = ios ? 'none' : 'block';
+    if (elIos) elIos.style.display = ios ? 'block' : 'none';
+    if (elModal) elModal.style.display = 'flex';
+  }, 1500);
+}
+document.getElementById('btn-instalar-prof-confirmar')?.addEventListener('click', async () => {
+  document.getElementById('modal-instalar-prof').style.display = 'none';
+  if (_deferredInstallPromptProf) {
+    _deferredInstallPromptProf.prompt();
+    try { await _deferredInstallPromptProf.userChoice; } catch (e) {}
+    _deferredInstallPromptProf = null;
+  }
+});
+document.getElementById('btn-instalar-prof-dispensar')?.addEventListener('click', () => { document.getElementById('modal-instalar-prof').style.display = 'none'; });
+document.getElementById('btn-instalar-prof-entendi')?.addEventListener('click', () => { document.getElementById('modal-instalar-prof').style.display = 'none'; });
+
 async function loadDashboard() {
   const token   = localStorage.getItem('mf_token');
   const session = JSON.parse(localStorage.getItem('mf_user') || 'null');
   if (!token || !session) { window.location.href = '/'; return; }
+  registrarPWAProfissional();
 
   // Resolve personal_id
   let personalId = session.personal_id || session.id;
@@ -1596,7 +1643,7 @@ function mostrarConviteGerado(studentId) {
   if (!box || !s) return;
   const link = location.origin + '/aluno/' + _trPersonalId();
   const firstName = (s.name || '').split(' ')[0];
-  const msg = `Oi ${firstName}! Agora você pode acompanhar seu treino direto pelo celular 💪\n\nAcesse: ${link}\n\nUse o e-mail ${s.email} pra entrar — você recebe um código por e-mail, sem precisar de senha.`;
+  const msg = `Oi ${firstName}! Agora você pode acompanhar seu treino direto pelo celular 💪\n\nAcesse: ${link}\n\nUse o e-mail ${s.email} pra entrar — você recebe um código por e-mail, sem precisar de senha.\n\nDica: quando abrir, adicione o app à tela inicial do seu celular — assim ele fica com acesso rápido, igual um app de verdade, e funciona até sem internet.`;
   const waLink = s.phone ? 'https://wa.me/55' + s.phone.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg) : null;
   box.innerHTML = `
     <div style="margin-top:8px;padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);max-width:360px">

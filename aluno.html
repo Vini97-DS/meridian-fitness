@@ -6,8 +6,10 @@
 <title>Meu treino</title>
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<link rel="icon" href="/icon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="/icon.svg" />
+<meta name="theme-color" content="#111A2E" />
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/icons/favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="manifest" id="pwa-manifest" href="" />
 <style>
   :root {
@@ -96,6 +98,12 @@
 <body>
 <div class="wrap">
 
+  <div id="offline-banner" class="hidden" style="background:#B45309;color:#fff;text-align:center;font-size:12px;padding:8px 10px;border-radius:8px;margin-bottom:14px">📴 Sem conexão — seu treino será salvo no aparelho</div>
+  <div id="banner-atualizacao" class="hidden" style="background:var(--brand-accent);color:#fff;text-align:center;font-size:12px;padding:10px;border-radius:8px;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
+    <span>Nova versão disponível</span>
+    <button type="button" id="btn-atualizar-versao" style="background:#fff;color:var(--brand-accent);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">Atualizar</button>
+  </div>
+
   <div class="brand-head">
     <div class="brand-logo" id="brand-logo">M</div>
     <div class="brand-name" id="brand-name">Meridian</div>
@@ -145,6 +153,7 @@
     </div>
 
     <div id="treino-ativo" style="display:none">
+      <div id="treino-cache-info" class="hidden" style="font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px"></div>
       <div class="card" id="treino-dia-card"></div>
       <div class="card" id="treino-picker-card">
         <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Treinos desta ficha</div>
@@ -216,8 +225,16 @@
 
   <!-- Link inválido -->
   <section id="step-invalid" class="card hidden">
-    <h1>Link inválido</h1>
-    <p>Peça ao seu profissional o link correto do app.</p>
+    <h1 id="invalid-title">Link inválido</h1>
+    <p id="invalid-desc">Peça ao seu profissional o link correto do app.</p>
+  </section>
+
+  <!-- Modo resolver (entrada por /aluno, sem personal_id na URL): escolhe
+       o profissional quando a conta está vinculada a mais de um -->
+  <section id="step-escolher-profissional" class="card hidden">
+    <h1>Qual profissional?</h1>
+    <p>Seu e-mail está vinculado a mais de um profissional no Meridian.</p>
+    <div id="lista-profissionais"></div>
   </section>
 
 </div>
@@ -250,6 +267,28 @@
   </div>
 </div>
 
+<!-- Instalação do app -->
+<div id="modal-instalar" class="modal-overlay center hidden">
+  <div class="card modal-sheet">
+    <div id="instalar-android" class="hidden">
+      <h1 style="font-size:17px">Instale o app</h1>
+      <p>Acesso rápido direto da tela inicial, e seu treino continua funcionando mesmo sem internet.</p>
+      <button class="btn" id="btn-instalar-confirmar">Instalar app</button>
+      <button class="btn btn-ghost" id="btn-instalar-dispensar-android">Agora não</button>
+    </div>
+    <div id="instalar-ios" class="hidden">
+      <h1 style="font-size:17px">Adicione à tela de início</h1>
+      <p>Isso é necessário pra que seu treino continue disponível mesmo sem internet — sem adicionar, seus dados não ficam salvos no aparelho.</p>
+      <div style="margin:16px 0">
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px"><strong style="flex-shrink:0">1.</strong><span>Toque no ícone de Compartilhar <span style="font-size:16px">⬆️</span> na barra do Safari</span></div>
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px"><strong style="flex-shrink:0">2.</strong><span>Role a lista e toque em "Adicionar à Tela de Início"</span></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><strong style="flex-shrink:0">3.</strong><span>Toque em "Adicionar" no canto superior</span></div>
+      </div>
+      <button class="btn" id="btn-instalar-entendi-ios">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const TOKEN_KEY = 'mf_aluno_token';
@@ -258,18 +297,164 @@
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const $ = id => document.getElementById(id);
-  const STEPS = ['step-email','step-code','step-home','step-invalid','step-execucao','step-resumo','step-historico','step-termos','step-privacidade'];
+  const STEPS = ['step-email','step-code','step-home','step-invalid','step-execucao','step-resumo','step-historico','step-termos','step-privacidade','step-escolher-profissional'];
   const show = id => { STEPS.forEach(s => $(s).classList.add('hidden')); $(id).classList.remove('hidden'); };
   const setMsg = (id, text, isErr) => { const el = $(id); el.textContent = text || ''; el.className = 'msg' + (isErr ? ' err' : ''); };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  // ── IndexedDB — fila de sincronização + cache da ficha offline ─────────
+  // A fila (`queue`) é o que não pode sumir nem duplicar: toda série/
+  // avaliação/início de treino que falhou por falta de rede fica aqui até
+  // sincronizar, sobrevive a fechar e reabrir o app (IndexedDB é
+  // persistente em disco, diferente de memória), e cada item só é
+  // removido depois de confirmado pelo servidor (ou descartado se o
+  // servidor responder com erro de validação, nunca de rede). `kv` guarda
+  // a última ficha ativa baixada (fallback offline) com timestamp.
+  const IDB_NAME = 'meridian_aluno_db';
+  const IDB_VERSION = 1;
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('IndexedDB indisponível')); return; }
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function idbKvGet(key) {
+    try {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('kv', 'readonly');
+        const req = tx.objectStore('kv').get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { return null; }
+  }
+  async function idbKvSet(key, value) {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put({ key, value });
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {}
+  }
+  async function idbQueueAdd(item) {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('queue', 'readwrite');
+        tx.objectStore('queue').add({ ...item, created_at: Date.now() });
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {}
+  }
+  async function idbQueueAll() {
+    try {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('queue', 'readonly');
+        const req = tx.objectStore('queue').getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { return []; }
+  }
+  async function idbQueueRemove(id) {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('queue', 'readwrite');
+        tx.objectStore('queue').delete(id);
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {}
+  }
+  async function enqueue(item) { await idbQueueAdd(item); atualizarIndicadorFila(); }
+
+  // Limpa TUDO do aparelho (fila, cache de ficha, estado de execução,
+  // token) — chamado no logout explícito e também quando o token já não é
+  // mais válido (ex: outra pessoa loga nesse mesmo aparelho/navegador sem
+  // ter clicado em "Sair" antes). Isso garante que a resposta de um aluno
+  // nunca sobra pro próximo que usar o mesmo aparelho.
+  async function wipeLocalAppData() {
+    try {
+      const db = await idbOpen();
+      await Promise.all(['kv', 'queue'].map(store => new Promise((resolve) => {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).clear();
+        tx.oncomplete = resolve; tx.onerror = resolve;
+      })));
+    } catch (e) {}
+    try { localStorage.removeItem(EXEC_KEY); } catch (e) {}
+  }
+
+  // ── Instalação do app (Entrega 2) ───────────────────────────────────
+  // Android/Chrome dispara beforeinstallprompt quando o app é instalável;
+  // guardamos o evento pra disparar manualmente no clique do nosso botão
+  // (o navegador NÃO mostra prompt nenhum sozinho sem isso).
+  let _deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+  });
+  window.addEventListener('appinstalled', () => { _deferredInstallPrompt = null; });
+
+  function isStandaloneApp() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  function isIOSDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }
+
+  const INSTALL_FLAG_LOGIN = 'mf_install_prompt_login_shown';
+  const INSTALL_FLAG_WORKOUT = 'mf_install_prompt_workout_shown';
+
+  function mostrarPromptInstalacao(flagKey) {
+    if (isStandaloneApp()) return; // já instalado — nunca insiste
+    try { if (localStorage.getItem(flagKey)) return; } catch (e) {}
+    const ios = isIOSDevice();
+    // No Android/Chrome só vale a pena mostrar se o navegador realmente
+    // disparou beforeinstallprompt (senão não tem o que oferecer); no
+    // iOS sempre vale, já que lá não existe esse evento — o caminho é
+    // sempre manual (Compartilhar → Adicionar à Tela de Início).
+    if (!ios && !_deferredInstallPrompt) return;
+    try { localStorage.setItem(flagKey, '1'); } catch (e) {}
+    $('instalar-android').classList.toggle('hidden', ios);
+    $('instalar-ios').classList.toggle('hidden', !ios);
+    $('modal-instalar').classList.remove('hidden');
+  }
+
+  $('btn-instalar-confirmar')?.addEventListener('click', async () => {
+    $('modal-instalar').classList.add('hidden');
+    if (_deferredInstallPrompt) {
+      _deferredInstallPrompt.prompt();
+      try { await _deferredInstallPrompt.userChoice; } catch (e) {}
+      _deferredInstallPrompt = null;
+    }
+  });
+  $('btn-instalar-dispensar-android')?.addEventListener('click', () => $('modal-instalar').classList.add('hidden'));
+  $('btn-instalar-entendi-ios')?.addEventListener('click', () => $('modal-instalar').classList.add('hidden'));
+
+  // A marca do profissional (logo + cores) só aparece DENTRO do app, a
+  // partir da tela de treino (ver aplicarBrandingProfissional, chamada em
+  // entrarNoHome) — login, termos e splash mostram só a marca Meridian,
+  // que já é o default de :root/do HTML estático (#brand-logo="M",
+  // #brand-name="Meridian"), então simplesmente NÃO chamar applyBrand()
+  // antes disso já basta.
   function applyBrand(b) {
     const root = document.documentElement;
     root.style.setProperty('--brand', b.primary);
     root.style.setProperty('--brand-accent', b.accent);
     root.style.setProperty('--on-brand', contrastText(b.primary));
     $('brand-name').textContent = b.display_name;
-    document.title = b.display_name;
     const logo = $('brand-logo');
     if (b.logo_url) {
       logo.innerHTML = '<img src="' + esc(b.logo_url) + '" alt="" style="width:100%;height:100%;border-radius:10px;object-fit:cover" />';
@@ -287,12 +472,32 @@
     return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#FFFFFF' : '#111111';
   }
 
+  const BRAND_CACHE_KEY = 'brand_cache_' + personalId;
+  let _brandData = null;
+
   async function loadBrand() {
-    const res = await fetch('/api/aluno/brand/' + personalId);
-    if (!res.ok) throw new Error('brand');
-    const b = await res.json();
-    applyBrand(b);
-    $('pwa-manifest').href = '/api/aluno/manifest/' + personalId + '.json';
+    try {
+      const res = await fetch('/api/aluno/brand/' + personalId);
+      if (!res.ok) throw new Error('brand');
+      _brandData = await res.json();
+      document.title = _brandData.display_name;
+      $('pwa-manifest').href = '/api/aluno/manifest/' + personalId + '.json';
+      idbKvSet(BRAND_CACHE_KEY, _brandData); // fire-and-forget
+    } catch (e) {
+      // Sem rede: usa a última marca baixada com sucesso pra esse
+      // personal_id, se existir — só é "link inválido" de verdade quando
+      // nunca foi possível carregar essa marca nenhuma vez (nesse caso
+      // nem dá pra saber se o link é válido sem internet mesmo).
+      const cached = await idbKvGet(BRAND_CACHE_KEY);
+      if (!cached) throw e;
+      _brandData = cached;
+      document.title = cached.display_name;
+      $('pwa-manifest').href = '/api/aluno/manifest/' + personalId + '.json';
+    }
+  }
+
+  function aplicarBrandingProfissional() {
+    if (_brandData) applyBrand(_brandData);
   }
 
   async function api(path, opts = {}) {
@@ -331,7 +536,8 @@
     try {
       const r = await api('/api/aluno/auth/verify-code', { method: 'POST', body: JSON.stringify({ email: pendingEmail, code }) });
       localStorage.setItem(TOKEN_KEY, r.token);
-      await enterHome();
+      if (_resolverMode) await resolverEContinuar();
+      else await enterHome();
     } catch (e) {
       setMsg('msg-code', e.message, true);
     } finally { btn.disabled = false; }
@@ -339,19 +545,39 @@
 
   $('btn-back').addEventListener('click', () => { setMsg('msg-code', ''); show('step-email'); });
 
-  $('btn-logout').addEventListener('click', () => {
+  $('btn-logout').addEventListener('click', async () => {
+    await wipeLocalAppData();
     localStorage.removeItem(TOKEN_KEY);
     show('step-email');
   });
 
   async function enterHome() {
-    const status = await api('/api/aluno/termos/status');
-    if (!status.accepted) { await mostrarTermos(); return; }
+    try {
+      const status = await api('/api/aluno/termos/status');
+      if (!status.accepted) { await mostrarTermos(); return; }
+    } catch (e) {
+      if (e.status) throw e; // erro de auth de verdade (401/403) -- sessão inválida mesmo
+      // falha de REDE: sem como confirmar aceite agora. Só existe token se
+      // já passou pelo login antes (que não dá pra fazer sem aceitar os
+      // termos), então segue offline — a confirmação de verdade roda de
+      // novo na próxima vez que o app abrir com internet.
+    }
     await entrarNoHome();
   }
 
+  const ME_CACHE_KEY = 'me_cache';
+
   async function entrarNoHome() {
-    const me = await api('/api/aluno/me');
+    aplicarBrandingProfissional();
+    let me;
+    try {
+      me = await api('/api/aluno/me');
+      idbKvSet(ME_CACHE_KEY, me); // fire-and-forget
+    } catch (e) {
+      if (e.status) throw e; // auth real
+      me = await idbKvGet(ME_CACHE_KEY);
+      if (!me) throw e; // nunca carregou com sucesso nenhuma vez — sem opção offline aqui
+    }
     const mine = (me.students || []).filter(s => s.personal_id === personalId);
     const fullName = mine[0] ? mine[0].name : ((me.name && me.name !== me.email) ? me.name : '');
     const name = (fullName || 'aluno').split(' ')[0];
@@ -359,6 +585,7 @@
     $('home-sub').textContent = mine.length ? 'Confira seu treino abaixo.' : 'Nenhum vínculo com este profissional ainda.';
     show('step-home');
     loadTreino();
+    setTimeout(() => mostrarPromptInstalacao(INSTALL_FLAG_LOGIN), 800);
   }
 
   // ── Termos de uso / privacidade (bloqueante) ──────────────────────────
@@ -477,7 +704,10 @@
           <div>descanso ${ex.rest_seconds}s</div>
         </div>
         ${ex.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">${esc(ex.notes)}</div>` : ''}
-        ${ex.video_url ? `<div style="margin-top:8px"><a class="ex-video" href="${esc(ex.video_url)}" target="_blank" rel="noopener">▶ Ver vídeo</a></div>` : ''}
+        ${ex.video_url ? (navigator.onLine
+          ? `<div style="margin-top:8px"><a class="ex-video" href="${esc(ex.video_url)}" target="_blank" rel="noopener">▶ Ver vídeo</a></div>`
+          : `<div style="margin-top:8px;font-size:12px;color:var(--muted)">▶ Vídeo indisponível offline</div>`
+        ) : ''}
       </div>`;
   }
 
@@ -529,12 +759,26 @@
     }
   }
 
+  const FICHA_CACHE_KEY = 'ficha_cache';
+
+  function renderCacheInfo(cachedAt) {
+    const el = $('treino-cache-info');
+    if (!el) return;
+    if (!cachedAt) { el.classList.add('hidden'); return; }
+    const d = new Date(cachedAt);
+    el.textContent = '📴 Sem conexão — mostrando o treino salvo no aparelho, atualizado em '
+      + d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    el.classList.remove('hidden');
+  }
+
   async function loadTreino() {
     $('treino-vazio').style.display = 'none';
     $('treino-erro').style.display = 'none';
     $('treino-ativo').style.display = 'none';
+    renderCacheInfo(null);
     try {
       const r = await api('/api/aluno/treino?personal_id=' + personalId);
+      idbKvSet(FICHA_CACHE_KEY, { data: r, cached_at: Date.now() }); // fire-and-forget, não bloqueia a tela
       if (!r.active) {
         $('treino-vazio').textContent = r.had_previous
           ? 'Sua ficha anterior foi encerrada. Aguarde seu personal atribuir uma nova.'
@@ -553,6 +797,20 @@
       renderPicker(sessions, _selectedSessionId);
       renderSessionDetalhe(sessions.find(s => s.id === _selectedSessionId) || null);
     } catch (e) {
+      // Sem rede (ou erro qualquer): tenta mostrar a última ficha baixada
+      // com sucesso, guardada no IndexedDB, em vez de só dar erro.
+      const cached = await idbKvGet(FICHA_CACHE_KEY);
+      if (cached && cached.data && cached.data.active) {
+        const sessions = cached.data.active.sessions || [];
+        if (sessions.length) {
+          $('treino-ativo').style.display = 'block';
+          renderTreinoDia(sessions);
+          renderPicker(sessions, _selectedSessionId);
+          renderSessionDetalhe(sessions.find(s => s.id === _selectedSessionId) || null);
+          renderCacheInfo(cached.cached_at);
+          return;
+        }
+      }
       $('treino-erro').style.display = 'block';
     }
   }
@@ -560,8 +818,15 @@
   $('btn-retry-treino').addEventListener('click', loadTreino);
 
   // ── Execução de treino + avaliação pós-treino (2.4) ────────────
+  // client_key / exec_state continuam em localStorage (estado efêmero da
+  // tela, pequeno, lido/escrito várias vezes por segundo pelo timer — mover
+  // pra IndexedDB aqui só trocaria simplicidade por assincronia sem
+  // ganho real: se essa chave se perder, o pior caso é o aluno remarcar
+  // as séries, nada é perdido de verdade porque toda série já sincronizada
+  // tem seu client_key gravado no servidor). A FILA DE SINCRONIZAÇÃO (o
+  // que de fato não pode sumir nem duplicar) é que mora em IndexedDB,
+  // ver mais abaixo.
   const EXEC_KEY = 'mf_aluno_execucao';
-  const QUEUE_KEY = 'mf_aluno_fila';
 
   function uuidish() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -573,9 +838,6 @@
   function loadExecState() { try { return JSON.parse(localStorage.getItem(EXEC_KEY) || 'null'); } catch (e) { return null; } }
   function saveExecState(s) { try { localStorage.setItem(EXEC_KEY, JSON.stringify(s)); } catch (e) {} }
   function clearExecState() { try { localStorage.removeItem(EXEC_KEY); } catch (e) {} }
-  function loadQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch (e) { return []; } }
-  function saveQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch (e) {} }
-  function enqueue(item) { const q = loadQueue(); q.push(item); saveQueue(q); }
 
   // Tenta enviar na hora; se for falha de REDE (sem resposta do servidor,
   // sem .status), enfileira pra reenviar depois — se for erro de validação
@@ -586,16 +848,15 @@
       return await api(path, { method: 'POST', body: JSON.stringify(body) });
     } catch (e) {
       if (e.status) { console.error('Erro ao sincronizar', path, e.message); return null; }
-      enqueue({ path, body });
+      await enqueue({ path, body });
       return null;
     }
   }
 
   async function flushQueue() {
-    const q = loadQueue();
-    if (!q.length) return;
-    const remaining = [];
-    for (const item of q) {
+    const items = await idbQueueAll();
+    if (!items.length) return;
+    for (const item of items) {
       try {
         const resp = await api(item.path, { method: 'POST', body: JSON.stringify(item.body) });
         if (item.path.endsWith('/execucoes/iniciar')) {
@@ -606,13 +867,18 @@
             saveExecState(st);
           }
         }
+        await idbQueueRemove(item.id);
       } catch (e) {
-        if (!e.status) remaining.push(item);
+        // sem e.status = falha de rede -> mantém na fila pra tentar de novo
+        // depois; com e.status = erro de validação -> descarta (nunca vai
+        // funcionar reenviando igual)
+        if (e.status) { console.error('fila: descartado', item.path, e.status, e.message); await idbQueueRemove(item.id); }
       }
     }
-    saveQueue(remaining);
+    atualizarIndicadorFila();
   }
-  window.addEventListener('online', flushQueue);
+  window.addEventListener('online', () => { atualizarBannerOffline(); flushQueue(); });
+  window.addEventListener('offline', atualizarBannerOffline);
   setInterval(flushQueue, 15000);
 
   function buildExecExercises(session) {
@@ -867,6 +1133,11 @@
         $('modal-peso').classList.remove('hidden');
       }
     } catch (e) { /* nao bloqueia o resumo se o check de peso falhar */ }
+    setTimeout(() => {
+      // Só oferece a instalação se o modal de peso não estiver ocupando a
+      // tela nesse momento (não empilha dois modais de uma vez).
+      if ($('modal-peso').classList.contains('hidden')) mostrarPromptInstalacao(INSTALL_FLAG_WORKOUT);
+    }, 2000);
   }
 
   $('btn-peso-pular').addEventListener('click', () => $('modal-peso').classList.add('hidden'));
@@ -908,18 +1179,160 @@
     } catch (e) { $('historico-lista').innerHTML = '<p class="placeholder">Não consegui carregar seu histórico.</p>'; }
   }
 
+  // ── Offline, fila pendente, atualização de versão, sessão persistente ──
+  function atualizarBannerOffline() {
+    const el = $('offline-banner');
+    if (el) el.classList.toggle('hidden', navigator.onLine);
+  }
+
+  async function atualizarIndicadorFila() {
+    // Hoje só reflete no banner offline (quando há fila pendente E está
+    // offline, deixa claro que o treino está sendo salvo no aparelho);
+    // quando volta a ficar online a fila é drenada por flushQueue() e o
+    // banner já cai junto com o evento 'online'.
+    if (!navigator.onLine) return;
+    const items = await idbQueueAll();
+    if (items.length) atualizarBannerOffline();
+  }
+
+  let _swReg = null;
+  let _reloadingForUpdate = false;
+  function registrarServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      _swReg = reg;
+      reg.addEventListener('updatefound', () => {
+        const novo = reg.installing;
+        if (!novo) return;
+        novo.addEventListener('statechange', () => {
+          // "installed" com um controller já ativo = havia uma versão
+          // anterior rodando, ou seja, isso é uma ATUALIZAÇÃO (não a
+          // primeira instalação) — só af então mostra o aviso.
+          if (novo.state === 'installed' && navigator.serviceWorker.controller) {
+            $('banner-atualizacao')?.classList.remove('hidden');
+          }
+        });
+      });
+    }).catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_reloadingForUpdate) location.reload();
+    });
+  }
+  $('btn-atualizar-versao')?.addEventListener('click', () => {
+    // Nunca troca de versão sozinho no meio de um treino — só quando o
+    // aluno clica, não importa em que tela ele esteja nesse momento.
+    _reloadingForUpdate = true;
+    _swReg?.waiting?.postMessage('SKIP_WAITING');
+    $('banner-atualizacao')?.classList.add('hidden');
+  });
+
+  // Renovação silenciosa de sessão: só dispara quando online e com menos
+  // de 30 dias de validade restante no token — assim quem abre o app com
+  // alguma regularidade nunca chega a precisar pedir código de novo.
+  function decodeJwtPayload(token) {
+    try {
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(decodeURIComponent(escape(atob(b64))));
+    } catch (e) { return null; }
+  }
+  async function renovarSessaoSeNecessario() {
+    if (!navigator.onLine) return;
+    const token = localStorage.getItem(TOKEN_KEY);
+    const payload = token && decodeJwtPayload(token);
+    if (!payload?.exp) return;
+    const diasRestantes = (payload.exp * 1000 - Date.now()) / 86400000;
+    if (diasRestantes >= 30) return;
+    try {
+      const r = await api('/api/aluno/auth/refresh', { method: 'POST' });
+      localStorage.setItem(TOKEN_KEY, r.token);
+    } catch (e) { /* se falhar, tenta de novo na próxima abertura online */ }
+  }
+
+  // Mesmo nome de cache do sw.js (ver SHELL_CACHE lá) — a página se
+  // cacheia sozinha aqui porque o service worker só passa a CONTROLAR a
+  // página a partir da navegação seguinte à que o registrou; sem isso, a
+  // primeira abertura nunca ficava disponível offline (só os assets do
+  // `install` do SW, tipo o ícone, ficavam cacheados de fato).
+  const SHELL_CACHE_NAME = 'meridian-aluno-shell-v3';
+  async function cachearPaginaAtual() {
+    try {
+      if (!('caches' in window)) return;
+      const cache = await caches.open(SHELL_CACHE_NAME);
+      const res = await fetch(location.pathname, { cache: 'no-store' });
+      if (res.ok) await cache.put(location.pathname, res);
+    } catch (e) {}
+  }
+
+  // Modo resolver: entrada genérica em /aluno (sem personal_id na URL) —
+  // é pra onde "Sou aluno" na tela de login (index.html) manda, já que o
+  // aluno não tem por que saber o link específico do profissional de
+  // cor. Faz o login normal (código por e-mail) e, depois, descobre
+  // sozinho a qual(is) profissional(is) esse e-mail está vinculado via
+  // /api/aluno/me — e redireciona pra a URL de verdade (/aluno/{id}),
+  // que é onde a marca do profissional, a ficha e tudo mais realmente
+  // vivem. Não carrega marca nem registra o app aqui propositalmente:
+  // essa tela é só uma ponte, quem fica instalado é a URL com o id.
+  let _resolverMode = false;
+
+  async function resolverEContinuar() {
+    const me = await api('/api/aluno/me');
+    const students = me.students || [];
+    const vistos = new Set();
+    const unicos = students.filter(s => { if (vistos.has(s.personal_id)) return false; vistos.add(s.personal_id); return true; });
+    if (unicos.length === 1) {
+      location.href = '/aluno/' + unicos[0].personal_id;
+      return;
+    }
+    if (unicos.length === 0) {
+      $('invalid-title').textContent = 'Nenhum vínculo encontrado';
+      $('invalid-desc').textContent = 'Esse e-mail ainda não está vinculado a nenhum profissional no Meridian. Peça o link de acesso ao seu personal trainer.';
+      show('step-invalid');
+      return;
+    }
+    $('lista-profissionais').innerHTML = unicos.map(s => {
+      const nome = s.brand_name || s.personal_name;
+      return `<button type="button" class="btn btn-ghost" style="margin-bottom:10px;text-align:left" onclick="location.href='/aluno/${s.personal_id}'">${esc(nome)}</button>`;
+    }).join('');
+    show('step-escolher-profissional');
+  }
+
   async function start() {
-    if (!personalId || !UUID_RE.test(personalId)) return show('step-invalid');
+    if (personalId && !UUID_RE.test(personalId)) return show('step-invalid');
+    _resolverMode = !personalId;
+    atualizarBannerOffline();
+    window.addEventListener('online', atualizarBannerOffline);
+    window.addEventListener('offline', atualizarBannerOffline);
+
+    if (_resolverMode) {
+      if (localStorage.getItem(TOKEN_KEY)) {
+        try { await resolverEContinuar(); return; }
+        catch (e) { await wipeLocalAppData(); localStorage.removeItem(TOKEN_KEY); }
+      }
+      show('step-email');
+      return;
+    }
+
     try {
       await loadBrand();
+      cachearPaginaAtual(); // fire-and-forget, só roda quando há rede
     } catch (e) {
       return show('step-invalid');
     }
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    registrarServiceWorker();
     flushQueue();
+    atualizarIndicadorFila();
     if (localStorage.getItem(TOKEN_KEY)) {
-      try { return await enterHome(); }
-      catch (e) { localStorage.removeItem(TOKEN_KEY); }
+      try {
+        await enterHome();
+        renovarSessaoSeNecessario();
+        return;
+      } catch (e) {
+        // Token inválido/expirado (ou outra pessoa usando o mesmo
+        // aparelho) — limpa tudo antes de voltar pro login, pra não
+        // vazar dado de um aluno pro próximo que usar esse navegador.
+        await wipeLocalAppData();
+        localStorage.removeItem(TOKEN_KEY);
+      }
     }
     show('step-email');
   }

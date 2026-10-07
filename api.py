@@ -1037,7 +1037,13 @@ def _rate_limited(conn, key: str, max_per_hour: int) -> bool:
     n = query(conn, "SELECT COUNT(*) AS n FROM auth_rate_limit WHERE rl_key=%s AND created_at > NOW() - INTERVAL '1 hour'", (key,))
     execute(conn, "INSERT INTO auth_rate_limit (rl_key) VALUES (%s)", (key,))
     return int(n[0]["n"]) >= max_per_hour
-STUDENT_TOKEN_DAYS = 30
+# Validade do token do aluno. Era 30 dias; o app agora é instalável (PWA),
+# então é razoável esperar que o aluno abra com menos frequência que um
+# site comum — subido pra 180 dias + renovação silenciosa (ver
+# /api/aluno/auth/refresh) sempre que o app abre online com token perto de
+# expirar, então quem usa o app com alguma regularidade nunca chega a
+# expirar de fato; só expira de verdade quem fica mais de 6 meses sem abrir.
+STUDENT_TOKEN_DAYS = 180
 RESEND_FROM = os.getenv("RESEND_FROM", "Meridian <acesso@meridianstrategy.de>")
 DEFAULT_BRAND_PRIMARY = "#C9A84C"
 DEFAULT_BRAND_ACCENT = "#4F46E5"
@@ -1172,6 +1178,16 @@ def aluno_me(current=Depends(get_current_student), conn=Depends(get_db)):
         WHERE l.account_id = %s
     """, (current["sub"],))
     return {"email": current["email"], "name": current.get("name"), "students": students_rows}
+
+@app.post("/api/aluno/auth/refresh")
+def aluno_refresh(current=Depends(get_current_student)):
+    """Renovação silenciosa de sessão — chamada pelo app quando está online
+    e o token atual ainda é válido mas perto de expirar (ver lógica no
+    aluno.html). Não pede código novo, só estende a validade. Mantém o
+    e-mail/nome do token atual (não revalida contra o banco: se a conta
+    foi deletada/revogada, get_current_student já teria barrado antes de
+    chegar aqui)."""
+    return {"token": create_student_token(current["sub"], current["email"], current.get("name"))}
 
 # ═══════════════════════════════════════════════════════════════
 #  PRIVACIDADE DO ALUNO — termos versionados + exclusão/exportação
@@ -1687,20 +1703,29 @@ def aluno_brand(personal_id: str, conn=Depends(get_db)):
 
 @app.get("/api/aluno/manifest/{personal_id}.json")
 def aluno_manifest(personal_id: str, conn=Depends(get_db)):
+    """Manifest dinâmico por profissional (Entrega 2) — SÓ name/short_name/
+    start_url/scope variam. Ícone, background_color e theme_color são
+    SEMPRE os da Meridian, iguais pra todo profissional: o app não gera
+    ícone a partir da logo de ninguém, e a marca do profissional só
+    aparece DENTRO do app (cabeçalho, a partir da tela de treino), nunca
+    no ícone/splash do sistema operacional."""
     brand = aluno_brand(personal_id, conn)
     name = brand["display_name"]
-    icons = ([{"src": brand["logo_url"], "sizes": "512x512", "purpose": "any"}]
-             if brand["logo_url"] else
-             [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}])
     manifest = {
         "name": name,
         "short_name": name[:12],
         "start_url": f"/aluno/{personal_id}",
         "scope": f"/aluno/{personal_id}",
         "display": "standalone",
-        "background_color": "#0b0b10",
-        "theme_color": brand["primary"],
-        "icons": icons,
+        "background_color": "#111A2E",
+        "theme_color": "#111A2E",
+        "icons": [
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            {"src": "/icons/icon-mono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "monochrome"},
+        ],
     }
     return Response(content=json.dumps(manifest), media_type="application/manifest+json")
 
