@@ -1362,6 +1362,9 @@ function updateStudent() {
   set('studentLTV',     s.ltv);
   set('sk1',s.sk1); set('sk2',s.sk2); set('sk3',s.sk3); set('sk4',s.sk4);
   loadStudentTreino(sel.value);
+  document.getElementById('student-execucoes').style.display = 'none';
+  document.getElementById('student-execucoes-toggle').textContent = '▸ TREINOS EXECUTADOS';
+  _trExecucoesLoaded = false;
 
   // Fotos — placeholder enquanto loadStudentCheckins carrega
   renderPhotoCarousel(sel.value, []);
@@ -3674,6 +3677,49 @@ function renderHistoricoTreino() {
         <span>Página ${_trStudentHistoricoPage} de ${totalPages}</span>
         <button onclick="_trStudentHistoricoPage++;renderHistoricoTreino()" ${_trStudentHistoricoPage>=totalPages?'disabled':''} style="padding:5px 10px;background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer">Próxima ›</button>
       </div>` : '');
+}
+
+// ── TREINOS EXECUTADOS PELO ALUNO (2.4) — view simples, so leitura ────
+let _trExecucoesLoaded = false;
+const TR_MOOD_EMOJI = ['😣','😕','😐','🙂','😄'];
+
+function toggleExecucoesTreino() {
+  const el = document.getElementById('student-execucoes');
+  const abrir = el.style.display === 'none';
+  el.style.display = abrir ? 'block' : 'none';
+  if (abrir && !_trExecucoesLoaded) loadExecucoesTreino();
+}
+
+async function loadExecucoesTreino() {
+  const sel = document.getElementById('studentSelect');
+  const studentId = sel?.value;
+  const el = document.getElementById('student-execucoes');
+  if (!studentId || !el) return;
+  el.innerHTML = '<div style="font-size:10px;color:var(--dim)">Carregando...</div>';
+  try {
+    const execs = await api('/treino/execucoes/' + studentId);
+    _trExecucoesLoaded = true;
+    if (!execs.length) {
+      el.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:10px 0;text-align:center">Nenhum treino concluído registrado ainda.</div>';
+      return;
+    }
+    el.innerHTML = execs.map(e => {
+      const dt = new Date(e.finished_at);
+      const dur = Math.max(1, Math.round((new Date(e.finished_at) - new Date(e.started_at)) / 60000));
+      const emoji = e.mood_score ? (TR_MOOD_EMOJI[Math.max(1, Math.min(5, e.mood_score)) - 1] || '') : '';
+      return `
+        <div style="border:1px solid rgba(168,178,189,0.1);padding:10px 12px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div style="font-size:12px;color:var(--white)">${escHtml(e.session_name)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">${dt.toLocaleDateString('pt-BR')}</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">${dur} min · ${e.sets.length} séries · esforço ${e.effort_score}/5 ${emoji}</div>
+          ${e.comment ? `<div style="font-size:10px;color:var(--silver);margin-top:4px">"${escHtml(e.comment)}"</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--red)">Erro ao carregar execuções: ' + escHtml(e.message) + '</div>';
+  }
 }
 
 async function encerrarFichaAluno(workoutId) {

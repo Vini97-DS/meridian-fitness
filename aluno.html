@@ -66,6 +66,31 @@
   .ex-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
   .ex-method { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: rgba(167,139,250,0.16); color: #8B5CF6; white-space: nowrap; flex-shrink: 0; }
   .ex-video { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--brand-accent); text-decoration: none; font-weight: 600; min-height: 44px; align-items: center; }
+  .set-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .set-row:first-of-type { border-top: none; }
+  .set-num { font-size: 13px; font-weight: 700; color: var(--muted); width: 22px; flex-shrink: 0; }
+  .set-input { width: 64px; min-height: 40px; padding: 8px; font-size: 15px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 0; text-align: center; }
+  .set-ref { font-size: 11px; color: var(--muted); flex-basis: 100%; }
+  .btn-set { min-height: 40px; padding: 0 14px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+    cursor: pointer; background: var(--brand-accent); color: #fff; margin-left: auto; flex-shrink: 0; }
+  .btn-set.done { background: #16a34a; }
+  .timer-banner { background: var(--brand); color: var(--on-brand); border-radius: 14px; padding: 14px 18px;
+    margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .timer-big { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .scale-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .scale-btn { flex: 1; min-height: 48px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size: 18px; cursor: pointer; }
+  .scale-btn.sel { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end;
+    justify-content: center; z-index: 30; }
+  .modal-overlay.center { align-items: center; padding: 16px; }
+  .modal-sheet { width: 100%; max-width: 480px; margin: 0; border-radius: 18px 18px 0 0; max-height: 90vh; overflow-y: auto; }
+  .modal-overlay.center .modal-sheet { border-radius: 14px; }
+  .sync-pill { font-size: 11px; padding: 3px 9px; border-radius: 999px; margin-left: 6px; }
+  .sync-pill.ok { background: rgba(22,163,74,0.14); color: #16a34a; }
+  .sync-pill.pending { background: rgba(217,119,6,0.14); color: #D97706; }
+  .hist-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -104,7 +129,10 @@
         <h1 id="home-title" style="margin:0 0 4px">Olá</h1>
         <p id="home-sub" style="margin:0;font-size:13px">Seu treino aparece aqui.</p>
       </div>
-      <button class="btn btn-ghost" id="btn-logout" style="width:auto;min-height:40px;padding:0 16px;font-size:13px;margin-top:0;flex-shrink:0">Sair</button>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-ghost" id="btn-historico" style="width:auto;min-height:40px;padding:0 14px;font-size:13px;margin-top:0">Meus treinos</button>
+        <button class="btn btn-ghost" id="btn-logout" style="width:auto;min-height:40px;padding:0 16px;font-size:13px;margin-top:0">Sair</button>
+      </div>
     </div>
 
     <div class="card" id="treino-vazio" style="display:none"></div>
@@ -123,12 +151,69 @@
     </div>
   </section>
 
+  <!-- Execução de treino -->
+  <section id="step-execucao" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="min-width:0">
+        <h1 id="exec-title" style="margin:0 0 4px;font-size:17px"></h1>
+        <p id="exec-sub" style="margin:0;font-size:12px"></p>
+      </div>
+      <button class="btn btn-ghost" id="btn-exec-sair" style="width:auto;min-height:40px;padding:0 14px;font-size:13px;margin-top:0;flex-shrink:0">Sair</button>
+    </div>
+    <div id="exec-timer-banner" class="timer-banner hidden"></div>
+    <div id="exec-lista"></div>
+    <button class="btn" id="btn-exec-finalizar" style="margin-top:4px">Finalizar treino</button>
+  </section>
+
+  <!-- Resumo pós-treino -->
+  <section id="step-resumo" class="hidden">
+    <div class="card" id="resumo-card"></div>
+    <button class="btn" id="btn-resumo-ok">Voltar ao início</button>
+  </section>
+
+  <!-- Histórico -->
+  <section id="step-historico" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+      <h1 style="margin:0;font-size:18px">Meus treinos</h1>
+      <button class="btn btn-ghost" id="btn-historico-voltar" style="width:auto;min-height:36px;padding:0 14px;font-size:13px;margin-top:0">Voltar</button>
+    </div>
+    <div id="historico-lista"></div>
+  </section>
+
   <!-- Link inválido -->
   <section id="step-invalid" class="card hidden">
     <h1>Link inválido</h1>
     <p>Peça ao seu profissional o link correto do app.</p>
   </section>
 
+</div>
+
+<!-- Modal avaliação pós-treino -->
+<div id="modal-avaliacao" class="modal-overlay hidden">
+  <div class="card modal-sheet">
+    <h1 style="font-size:18px">Como foi o treino?</h1>
+    <p style="margin-bottom:10px">Esforço percebido</p>
+    <div id="av-esforco" class="scale-row"></div>
+    <p style="margin:14px 0 10px">Humor</p>
+    <div id="av-humor" class="scale-row"></div>
+    <label for="av-comentario" style="margin-top:14px">Comentário (opcional)</label>
+    <input id="av-comentario" placeholder="Algo a dizer sobre o treino?" />
+    <button class="btn" id="btn-av-confirmar" disabled>Concluir</button>
+    <div class="msg err" id="msg-avaliacao"></div>
+  </div>
+</div>
+
+<!-- Modal peso semanal (opcional) -->
+<div id="modal-peso" class="modal-overlay center hidden">
+  <div class="card modal-sheet">
+    <h1 style="font-size:17px">Quer registrar seu peso desta semana?</h1>
+    <p>Opcional — ajuda seu profissional a acompanhar sua evolução.</p>
+    <label for="peso-valor">Peso (kg)</label>
+    <input id="peso-valor" type="number" step="0.1" inputmode="decimal" placeholder="Ex: 72.5" />
+    <button class="btn" id="btn-peso-salvar">Salvar</button>
+    <button class="btn btn-ghost" id="btn-peso-pular">Agora não</button>
+    <div class="msg" id="msg-peso"></div>
+  </div>
 </div>
 
 <script>
@@ -139,7 +224,8 @@
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const $ = id => document.getElementById(id);
-  const show = id => { ['step-email','step-code','step-home','step-invalid'].forEach(s => $(s).classList.add('hidden')); $(id).classList.remove('hidden'); };
+  const STEPS = ['step-email','step-code','step-home','step-invalid','step-execucao','step-resumo','step-historico'];
+  const show = id => { STEPS.forEach(s => $(s).classList.add('hidden')); $(id).classList.remove('hidden'); };
   const setMsg = (id, text, isErr) => { const el = $(id); el.textContent = text || ''; el.className = 'msg' + (isErr ? ' err' : ''); };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -293,8 +379,12 @@
   function renderSessionDetalhe(session) {
     const el = $('treino-detalhe');
     if (!session) { el.innerHTML = ''; return; }
+    const emAndamento = loadExecState();
+    const continuar = emAndamento && emAndamento.session_id === session.id && !emAndamento.finished;
     el.innerHTML = '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin:18px 0 10px">' + esc(session.name) + '</div>'
-      + (session.exercises || []).map(renderExercicio).join('');
+      + (session.exercises || []).map(renderExercicio).join('')
+      + '<button class="btn" id="btn-iniciar-treino" style="margin-top:4px">' + (continuar ? 'Continuar treino' : 'Iniciar treino') + '</button>';
+    $('btn-iniciar-treino').addEventListener('click', () => iniciarOuContinuarTreino(session));
   }
 
   function renderPicker(sessions, selectedId) {
@@ -364,6 +454,355 @@
 
   $('btn-retry-treino').addEventListener('click', loadTreino);
 
+  // ── Execução de treino + avaliação pós-treino (2.4) ────────────
+  const EXEC_KEY = 'mf_aluno_execucao';
+  const QUEUE_KEY = 'mf_aluno_fila';
+
+  function uuidish() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  function loadExecState() { try { return JSON.parse(localStorage.getItem(EXEC_KEY) || 'null'); } catch (e) { return null; } }
+  function saveExecState(s) { try { localStorage.setItem(EXEC_KEY, JSON.stringify(s)); } catch (e) {} }
+  function clearExecState() { try { localStorage.removeItem(EXEC_KEY); } catch (e) {} }
+  function loadQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch (e) { return []; } }
+  function saveQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch (e) {} }
+  function enqueue(item) { const q = loadQueue(); q.push(item); saveQueue(q); }
+
+  // Tenta enviar na hora; se for falha de REDE (sem resposta do servidor,
+  // sem .status), enfileira pra reenviar depois — se for erro de validação
+  // (.status presente, ex: 400/403), descarta e so loga no console, pra nao
+  // ficar reenviando pra sempre algo que o servidor vai sempre recusar.
+  async function tryOrQueue(path, body) {
+    try {
+      return await api(path, { method: 'POST', body: JSON.stringify(body) });
+    } catch (e) {
+      if (e.status) { console.error('Erro ao sincronizar', path, e.message); return null; }
+      enqueue({ path, body });
+      return null;
+    }
+  }
+
+  async function flushQueue() {
+    const q = loadQueue();
+    if (!q.length) return;
+    const remaining = [];
+    for (const item of q) {
+      try {
+        const resp = await api(item.path, { method: 'POST', body: JSON.stringify(item.body) });
+        if (item.path.endsWith('/execucoes/iniciar')) {
+          const st = loadExecState();
+          if (st && st.client_key === item.body.client_key) {
+            applyServerStateToExec(st, resp);
+            st.execConfirmed = true;
+            saveExecState(st);
+          }
+        }
+      } catch (e) {
+        if (!e.status) remaining.push(item);
+      }
+    }
+    saveQueue(remaining);
+  }
+  window.addEventListener('online', flushQueue);
+  setInterval(flushQueue, 15000);
+
+  function buildExecExercises(session) {
+    return (session.exercises || []).map(ex => ({
+      workout_exercise_id: String(ex.id),
+      exercise_name: ex.exercise_name,
+      rest_seconds: ex.rest_seconds || 60,
+      load_unit: ex.load_unit || 'kg',
+      sets: Array.from({ length: ex.sets }, (_, i) => ({
+        set_number: i + 1, reps_target_min: ex.reps_min, reps_target_max: ex.reps_max,
+        load_target: ex.load_value, reps_done: null, load_done: null, done: false, client_key: null,
+      })),
+    }));
+  }
+
+  function applyServerStateToExec(state, resp) {
+    state.lastTime = resp.last_time || {};
+    (resp.already_done || []).forEach(d => {
+      const ex = state.exercises.find(e => e.workout_exercise_id === String(d.workout_exercise_id));
+      if (!ex) return;
+      const s = ex.sets.find(x => x.set_number === d.set_number);
+      if (s) { s.done = true; s.reps_done = d.reps_done; s.load_done = d.load_done != null ? parseFloat(d.load_done) : null; }
+    });
+    saveExecState(state);
+  }
+
+  async function iniciarOuContinuarTreino(session) {
+    flushQueue();
+    let state = loadExecState();
+    if (state && state.session_id !== session.id && !state.finished) {
+      if (!confirm('Você tem um treino em andamento (' + state.session_name + '). Começar "' + session.name + '" vai descartar o progresso não sincronizado desse treino. Continuar?')) return;
+      state = null;
+    }
+    if (!(state && state.session_id === session.id && !state.finished)) {
+      const client_key = 'exec-' + session.id + '-' + Date.now() + '-' + uuidish();
+      state = {
+        client_key, session_id: session.id, session_name: session.name,
+        started_at: new Date().toISOString(), exercises: buildExecExercises(session),
+        finished: false, execConfirmed: false, timerEnd: null, timerExerciseLabel: null,
+      };
+      saveExecState(state);
+      const resp = await tryOrQueue('/api/aluno/treino/execucoes/iniciar', { session_id: session.id, client_key });
+      if (resp) { applyServerStateToExec(state, resp); state.execConfirmed = true; saveExecState(state); }
+    }
+    renderExecucao(loadExecState());
+    show('step-execucao');
+    requestWakeLockSafe();
+    resumeTimerIfAny(loadExecState());
+  }
+
+  function renderExecucao(state) {
+    $('exec-title').textContent = state.session_name;
+    $('exec-sub').textContent = 'Treino em andamento';
+    const el = $('exec-lista');
+    el.innerHTML = state.exercises.map(ex => {
+      const rows = ex.sets.map(s => {
+        const last = ((state.lastTime || {})[ex.workout_exercise_id] || []).find(l => l.set_number === s.set_number);
+        const refTxt = last ? ('última vez: ' + (last.reps_done ?? '–') + ' reps' + (last.load_done != null ? ' · ' + last.load_done + ex.load_unit : '')) : '';
+        const repsVal = s.reps_done ?? (last ? last.reps_done : null);
+        const loadVal = s.load_done ?? (last ? last.load_done : null);
+        const placeholderReps = s.reps_target_min === s.reps_target_max ? s.reps_target_min : (s.reps_target_min + '-' + s.reps_target_max);
+        return `<div class="set-row" data-wex="${esc(ex.workout_exercise_id)}" data-set="${s.set_number}">
+          <div class="set-num">${s.set_number}ª</div>
+          <input class="set-input" type="number" inputmode="numeric" placeholder="${esc(String(placeholderReps))}" value="${repsVal ?? ''}" data-field="reps" ${s.done ? 'disabled' : ''} />
+          <input class="set-input" type="number" inputmode="decimal" step="0.5" placeholder="${esc(String(s.load_target ?? ex.load_unit))}" value="${loadVal ?? ''}" data-field="load" ${s.done ? 'disabled' : ''} />
+          <button type="button" class="btn-set ${s.done ? 'done' : ''}" data-action="toggle-set">${s.done ? '✓ feito' : 'Concluir'}</button>
+          ${refTxt ? `<div class="set-ref">${esc(refTxt)}</div>` : ''}
+        </div>`;
+      }).join('');
+      return `<div class="ex-card"><div style="font-weight:700;margin-bottom:6px">${esc(ex.exercise_name)}</div>${rows}</div>`;
+    }).join('');
+    el.querySelectorAll('[data-action="toggle-set"]').forEach(btn => btn.addEventListener('click', () => onToggleSet(btn)));
+  }
+
+  function onToggleSet(btn) {
+    const row = btn.closest('.set-row');
+    const wex = row.dataset.wex, setNum = parseInt(row.dataset.set, 10);
+    const state = loadExecState();
+    const ex = state.exercises.find(e => e.workout_exercise_id === wex);
+    const s = ex.sets.find(x => x.set_number === setNum);
+    if (s.done) {
+      s.done = false;
+      saveExecState(state);
+      renderExecucao(state);
+      return;
+    }
+    const reps = row.querySelector('[data-field="reps"]').value;
+    const load = row.querySelector('[data-field="load"]').value;
+    s.reps_done = reps !== '' ? parseInt(reps, 10) : null;
+    s.load_done = load !== '' ? parseFloat(load) : null;
+    s.done = true;
+    s.client_key = s.client_key || (state.client_key + '-' + wex + '-' + setNum);
+    saveExecState(state);
+    renderExecucao(state);
+    const body = {
+      execution_client_key: state.client_key,
+      sets: [{
+        workout_exercise_id: wex, exercise_name: ex.exercise_name, set_number: setNum,
+        reps_target_min: s.reps_target_min, reps_target_max: s.reps_target_max,
+        load_target: s.load_target, load_unit: ex.load_unit,
+        reps_done: s.reps_done, load_done: s.load_done, client_key: s.client_key,
+      }],
+    };
+    if (state.execConfirmed === false) enqueue({ path: '/api/aluno/treino/execucoes/series', body });
+    else tryOrQueue('/api/aluno/treino/execucoes/series', body);
+    startRestTimer(ex.rest_seconds, ex.exercise_name);
+  }
+
+  // ── Timer de descanso (sobrevive troca de aba — calcula pelo timestamp
+  // absoluto de fim, nao por contagem incremental) + Wake Lock ──────────
+  let timerInterval = null;
+  let wakeLockSentinel = null;
+
+  async function requestWakeLockSafe() {
+    try { if ('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen'); }
+    catch (e) { /* sem suporte ou negado — tela apaga normalmente, sem quebrar nada */ }
+  }
+  function releaseWakeLock() {
+    try { wakeLockSentinel && wakeLockSentinel.release(); } catch (e) {}
+    wakeLockSentinel = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    const st = loadExecState();
+    if (document.visibilityState === 'visible' && st && !st.finished) { requestWakeLockSafe(); renderTimerBanner(); }
+  });
+
+  function fmtTimer(s) { const m = Math.floor(s / 60), r = s % 60; return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0'); }
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.frequency.value = 880; osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {}
+  }
+  function startRestTimer(seconds, exerciseName) {
+    const state = loadExecState();
+    state.timerEnd = Date.now() + (seconds || 60) * 1000;
+    state.timerExerciseLabel = exerciseName;
+    saveExecState(state);
+    renderTimerBanner();
+  }
+  function resumeTimerIfAny(state) {
+    if (state.timerEnd && state.timerEnd > Date.now()) renderTimerBanner();
+  }
+  function endTimer(alertUser) {
+    const state = loadExecState();
+    if (state) { state.timerEnd = null; state.timerExerciseLabel = null; saveExecState(state); }
+    clearInterval(timerInterval);
+    $('exec-timer-banner').classList.add('hidden');
+    if (alertUser) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} playBeep(); }
+  }
+  function renderTimerBanner() {
+    clearInterval(timerInterval);
+    const banner = $('exec-timer-banner');
+    const tick = () => {
+      const state = loadExecState();
+      if (!state || !state.timerEnd) { banner.classList.add('hidden'); clearInterval(timerInterval); return; }
+      banner.classList.remove('hidden');
+      const remaining = Math.max(0, Math.round((state.timerEnd - Date.now()) / 1000));
+      banner.innerHTML = '<div><div style="font-size:11px;opacity:.85">Descanso' + (state.timerExerciseLabel ? ' · ' + esc(state.timerExerciseLabel) : '') + '</div><div class="timer-big">' + fmtTimer(remaining) + '</div></div>'
+        + '<button type="button" class="btn-set" style="background:rgba(0,0,0,0.2);color:inherit" id="btn-timer-pular">Pular</button>';
+      const skipBtn = document.getElementById('btn-timer-pular');
+      if (skipBtn) skipBtn.onclick = () => endTimer(false);
+      if (remaining <= 0) endTimer(true);
+    };
+    tick();
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  // ── Avaliação pós-treino (obrigatória pra finalizar) ──────────────────
+  let _avEsforco = null, _avHumor = null;
+  function renderScale(containerId, selected) {
+    const el = $(containerId);
+    el.innerHTML = [1, 2, 3, 4, 5].map(n => '<button type="button" class="scale-btn' + (selected === n ? ' sel' : '') + '" data-n="' + n + '">' + n + '</button>').join('');
+    el.querySelectorAll('.scale-btn').forEach(btn => btn.addEventListener('click', () => {
+      const n = parseInt(btn.dataset.n, 10);
+      if (containerId === 'av-esforco') _avEsforco = n; else _avHumor = n;
+      renderScale(containerId, containerId === 'av-esforco' ? _avEsforco : _avHumor);
+      $('btn-av-confirmar').disabled = !(_avEsforco && _avHumor);
+    }));
+  }
+
+  $('btn-exec-finalizar').addEventListener('click', () => {
+    _avEsforco = null; _avHumor = null;
+    $('msg-avaliacao').textContent = '';
+    $('av-comentario').value = '';
+    renderScale('av-esforco', null);
+    renderScale('av-humor', null);
+    $('btn-av-confirmar').disabled = true;
+    $('modal-avaliacao').classList.remove('hidden');
+  });
+
+  $('btn-av-confirmar').addEventListener('click', async () => {
+    if (!_avEsforco || !_avHumor) return;
+    const btn = $('btn-av-confirmar'); btn.disabled = true;
+    const state = loadExecState();
+    const body = { execution_client_key: state.client_key, effort_score: _avEsforco, mood_score: _avHumor, comment: $('av-comentario').value.trim() || null };
+    if (state.execConfirmed === false) enqueue({ path: '/api/aluno/treino/execucoes/finalizar', body });
+    else await tryOrQueue('/api/aluno/treino/execucoes/finalizar', body);
+    state.finished = true;
+    state.finishedAt = new Date().toISOString();
+    state.effort_score = _avEsforco; state.mood_score = _avHumor;
+    saveExecState(state);
+    endTimer(false);
+    releaseWakeLock();
+    $('modal-avaliacao').classList.add('hidden');
+    await mostrarResumo(state);
+  });
+
+  // Comparações descontraídas pro resumo final — so estimativa, pra deixar
+  // mais leve, nao e dado cientifico.
+  const TONNAGE_REFS = [
+    { label: 'uma pena', kg: 0.01, min: 0 },
+    { label: 'um gato', kg: 4, min: 1 },
+    { label: 'uma pessoa adulta', kg: 70, min: 20 },
+    { label: 'uma moto', kg: 180, min: 100 },
+    { label: 'um piano', kg: 250, min: 150 },
+    { label: 'um carro pequeno', kg: 1200, min: 600 },
+    { label: 'um elefante', kg: 5000, min: 3000 },
+    { label: 'um ônibus', kg: 12000, min: 8000 },
+  ];
+  function equivalenteTonelagem(totalKg) {
+    let best = TONNAGE_REFS[0];
+    for (const r of TONNAGE_REFS) if (totalKg >= r.min) best = r;
+    const qtd = Math.max(1, Math.round(totalKg / best.kg));
+    return qtd + 'x ' + best.label;
+  }
+
+  async function mostrarResumo(state) {
+    const setsDone = state.exercises.flatMap(e => e.sets.filter(s => s.done).map(s => ({ ...s, load_unit: e.load_unit })));
+    const totalKg = setsDone.reduce((acc, s) => acc + (s.load_done || 0) * (s.reps_done || 0), 0);
+    const durMin = Math.max(1, Math.round((new Date(state.finishedAt) - new Date(state.started_at)) / 60000));
+    $('resumo-card').innerHTML = `
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Treino concluído</div>
+      <div style="font-size:20px;font-weight:800;margin-bottom:14px">${esc(state.session_name)}</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+        <div><div style="font-size:22px;font-weight:800">${durMin} min</div><div style="font-size:12px;color:var(--muted)">duração</div></div>
+        <div><div style="font-size:22px;font-weight:800">${setsDone.length}</div><div style="font-size:12px;color:var(--muted)">séries</div></div>
+        ${totalKg > 0 ? `<div><div style="font-size:22px;font-weight:800">${Math.round(totalKg)}kg</div><div style="font-size:12px;color:var(--muted)">tonelagem</div></div>` : ''}
+      </div>
+      ${totalKg > 0 ? `<div class="pill" style="display:block;margin-top:4px">💪 Equivalente a ${esc(equivalenteTonelagem(totalKg))}. Mandou bem!</div>` : '<div class="pill" style="display:block;margin-top:4px">🔥 Treino concluído. Mandou bem!</div>'}
+    `;
+    show('step-resumo');
+    clearExecState();
+    try {
+      const st = await api('/api/aluno/peso/status?personal_id=' + personalId);
+      if (st.can_log) {
+        $('peso-valor').value = '';
+        $('msg-peso').textContent = '';
+        $('modal-peso').classList.remove('hidden');
+      }
+    } catch (e) { /* nao bloqueia o resumo se o check de peso falhar */ }
+  }
+
+  $('btn-peso-pular').addEventListener('click', () => $('modal-peso').classList.add('hidden'));
+  $('btn-peso-salvar').addEventListener('click', async () => {
+    const val = parseFloat($('peso-valor').value);
+    if (!val || val <= 0) return setMsg('msg-peso', 'Informe um peso válido.', true);
+    const btn = $('btn-peso-salvar'); btn.disabled = true;
+    try {
+      await api('/api/aluno/peso', { method: 'POST', body: JSON.stringify({ personal_id: personalId, weight: val }) });
+      $('modal-peso').classList.add('hidden');
+    } catch (e) { setMsg('msg-peso', e.message, true); }
+    finally { btn.disabled = false; }
+  });
+
+  $('btn-resumo-ok').addEventListener('click', () => { show('step-home'); loadTreino(); });
+  $('btn-exec-sair').addEventListener('click', () => { clearInterval(timerInterval); releaseWakeLock(); show('step-home'); loadTreino(); });
+
+  // ── Histórico de treinos concluídos (simples) ─────────────────────────
+  $('btn-historico').addEventListener('click', abrirHistorico);
+  $('btn-historico-voltar').addEventListener('click', () => show('step-home'));
+
+  async function abrirHistorico() {
+    show('step-historico');
+    $('historico-lista').innerHTML = '<p class="placeholder">Carregando...</p>';
+    try {
+      const list = await api('/api/aluno/treino/execucoes');
+      if (!list.length) { $('historico-lista').innerHTML = '<p class="placeholder">Nenhum treino concluído ainda.</p>'; return; }
+      const moodEmoji = ['😣', '😕', '😐', '🙂', '😄'];
+      $('historico-lista').innerHTML = list.map(e => {
+        const dt = new Date(e.finished_at);
+        const dur = Math.max(1, Math.round((new Date(e.finished_at) - new Date(e.started_at)) / 60000));
+        const emoji = e.mood_score ? (moodEmoji[Math.max(1, Math.min(5, e.mood_score)) - 1] || '') : '';
+        return `<div class="hist-card">
+          <div style="display:flex;justify-content:space-between;gap:10px"><strong>${esc(e.session_name)}</strong><span style="font-size:12px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</span></div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">${dur} min · ${e.sets.length} séries · esforço ${e.effort_score}/5 ${emoji}</div>
+          ${e.comment ? `<div style="font-size:13px;margin-top:6px">"${esc(e.comment)}"</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) { $('historico-lista').innerHTML = '<p class="placeholder">Não consegui carregar seu histórico.</p>'; }
+  }
+
   async function start() {
     if (!personalId || !UUID_RE.test(personalId)) return show('step-invalid');
     try {
@@ -372,6 +811,7 @@
       return show('step-invalid');
     }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    flushQueue();
     if (localStorage.getItem(TOKEN_KEY)) {
       try { return await enterHome(); }
       catch (e) { localStorage.removeItem(TOKEN_KEY); }

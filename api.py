@@ -413,6 +413,62 @@ def create_users_table():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # Treino (2.4): registro de execucao de series + avaliacao pos-
+            # treino. client_key e gerado no app (localStorage) e sobrevive a
+            # reenvios offline — UNIQUE garante que um reenvio apos
+            # reconexao nunca duplica a mesma serie/execucao. Testado antes
+            # num branch do Neon (br-soft-silence-aqqf4z02, deletado).
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS workout_executions (
+                        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        student_id    UUID NOT NULL REFERENCES students(id),
+                        workout_id    UUID NOT NULL REFERENCES workouts(id),
+                        session_id    UUID NOT NULL REFERENCES workout_sessions(id),
+                        session_name  TEXT NOT NULL,
+                        started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        finished_at   TIMESTAMPTZ,
+                        effort_score  INT,
+                        mood_score    INT,
+                        comment       TEXT,
+                        client_key    TEXT UNIQUE NOT NULL,
+                        created_at    TIMESTAMPTZ DEFAULT NOW(),
+                        CONSTRAINT workout_executions_effort_check CHECK (effort_score IS NULL OR (effort_score BETWEEN 1 AND 5)),
+                        CONSTRAINT workout_executions_mood_check CHECK (mood_score IS NULL OR (mood_score BETWEEN 1 AND 5))
+                    )
+                """)
+                cur2.execute("CREATE INDEX IF NOT EXISTS workout_executions_student_idx ON workout_executions(student_id, started_at DESC)")
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS workout_execution_sets (
+                        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        execution_id        UUID NOT NULL REFERENCES workout_executions(id) ON DELETE CASCADE,
+                        workout_exercise_id UUID REFERENCES workout_exercises(id),
+                        exercise_name       TEXT NOT NULL,
+                        set_number          INT NOT NULL,
+                        reps_target_min     INT,
+                        reps_target_max     INT,
+                        load_target         NUMERIC(6,2),
+                        load_unit           TEXT DEFAULT 'kg',
+                        reps_done           INT,
+                        load_done           NUMERIC(6,2),
+                        completed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        client_key          TEXT UNIQUE NOT NULL,
+                        created_at          TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur2.execute("CREATE INDEX IF NOT EXISTS workout_execution_sets_execution_idx ON workout_execution_sets(execution_id)")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+            # checkins.type e ENUM (checkin_type) com so semanal/mensal/
+            # trimestral — precisa de um 4o valor pro peso opcional lancado
+            # pelo proprio aluno no fim do treino (2.4). Aditivo, testado
+            # antes num branch do Neon (br-super-wave-aq80vw8d, deletado).
+            try:
+                cur2.execute("ALTER TYPE checkin_type ADD VALUE IF NOT EXISTS 'treino'")
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # student_acquisition_costs — custo de CADA PROFISSIONAL adquirir
             # um ALUNO (Nivel 1), nao confundir com acquisition_costs acima
             # (custo do Meridian adquirir um PROFISSIONAL, Nivel 2). "amount"
@@ -1107,6 +1163,211 @@ def aluno_treino(personal_id: str, current=Depends(get_current_student), conn=De
         return {"active": ativa[0], "had_previous": True, "student_name": link[0]["student_name"]}
     any_before = query(conn, "SELECT id FROM workouts WHERE student_id=%s LIMIT 1", (student_id,))
     return {"active": None, "had_previous": bool(any_before), "student_name": link[0]["student_name"]}
+
+# ═══════════════════════════════════════════════════════════════
+#  TREINO — execução de séries + avaliação pós-treino (2.4)
+# ═══════════════════════════════════════════════════════════════
+def _own_student_id_for_session(conn, session_id: str, current: dict) -> tuple[str, str, str]:
+    """Confere que a sessao pertence a uma ficha do aluno logado (via
+    student_account_links). Retorna (student_id, workout_id, session_name)."""
+    rows = query(conn, """
+        SELECT w.student_id, w.id AS workout_id, ws.name AS session_name
+        FROM workout_sessions ws JOIN workouts w ON w.id = ws.workout_id
+        WHERE ws.id = %s
+    """, (session_id,))
+    if not rows or not rows[0]["student_id"]:
+        raise HTTPException(404, "Treino não encontrado")
+    link = query(conn, """
+        SELECT 1 FROM student_account_links WHERE account_id=%s AND student_id=%s
+    """, (current["sub"], rows[0]["student_id"]))
+    if not link:
+        raise HTTPException(403, "Este treino não pertence a você")
+    return str(rows[0]["student_id"]), str(rows[0]["workout_id"]), rows[0]["session_name"]
+
+def _own_execution_by_client_key(conn, execution_client_key: str, current: dict) -> dict:
+    """Resolve a execucao pelo client_key (gerado no app) em vez do id do
+    servidor — assim a fila offline nunca depende de ter recebido de volta
+    o id gerado pelo POST /iniciar antes de poder enfileirar series/finalizar."""
+    rows = query(conn, "SELECT * FROM workout_executions WHERE client_key=%s", (execution_client_key,))
+    if not rows:
+        raise HTTPException(404, "Execução não encontrada — inicie o treino antes de registrar séries")
+    link = query(conn, "SELECT 1 FROM student_account_links WHERE account_id=%s AND student_id=%s",
+                 (current["sub"], rows[0]["student_id"]))
+    if not link:
+        raise HTTPException(403, "Esta execução não pertence a você")
+    return rows[0]
+
+class ExecucaoStart(BaseModel):
+    session_id: str
+    client_key: str
+
+class SetLogIn(BaseModel):
+    workout_exercise_id: Optional[str] = None
+    exercise_name:       str
+    set_number:          int
+    reps_target_min:     Optional[int] = None
+    reps_target_max:     Optional[int] = None
+    load_target:         Optional[float] = None
+    load_unit:            str = "kg"
+    reps_done:           Optional[int] = None
+    load_done:           Optional[float] = None
+    client_key:          str
+
+class SetsLogIn(BaseModel):
+    execution_client_key: str
+    sets: list[SetLogIn]
+
+class ExecucaoFinish(BaseModel):
+    execution_client_key: str
+    effort_score: int
+    mood_score:   int
+    comment:      Optional[str] = None
+
+@app.post("/api/aluno/treino/execucoes/iniciar")
+def iniciar_execucao(data: ExecucaoStart, current=Depends(get_current_student), conn=Depends(get_db)):
+    student_id, workout_id, session_name = _own_student_id_for_session(conn, data.session_id, current)
+    existing = query(conn, "SELECT * FROM workout_executions WHERE client_key=%s", (data.client_key,))
+    if existing:
+        execution = existing[0]
+    else:
+        execution = execute(conn, """
+            INSERT INTO workout_executions (student_id, workout_id, session_id, session_name, client_key)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (client_key) DO UPDATE SET client_key = EXCLUDED.client_key
+            RETURNING *
+        """, (student_id, workout_id, data.session_id, session_name, data.client_key))
+    # Referencia "ultima vez" — ultima execucao FINALIZADA dessa mesma sessao
+    # (nao necessariamente deste client_key), pra pre-preencher carga/reps.
+    last = query(conn, """
+        SELECT es.workout_exercise_id, es.set_number, es.reps_done, es.load_done
+        FROM workout_execution_sets es
+        JOIN workout_executions we ON we.id = es.execution_id
+        WHERE we.session_id = %s AND we.student_id = %s AND we.finished_at IS NOT NULL
+          AND we.id != %s
+        ORDER BY we.finished_at DESC LIMIT 1
+    """, (data.session_id, student_id, execution["id"]))
+    last_time = {}
+    if last:
+        # pega so a execucao finalizada mais recente inteira, nao so 1 linha
+        last_exec = query(conn, """
+            SELECT we.id FROM workout_execution_sets es
+            JOIN workout_executions we ON we.id = es.execution_id
+            WHERE we.session_id = %s AND we.student_id = %s AND we.finished_at IS NOT NULL AND we.id != %s
+            ORDER BY we.finished_at DESC LIMIT 1
+        """, (data.session_id, student_id, execution["id"]))
+        if last_exec:
+            rows = query(conn, """
+                SELECT workout_exercise_id, set_number, reps_done, load_done
+                FROM workout_execution_sets WHERE execution_id=%s
+            """, (last_exec[0]["id"],))
+            for r in rows:
+                key = str(r["workout_exercise_id"])
+                last_time.setdefault(key, []).append(
+                    {"set_number": r["set_number"], "reps_done": r["reps_done"], "load_done": float(r["load_done"]) if r["load_done"] is not None else None})
+    already_done = query(conn, """
+        SELECT workout_exercise_id, set_number, reps_done, load_done FROM workout_execution_sets WHERE execution_id=%s
+    """, (execution["id"],))
+    return {"execution": execution, "last_time": last_time, "already_done": already_done}
+
+@app.post("/api/aluno/treino/execucoes/series")
+def registrar_series(data: SetsLogIn, current=Depends(get_current_student), conn=Depends(get_db)):
+    execution = _own_execution_by_client_key(conn, data.execution_client_key, current)
+    if execution["finished_at"]:
+        raise HTTPException(400, "Este treino já foi finalizado")
+    saved = []
+    for s in data.sets:
+        row = execute(conn, """
+            INSERT INTO workout_execution_sets
+                (execution_id, workout_exercise_id, exercise_name, set_number,
+                 reps_target_min, reps_target_max, load_target, load_unit,
+                 reps_done, load_done, client_key)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (client_key) DO UPDATE SET client_key = EXCLUDED.client_key
+            RETURNING *
+        """, (execution["id"], s.workout_exercise_id, s.exercise_name, s.set_number,
+              s.reps_target_min, s.reps_target_max, s.load_target, s.load_unit,
+              s.reps_done, s.load_done, s.client_key))
+        saved.append(row)
+    return {"saved": saved}
+
+@app.post("/api/aluno/treino/execucoes/finalizar")
+def finalizar_execucao(data: ExecucaoFinish, current=Depends(get_current_student), conn=Depends(get_db)):
+    execution = _own_execution_by_client_key(conn, data.execution_client_key, current)
+    if not (1 <= data.effort_score <= 5) or not (1 <= data.mood_score <= 5):
+        raise HTTPException(400, "Esforço e humor devem ser de 1 a 5")
+    if execution["finished_at"]:
+        return execution  # idempotente: ja finalizado (reenvio offline), devolve como esta
+    return execute(conn, """
+        UPDATE workout_executions
+        SET finished_at=NOW(), effort_score=%s, mood_score=%s, comment=%s
+        WHERE id=%s RETURNING *
+    """, (data.effort_score, data.mood_score, data.comment, execution["id"]))
+
+@app.get("/api/aluno/treino/execucoes")
+def historico_execucoes_aluno(current=Depends(get_current_student), conn=Depends(get_db)):
+    links = query(conn, "SELECT student_id FROM student_account_links WHERE account_id=%s", (current["sub"],))
+    student_ids = [str(l["student_id"]) for l in links]
+    if not student_ids:
+        return []
+    execs = query(conn, """
+        SELECT * FROM workout_executions WHERE student_id = ANY(%s::uuid[]) AND finished_at IS NOT NULL
+        ORDER BY finished_at DESC LIMIT 20
+    """, (student_ids,))
+    for e in execs:
+        e["sets"] = query(conn, "SELECT * FROM workout_execution_sets WHERE execution_id=%s ORDER BY set_number", (e["id"],))
+    return execs
+
+class PesoIn(BaseModel):
+    personal_id: str
+    weight:      float
+
+@app.post("/api/aluno/peso")
+def registrar_peso_aluno(data: PesoIn, current=Depends(get_current_student), conn=Depends(get_db)):
+    link = query(conn, """
+        SELECT s.id AS student_id FROM student_account_links l JOIN students s ON s.id = l.student_id
+        WHERE l.account_id=%s AND s.personal_id=%s
+    """, (current["sub"], data.personal_id))
+    if not link:
+        raise HTTPException(403, "Aluno não vinculado a este profissional")
+    student_id = link[0]["student_id"]
+    recent = query(conn, """
+        SELECT id FROM checkins WHERE student_id=%s AND weight_reported IS NOT NULL
+          AND created_at > NOW() - INTERVAL '7 days'
+    """, (student_id,))
+    if recent:
+        raise HTTPException(400, "Peso já registrado nos últimos 7 dias")
+    execute(conn, """
+        INSERT INTO checkins (student_id, personal_id, type, weight_reported, responded_at)
+        VALUES (%s, %s, 'treino', %s, NOW())
+    """, (student_id, data.personal_id, data.weight))
+    execute(conn, "UPDATE students SET weight_current=%s WHERE id=%s", (data.weight, student_id))
+    return {"ok": True}
+
+@app.get("/api/aluno/peso/status")
+def status_peso_aluno(personal_id: str, current=Depends(get_current_student), conn=Depends(get_db)):
+    link = query(conn, """
+        SELECT s.id AS student_id FROM student_account_links l JOIN students s ON s.id = l.student_id
+        WHERE l.account_id=%s AND s.personal_id=%s
+    """, (current["sub"], personal_id))
+    if not link:
+        raise HTTPException(403, "Aluno não vinculado a este profissional")
+    recent = query(conn, """
+        SELECT id FROM checkins WHERE student_id=%s AND weight_reported IS NOT NULL
+          AND created_at > NOW() - INTERVAL '7 days'
+    """, (link[0]["student_id"],))
+    return {"can_log": not bool(recent)}
+
+# Visao do profissional (perfil do aluno em Acompanhamento)
+@app.get("/api/treino/execucoes/{student_id}")
+def historico_execucoes_personal(student_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_student(conn, student_id, current)
+    execs = query(conn, """
+        SELECT * FROM workout_executions WHERE student_id=%s AND finished_at IS NOT NULL
+        ORDER BY finished_at DESC LIMIT 20
+    """, (student_id,))
+    for e in execs:
+        e["sets"] = query(conn, "SELECT * FROM workout_execution_sets WHERE execution_id=%s ORDER BY set_number", (e["id"],))
+    return execs
 
 @app.get("/api/aluno/brand/{personal_id}")
 def aluno_brand(personal_id: str, conn=Depends(get_db)):
