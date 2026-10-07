@@ -1361,6 +1361,7 @@ function updateStudent() {
   set('studentChannel', s.channel);
   set('studentLTV',     s.ltv);
   set('sk1',s.sk1); set('sk2',s.sk2); set('sk3',s.sk3); set('sk4',s.sk4);
+  loadStudentTreino(sel.value);
 
   // Fotos — placeholder enquanto loadStudentCheckins carrega
   renderPhotoCarousel(sel.value, []);
@@ -3251,14 +3252,40 @@ const TR_WEEKDAY_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 let _trStudents = null;
 let _trAssignOpenId = null;
 
+let _trDraftStudentId = null;
+
 function abrirNovaFicha() {
   _trDraft = { sessoes: [ { nome: 'A', weekdays: [], exercicios: [] } ] };
+  _trDraftStudentId = null;
+  const banner = document.getElementById('tr-ficha-contexto-aluno');
+  if (banner) banner.style.display = 'none';
   document.getElementById('tr-ficha-nome').value = '';
   document.getElementById('tr-ficha-objetivo').value = '';
   document.getElementById('tr-ficha-nivel').value = '';
   document.getElementById('tr-ficha-obs').value = '';
   document.getElementById('tr-form-ficha').style.display = 'block';
+  const btn = document.getElementById('tr-ficha-salvar-btn');
+  if (btn) btn.textContent = 'Salvar como modelo';
   renderDraft();
+}
+
+// Abre o montador da aba Treinos já mirando o aluno selecionado em
+// Acompanhamento — ao salvar, a ficha nasce atribuída direto (não modelo)
+function abrirCriarFichaAluno() {
+  const sel = document.getElementById('studentSelect');
+  const studentId = sel?.value;
+  const student = studentId ? students[studentId] : null;
+  if (!studentId || !student) { alert('Selecione um aluno primeiro.'); return; }
+  switchTab('treinos', document.querySelector('[onclick*="treinos"]'));
+  abrirNovaFicha();
+  _trDraftStudentId = studentId;
+  const banner = document.getElementById('tr-ficha-contexto-aluno');
+  if (banner) {
+    banner.textContent = '✓ Criando ficha para ' + student.name + ' — já nasce atribuída, não vira modelo.';
+    banner.style.display = 'block';
+  }
+  const btn = document.getElementById('tr-ficha-salvar-btn');
+  if (btn) btn.textContent = 'Salvar e atribuir ao aluno';
 }
 
 function fecharNovaFicha() {
@@ -3295,10 +3322,37 @@ function normalizeText(s) {
 function adicionarExercicioObjAoDraft(i, ex) {
   _trDraft.sessoes[i].exercicios.push({
     exercise_id: ex.id, name: ex.name, sets: 3, reps_min: 8, reps_max: 12,
-    load_value: '', load_unit: 'kg', rest_seconds: 60,
+    load_value: '', load_unit: 'kg', rest_seconds: 60, notes: '', method: '', method_other: '',
   });
   delete _exComboState[i];
   renderDraft();
+}
+
+// ── Método de execução por exercício (opcional) — chave estável
+// persistida (method), rótulo traduzido só aqui no front. "Outro" abre
+// campo de texto livre (method_other).
+const TR_METHOD_ORDER = ['drop_set','cluster_set','rest_pause','bi_set','tri_set','super_serie',
+  'pre_exaustao','pos_exaustao','ate_falha','negativa','isometria','reps_parciais',
+  'piramide_crescente','piramide_decrescente','metodo_21','cadencia_controlada','outro'];
+const TR_METHOD_LABELS = {
+  drop_set:'Drop set', cluster_set:'Cluster set', rest_pause:'Rest-pause', bi_set:'Bi-set',
+  tri_set:'Tri-set', super_serie:'Super-série', pre_exaustao:'Pré-exaustão', pos_exaustao:'Pós-exaustão',
+  ate_falha:'Até a falha', negativa:'Negativa (excêntrica)', isometria:'Isometria',
+  reps_parciais:'Repetições parciais', piramide_crescente:'Pirâmide crescente',
+  piramide_decrescente:'Pirâmide decrescente', metodo_21:'Método 21',
+  cadencia_controlada:'Cadência controlada', outro:'Outro',
+};
+
+function renderExerciseLine(ex) {
+  const reps = ex.reps_min === ex.reps_max ? ex.reps_min : (ex.reps_min + '-' + ex.reps_max);
+  const parts = [ex.sets + '× ' + reps];
+  if (ex.load_value) parts.push(ex.load_value + (ex.load_unit || 'kg'));
+  parts.push('descanso ' + ex.rest_seconds + 's');
+  const metodoLabel = ex.method ? (ex.method === 'outro' ? (ex.method_other || 'Outro') : (TR_METHOD_LABELS[ex.method] || ex.method)) : '';
+  const badge = metodoLabel ? ' <span style="display:inline-block;padding:1px 7px;border-radius:3px;background:rgba(167,139,250,0.12);color:var(--purple);font-size:9px;vertical-align:middle">'+escHtml(metodoLabel)+'</span>' : '';
+  return '<div style="font-size:11px;color:var(--silver)">'+escHtml(ex.exercise_name)+' · '+parts.join(' · ')+badge
+    + (ex.notes ? '<div style="font-size:9px;color:var(--dim);margin-top:1px">'+escHtml(ex.notes)+'</div>' : '')
+    + '</div>';
 }
 
 function filterExerciseCombo(i, query) {
@@ -3436,6 +3490,16 @@ function renderDraft() {
             <div><label class="v-label">Carga (kg)</label><input class="v-input" type="number" step="0.5" value="${ex.load_value}" placeholder="opcional" onchange="atualizarCampoDraft(${i},${j},'load_value',this.value)" /></div>
             <div><label class="v-label">Descanso (s)</label><input class="v-input" type="number" min="0" value="${ex.rest_seconds}" onchange="atualizarCampoDraft(${i},${j},'rest_seconds',this.value)" /></div>
           </div>
+          <div style="display:grid;grid-template-columns:${ex.method==='outro' ? '1fr 1fr' : '1fr'};gap:8px;margin-top:8px">
+            <div><label class="v-label">Método (opcional)</label>
+              <select class="v-select" onchange="atualizarCampoDraft(${i},${j},'method',this.value);renderDraft()">
+                <option value="">Sem método</option>
+                ${TR_METHOD_ORDER.map(k => `<option value="${k}" ${ex.method===k?'selected':''}>${escHtml(TR_METHOD_LABELS[k])}</option>`).join('')}
+              </select>
+            </div>
+            ${ex.method === 'outro' ? `<div><label class="v-label">Qual?</label><input class="v-input" value="${escHtml(ex.method_other||'')}" onchange="atualizarCampoDraft(${i},${j},'method_other',this.value)" /></div>` : ''}
+          </div>
+          <div style="margin-top:8px"><label class="v-label">Observação (opcional)</label><input class="v-input" value="${escHtml(ex.notes||'')}" onchange="atualizarCampoDraft(${i},${j},'notes',this.value)" /></div>
         </div>`).join('')}
       <div class="ex-combo-wrap" style="position:relative;margin-top:6px">
         <input class="v-input ex-combo-input" type="text" autocomplete="off" placeholder="Buscar exercício..."
@@ -3453,9 +3517,10 @@ async function salvarFicha() {
   const nome = document.getElementById('tr-ficha-nome').value.trim();
   if (!nome) { erro.textContent = 'Dê um nome à ficha.'; erro.style.display = 'block'; return; }
   if (!_trDraft.sessoes.some(s => s.exercicios.length)) { erro.textContent = 'Adicione pelo menos um exercício.'; erro.style.display = 'block'; return; }
+  const targetStudentId = _trDraftStudentId;
   try {
     await api('/treino/fichas', { method:'POST', body: JSON.stringify({
-      personal_id: _trPersonalId(), name: nome,
+      personal_id: _trPersonalId(), student_id: targetStudentId || null, name: nome,
       goal: document.getElementById('tr-ficha-objetivo').value.trim() || null,
       level: document.getElementById('tr-ficha-nivel').value || null,
       notes: document.getElementById('tr-ficha-obs').value.trim() || null,
@@ -3464,12 +3529,20 @@ async function salvarFicha() {
         exercises: s.exercicios.map(ex => ({
           exercise_id: ex.exercise_id, sets: ex.sets, reps_min: ex.reps_min, reps_max: ex.reps_max,
           load_value: ex.load_value === '' ? null : ex.load_value, rest_seconds: ex.rest_seconds,
+          notes: ex.notes || null, method: ex.method || null,
+          method_other: ex.method === 'outro' ? (ex.method_other || null) : null,
         })),
       })),
     })});
     fecharNovaFicha();
-    _trFichas = await api('/treino/fichas/' + _trPersonalId());
-    renderFichas();
+    if (targetStudentId) {
+      switchTab('acompanhamento', document.querySelector('[onclick*="acompanhamento"]'));
+      const sel = document.getElementById('studentSelect');
+      if (sel) { sel.value = targetStudentId; if (typeof syncStudentSearchInput === 'function') syncStudentSearchInput(); updateStudent(); }
+    } else {
+      _trFichas = await api('/treino/fichas/' + _trPersonalId());
+      renderFichas();
+    }
   } catch (e) { erro.textContent = e.message; erro.style.display = 'block'; }
 }
 
@@ -3497,7 +3570,7 @@ function renderFichas() {
       ${w.sessions.map(s => `
         <div style="margin-bottom:6px">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.1em">${escHtml(s.name).toUpperCase()}${s.weekdays && s.weekdays.length ? ' · ' + s.weekdays.map(d=>TR_WEEKDAY_LABELS[d]).join('/') : ''}</div>
-          ${s.exercises.map(ex => `<div style="font-size:11px;color:var(--silver)">${escHtml(ex.exercise_name)} · ${ex.sets}× ${ex.reps_min===ex.reps_max?ex.reps_min:(ex.reps_min+'-'+ex.reps_max)}${ex.load_value ? ' · '+ex.load_value+(ex.load_unit||'kg') : ''} · descanso ${ex.rest_seconds}s</div>`).join('')}
+          ${s.exercises.map(ex => renderExerciseLine(ex)).join('')}
         </div>`).join('')}
     </div>`).join('');
 }
@@ -3533,5 +3606,111 @@ async function excluirFicha(id) {
     await api('/treino/fichas/' + id, { method:'DELETE' });
     _trFichas = await api('/treino/fichas/' + _trPersonalId());
     renderFichas();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ── FICHA DE TREINO NO PERFIL DO ALUNO (Acompanhamento) ────────────
+let _trStudentHistorico = [];
+let _trStudentHistoricoPage = 1;
+const TR_HIST_PER_PAGE = 5;
+
+function renderFichaAluno(w, isAtiva) {
+  const periodo = (w.starts_on || w.ends_on)
+    ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:4px">${w.starts_on ? 'de ' + w.starts_on : ''}${w.starts_on && w.ends_on ? ' ' : ''}${w.ends_on ? 'até ' + w.ends_on : ''}</div>`
+    : '';
+  return `
+    <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-size:13px;color:var(--white)">${escHtml(w.name)}${isAtiva ? ' <span style="font-size:9px;color:var(--green);font-family:\'DM Mono\',monospace">ATIVA</span>' : ''}</div>
+        ${isAtiva ? `<button onclick="encerrarFichaAluno('${w.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">encerrar</button>` : ''}
+      </div>
+      ${(w.goal || w.level) ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:4px">${w.goal ? escHtml(w.goal) : ''}${w.goal && w.level ? ' · ' : ''}${w.level ? (TR_LEVEL_LABELS[w.level] || escHtml(w.level)) : ''}</div>` : ''}
+      ${periodo}
+      ${w.notes ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--silver);margin-bottom:8px">${escHtml(w.notes)}</div>` : ''}
+      ${w.sessions.map(s => `
+        <div style="margin-bottom:6px">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.1em">${escHtml(s.name).toUpperCase()}${s.weekdays && s.weekdays.length ? ' · ' + s.weekdays.map(d=>TR_WEEKDAY_LABELS[d]).join('/') : ''}</div>
+          ${s.exercises.map(ex => renderExerciseLine(ex)).join('')}
+        </div>`).join('')}
+    </div>`;
+}
+
+async function loadStudentTreino(studentId) {
+  const el = document.getElementById('student-treino-ativa');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:10px;color:var(--dim)">Carregando ficha...</div>';
+  document.getElementById('student-atribuir-modelo').style.display = 'none';
+  document.getElementById('student-treino-historico').style.display = 'none';
+  try {
+    const fichas = await api('/treino/fichas/' + _trPersonalId() + '?student_id=' + studentId);
+    const ativa = fichas.find(f => f.status === 'ativa');
+    _trStudentHistorico = fichas.filter(f => f.status !== 'ativa');
+    _trStudentHistoricoPage = 1;
+    el.innerHTML = ativa ? renderFichaAluno(ativa, true)
+      : '<div style="font-size:11px;color:var(--dim);padding:16px 0;text-align:center">Nenhuma ficha ativa pra este aluno. Use "Atribuir modelo" ou "+ Criar ficha pro aluno" acima.</div>';
+    document.getElementById('student-treino-historico-toggle').textContent = '▸ HISTÓRICO (' + _trStudentHistorico.length + ')';
+  } catch (e) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--red)">Erro ao carregar ficha: ' + escHtml(e.message) + '</div>';
+  }
+}
+
+function toggleHistoricoTreino() {
+  const el = document.getElementById('student-treino-historico');
+  const abrir = el.style.display === 'none';
+  el.style.display = abrir ? 'block' : 'none';
+  if (abrir) renderHistoricoTreino();
+}
+
+function renderHistoricoTreino() {
+  const el = document.getElementById('student-treino-historico');
+  if (!_trStudentHistorico.length) { el.innerHTML = '<div style="font-size:10px;color:var(--dim)">Nenhuma ficha anterior.</div>'; return; }
+  const totalPages = Math.max(1, Math.ceil(_trStudentHistorico.length / TR_HIST_PER_PAGE));
+  _trStudentHistoricoPage = Math.min(Math.max(1, _trStudentHistoricoPage), totalPages);
+  const start = (_trStudentHistoricoPage - 1) * TR_HIST_PER_PAGE;
+  const page = _trStudentHistorico.slice(start, start + TR_HIST_PER_PAGE);
+  el.innerHTML = page.map(w => renderFichaAluno(w, false)).join('')
+    + (totalPages > 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">
+        <button onclick="_trStudentHistoricoPage--;renderHistoricoTreino()" ${_trStudentHistoricoPage<=1?'disabled':''} style="padding:5px 10px;background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer">‹ Anterior</button>
+        <span>Página ${_trStudentHistoricoPage} de ${totalPages}</span>
+        <button onclick="_trStudentHistoricoPage++;renderHistoricoTreino()" ${_trStudentHistoricoPage>=totalPages?'disabled':''} style="padding:5px 10px;background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer">Próxima ›</button>
+      </div>` : '');
+}
+
+async function encerrarFichaAluno(workoutId) {
+  if (!confirm('Encerrar esta ficha?')) return;
+  try {
+    await api('/treino/fichas/' + workoutId + '/status', { method:'PATCH', body: JSON.stringify({ status: 'encerrada' }) });
+    const sel = document.getElementById('studentSelect');
+    if (sel?.value) loadStudentTreino(sel.value);
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+async function toggleAtribuirModeloAluno() {
+  const box = document.getElementById('student-atribuir-modelo');
+  const abrir = box.style.display === 'none';
+  if (!abrir) { box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  try {
+    const modelos = await api('/treino/fichas/' + _trPersonalId());
+    const sel = document.getElementById('student-atribuir-select');
+    sel.dataset.hasModelos = modelos.length ? '1' : '0';
+    sel.innerHTML = modelos.length
+      ? modelos.map(m => '<option value="'+m.id+'">'+escHtml(m.name)+'</option>').join('')
+      : '<option value="">Nenhum modelo cadastrado — crie um na aba Treinos</option>';
+  } catch (e) { alert('Erro ao carregar modelos: ' + e.message); }
+}
+
+async function confirmarAtribuicaoAluno() {
+  const sel = document.getElementById('student-atribuir-select');
+  if (sel.dataset.hasModelos !== '1' || !sel.value) return;
+  const studentSel = document.getElementById('studentSelect');
+  const studentId = studentSel?.value;
+  if (!studentId) return;
+  const temAtiva = _trStudentHistorico !== null && (await api('/treino/fichas/' + _trPersonalId() + '?student_id=' + studentId)).some(f => f.status === 'ativa');
+  if (temAtiva && !confirm('Este aluno já tem uma ficha ativa. Atribuir esta vai encerrar a atual automaticamente. Confirma?')) return;
+  try {
+    await api('/treino/fichas/' + sel.value + '/atribuir', { method:'POST', body: JSON.stringify({ student_id: studentId }) });
+    document.getElementById('student-atribuir-modelo').style.display = 'none';
+    loadStudentTreino(studentId);
   } catch (e) { alert('Erro: ' + e.message); }
 }

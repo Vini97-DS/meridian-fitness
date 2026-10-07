@@ -170,6 +170,19 @@ Variáveis de ambiente no Vercel: `DATABASE_URL`, `SECRET_KEY`
 
 ---
 
+## Como trabalhar nesse projeto (preferências do usuário)
+- **Comunicação enxuta:** em tarefas de múltiplas etapas, não narra cada
+  passo no chat. Trabalha, mantém um log (arquivo, não mensagem) do que
+  foi feito e testado, e só manda mensagem pro usuário quando a tarefa
+  inteira terminar (ou travar em algo que precise de decisão dele).
+  Motivo: economizar o limite de uso da sessão.
+- **Mudança de schema (Neon):** antes de alterar schema em produção,
+  testa num branch do Neon. Mudança nova deve ser aditiva (coluna
+  nullable, `ADD COLUMN IF NOT EXISTS`), nunca alterando dado existente.
+- Commit/push só quando o usuário pedir explicitamente ("pode subir").
+
+---
+
 ## Problemas conhecidos (pendentes M1)
 1. Gráficos BI: sazonalidade, meta vs realizado, performance por canal, ROI — precisam de queries adicionais na API
 2. Renovação ainda cria linha duplicada — DISTINCT ON precisa de índice composto no Neon

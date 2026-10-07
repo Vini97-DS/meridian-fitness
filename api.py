@@ -378,6 +378,11 @@ def create_users_table():
                 "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS load_value NUMERIC(6,2)",
                 "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS load_unit TEXT NOT NULL DEFAULT 'kg'",
                 "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS video_url TEXT",
+                # Metodo de execucao (drop set, bi-set, etc) — chave estavel
+                # (nao o rotulo traduzido), nullable, aditivo. Validado antes
+                # num branch do Neon (br-frosty-resonance-aq4equxa).
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS method TEXT",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS method_other TEXT",
                 # colunas antigas (texto livre), substituidas pelas estruturadas acima
                 "ALTER TABLE workout_exercises DROP COLUMN IF EXISTS reps",
                 "ALTER TABLE workout_exercises DROP COLUMN IF EXISTS target_load",
@@ -1169,6 +1174,15 @@ class ExerciseUpdate(BaseModel):
 
 WORKOUT_LEVELS = ("iniciante", "intermediario", "avancado")
 
+# Chave estavel pra persistencia — o rotulo traduzido fica so no front
+# (METODO_LABELS em dashboard.js), nunca gravado no banco.
+WORKOUT_METHODS = (
+    "drop_set", "cluster_set", "rest_pause", "bi_set", "tri_set", "super_serie",
+    "pre_exaustao", "pos_exaustao", "ate_falha", "negativa", "isometria",
+    "reps_parciais", "piramide_crescente", "piramide_decrescente", "metodo_21",
+    "cadencia_controlada", "outro",
+)
+
 class WorkoutExerciseIn(BaseModel):
     exercise_id:  str
     sets:         int = 3
@@ -1178,6 +1192,8 @@ class WorkoutExerciseIn(BaseModel):
     load_unit:    str = "kg"
     rest_seconds: int = 60
     notes:        Optional[str] = None
+    method:       Optional[str] = None
+    method_other: Optional[str] = None
 
 class WorkoutSessionIn(BaseModel):
     name:      str
@@ -1186,6 +1202,7 @@ class WorkoutSessionIn(BaseModel):
 
 class WorkoutCreate(BaseModel):
     personal_id: str
+    student_id:  Optional[str] = None  # se vier, cria JA atribuida a esse aluno (nao como modelo)
     name:        str
     goal:        Optional[str] = None
     level:       Optional[str] = None
@@ -1269,7 +1286,8 @@ def _attach_sessions(conn, workouts: list) -> None:
             s["exercises"] = query(conn, """
                 SELECT we.id, we.exercise_id, e.name AS exercise_name, e.muscle_group,
                        we.position, we.sets, we.reps_min, we.reps_max,
-                       we.load_value, we.load_unit, we.rest_seconds, we.notes, we.video_url
+                       we.load_value, we.load_unit, we.rest_seconds, we.notes, we.video_url,
+                       we.method, we.method_other
                 FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
                 WHERE we.session_id=%s ORDER BY we.position
             """, (s["id"],))
@@ -1281,15 +1299,18 @@ def _insert_sessions(conn, workout_id: str, sessions) -> None:
             VALUES (%s, %s, %s, %s) RETURNING id
         """, (workout_id, s.name.strip() or f"Treino {pos+1}", s.weekdays, pos))
         for epos, ex in enumerate(s.exercises):
+            if ex.method and ex.method not in WORKOUT_METHODS:
+                raise HTTPException(400, "Método inválido")
             exrow = query(conn, "SELECT video_url FROM exercises WHERE id=%s", (ex.exercise_id,))
             video = exrow[0]["video_url"] if exrow else None
             execute(conn, """
                 INSERT INTO workout_exercises
                     (session_id, exercise_id, position, sets, reps_min, reps_max,
-                     load_value, load_unit, rest_seconds, notes, video_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     load_value, load_unit, rest_seconds, notes, video_url, method, method_other)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (sess["id"], ex.exercise_id, epos, ex.sets, ex.reps_min, ex.reps_max,
-                  ex.load_value, ex.load_unit, ex.rest_seconds, ex.notes, video))
+                  ex.load_value, ex.load_unit, ex.rest_seconds, ex.notes, video,
+                  ex.method or None, ex.method_other if ex.method == "outro" else None))
 
 @app.get("/api/treino/fichas/{personal_id}")
 def list_workouts(personal_id: str, student_id: Optional[str] = None,
@@ -1320,10 +1341,19 @@ def create_workout(data: WorkoutCreate, conn=Depends(get_db), current=Depends(ge
     for s in data.sessions:
         for ex in s.exercises:
             _assert_own_exercise(conn, ex.exercise_id, current)
-    workout = execute(conn, """
-        INSERT INTO workouts (personal_id, name, goal, level, starts_on, ends_on, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
-    """, (data.personal_id, name, data.goal, data.level, data.starts_on, data.ends_on, data.notes))
+    if data.student_id:
+        _assert_own_student(conn, data.student_id, current)
+        execute(conn, "UPDATE workouts SET status='encerrada', updated_at=NOW() WHERE student_id=%s AND status='ativa'",
+                (data.student_id,))
+        workout = execute(conn, """
+            INSERT INTO workouts (personal_id, student_id, name, goal, level, starts_on, ends_on, notes, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ativa') RETURNING id
+        """, (data.personal_id, data.student_id, name, data.goal, data.level, data.starts_on, data.ends_on, data.notes))
+    else:
+        workout = execute(conn, """
+            INSERT INTO workouts (personal_id, name, goal, level, starts_on, ends_on, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, (data.personal_id, name, data.goal, data.level, data.starts_on, data.ends_on, data.notes))
     _insert_sessions(conn, workout["id"], data.sessions)
     return {"id": str(workout["id"])}
 
@@ -1355,10 +1385,11 @@ def assign_workout(workout_id: str, data: WorkoutAssign, conn=Depends(get_db), c
             execute(conn, """
                 INSERT INTO workout_exercises
                     (session_id, exercise_id, position, sets, reps_min, reps_max,
-                     load_value, load_unit, rest_seconds, notes, video_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     load_value, load_unit, rest_seconds, notes, video_url, method, method_other)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (new_sess["id"], ex["exercise_id"], ex["position"], ex["sets"], ex["reps_min"], ex["reps_max"],
-                  ex["load_value"], ex["load_unit"], ex["rest_seconds"], ex["notes"], ex["video_url"]))
+                  ex["load_value"], ex["load_unit"], ex["rest_seconds"], ex["notes"], ex["video_url"],
+                  ex["method"], ex["method_other"]))
     return {"id": str(clone["id"])}
 
 @app.patch("/api/treino/fichas/{workout_id}/status")
