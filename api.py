@@ -12,6 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import psycopg2
 import psycopg2.extras
 import os
@@ -1513,6 +1514,161 @@ def historico_execucoes_personal(student_id: str, conn=Depends(get_db), current=
         e["sets"] = query(conn, "SELECT * FROM workout_execution_sets WHERE execution_id=%s ORDER BY set_number", (e["id"],))
     return execs
 
+# Fuso usado pra bucketizar "o dia" do treino nas agregações abaixo
+# (calendário, semanas). O app do aluno decide "qual é o treino de hoje"
+# pelo relógio do PRÓPRIO APARELHO do aluno (já era assim desde a 2.3) —
+# isso não muda, é o que faz sentido pra quem tá treinando agora. Mas aqui
+# no backend só existe o timestamp em UTC, sem o fuso de quem treinou; como
+# o produto é 100% Brasil (CLAUDE.md, pt-BR, R$/€ conforme o profissional,
+# mas sempre fuso do Brasil), usamos um fuso FIXO pra bucketizar essas
+# agregações: America/Sao_Paulo — o mesmo em todo o sistema, como pedido.
+ACOMPANHAMENTO_TZ = ZoneInfo("America/Sao_Paulo")
+
+def _to_local_date(dt) -> date:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ACOMPANHAMENTO_TZ).date()
+
+def _week_start(d: date) -> date:
+    return d - timedelta(days=d.weekday())  # segunda-feira
+
+@app.get("/api/treino/acompanhamento/{student_id}")
+def acompanhamento_treino(student_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
+    """Dados do app do aluno pra aba Acompanhamento (NÃO mexe em nada da
+    aba BI & Negócio nem em métrica financeira). Se o aluno não tem conta
+    no app, devolve só {has_app: false} pro front mostrar o estado vazio."""
+    _assert_own_student(conn, student_id, current)
+    link = query(conn, "SELECT 1 FROM student_account_links WHERE student_id=%s", (student_id,))
+    if not link:
+        return {"has_app": False}
+
+    ativa = query(conn, "SELECT id FROM workouts WHERE student_id=%s AND status='ativa'", (student_id,))
+    planned_per_week = 0
+    active_workout_id = None
+    session_set_totals = {}
+    if ativa:
+        active_workout_id = ativa[0]["id"]
+        sessions = query(conn, "SELECT id, weekdays FROM workout_sessions WHERE workout_id=%s", (active_workout_id,))
+        com_dias = [s for s in sessions if s["weekdays"]]
+        if com_dias:
+            dias = set()
+            for s in com_dias:
+                dias.update(s["weekdays"])
+            planned_per_week = len(dias)
+        else:
+            # sem dia da semana definido em nenhuma sessão: meta = 1x cada
+            # sessão por semana (mesma filosofia de fallback da 2.3)
+            planned_per_week = len(sessions)
+        for s in sessions:
+            total = query(conn, "SELECT COALESCE(SUM(sets),0) AS n FROM workout_exercises WHERE session_id=%s", (s["id"],))
+            session_set_totals[str(s["id"])] = int(total[0]["n"])
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    execs = query(conn, """
+        SELECT id, session_id, session_name, started_at, finished_at, effort_score, mood_score, comment
+        FROM workout_executions
+        WHERE student_id=%s AND finished_at IS NOT NULL AND finished_at >= %s
+        ORDER BY finished_at ASC
+    """, (student_id, cutoff))
+
+    exec_ids = [e["id"] for e in execs]
+    sets_by_exec = {}
+    if exec_ids:
+        all_sets = query(conn, """
+            SELECT execution_id, workout_exercise_id, exercise_name, load_done, reps_done
+            FROM workout_execution_sets WHERE execution_id = ANY(%s::uuid[])
+        """, (exec_ids,))
+        for s in all_sets:
+            sets_by_exec.setdefault(str(s["execution_id"]), []).append(s)
+
+    # ── Calendário (últimos 90 dias) ────────────────────────────────────
+    trained_dates = {_to_local_date(e["finished_at"]) for e in execs}
+    today_local = _to_local_date(datetime.now(timezone.utc))
+    calendar = []
+    for i in range(89, -1, -1):
+        d = today_local - timedelta(days=i)
+        calendar.append({"date": d.isoformat(), "trained": d in trained_dates})
+
+    # ── Semanas (últimas 12, segunda a domingo, fuso local) ─────────────
+    # "Qualidade do treino" = média ponderada de aderência (50%), humor
+    # (30%) e esforço (20%) — aderência pesa mais porque é o sinal mais
+    # direto de "fez o que tava prescrito"; humor importa porque o treino
+    # também precisa ser sustentável; esforço entra com peso menor porque
+    # esforço alto não é necessariamente "qualidade" por si só.
+    weeks = {}
+    for e in execs:
+        wk = _week_start(_to_local_date(e["finished_at"]))
+        bucket = weeks.setdefault(wk, {"execs": [], "done_sets": 0, "total_sets": 0})
+        bucket["execs"].append(e)
+        es = sets_by_exec.get(str(e["id"]), [])
+        bucket["done_sets"] += len(es)
+        bucket["total_sets"] += session_set_totals.get(str(e["session_id"]), 0)
+
+    this_week_start = _week_start(today_local)
+    weekly = []
+    for i in range(11, -1, -1):
+        wk = this_week_start - timedelta(weeks=i)
+        b = weeks.get(wk)
+        if not b:
+            weekly.append({"week_start": wk.isoformat(), "planned": planned_per_week, "done": 0,
+                            "adherence_pct": None, "avg_effort": None, "avg_mood": None, "quality_score": None})
+            continue
+        done = len(b["execs"])
+        adherence = round(b["done_sets"] / b["total_sets"] * 100) if b["total_sets"] else None
+        efforts = [e["effort_score"] for e in b["execs"] if e["effort_score"] is not None]
+        moods = [e["mood_score"] for e in b["execs"] if e["mood_score"] is not None]
+        avg_effort = round(sum(efforts) / len(efforts), 1) if efforts else None
+        avg_mood = round(sum(moods) / len(moods), 1) if moods else None
+        quality = None
+        if adherence is not None or avg_mood is not None or avg_effort is not None:
+            parts = weight_sum = 0.0
+            if adherence is not None: parts += adherence * 0.5; weight_sum += 0.5
+            if avg_mood is not None: parts += (avg_mood / 5 * 100) * 0.3; weight_sum += 0.3
+            if avg_effort is not None: parts += (avg_effort / 5 * 100) * 0.2; weight_sum += 0.2
+            quality = round(parts / weight_sum) if weight_sum else None
+        weekly.append({"week_start": wk.isoformat(), "planned": planned_per_week, "done": done,
+                        "adherence_pct": adherence, "avg_effort": avg_effort, "avg_mood": avg_mood,
+                        "quality_score": quality})
+
+    # ── Evolução de carga por exercício (toda a janela de 90 dias) ──────
+    by_exercise = {}
+    for e in execs:
+        es = sets_by_exec.get(str(e["id"]), [])
+        if not es:
+            continue
+        d = _to_local_date(e["finished_at"])
+        per_ex = {}
+        for s in es:
+            key = str(s["workout_exercise_id"]) if s["workout_exercise_id"] else s["exercise_name"]
+            per_ex.setdefault(key, {"name": s["exercise_name"], "max_load": 0, "tonnage": 0.0})
+            load = float(s["load_done"]) if s["load_done"] is not None else 0
+            reps = s["reps_done"] or 0
+            per_ex[key]["max_load"] = max(per_ex[key]["max_load"], load)
+            per_ex[key]["tonnage"] += load * reps
+        for key, v in per_ex.items():
+            by_exercise.setdefault(key, {"exercise_name": v["name"], "points": []})
+            by_exercise[key]["points"].append({"date": d.isoformat(), "max_load": v["max_load"], "tonnage": round(v["tonnage"], 1)})
+    exercises = sorted(({"key": k, **v} for k, v in by_exercise.items()), key=lambda x: x["exercise_name"])
+
+    # ── Últimas 10 sessões concluídas ────────────────────────────────────
+    last_sessions = []
+    for e in reversed(execs[-10:]):
+        es = sets_by_exec.get(str(e["id"]), [])
+        dur = round((e["finished_at"] - e["started_at"]).total_seconds() / 60)
+        last_sessions.append({
+            "session_name": e["session_name"], "date": _to_local_date(e["finished_at"]).isoformat(),
+            "duration_min": dur, "effort_score": e["effort_score"], "mood_score": e["mood_score"],
+            "comment": e["comment"], "sets_done": len(es),
+            "sets_total": session_set_totals.get(str(e["session_id"])),
+        })
+
+    return {
+        "has_app": True, "timezone": "America/Sao_Paulo",
+        "has_active_workout": bool(active_workout_id),
+        "calendar": calendar, "weekly": weekly,
+        "exercises": exercises, "last_sessions": last_sessions,
+    }
+
 @app.get("/api/aluno/brand/{personal_id}")
 def aluno_brand(personal_id: str, conn=Depends(get_db)):
     rows = query(conn, """
@@ -1910,7 +2066,14 @@ def get_students(personal_id: str, conn=Depends(get_db), _=Depends(get_current_u
             (SELECT COUNT(*) = 2 FROM (
                 SELECT used, expires_at FROM form_tokens
                 WHERE student_id=s.id ORDER BY created_at DESC LIMIT 2
-            ) t WHERE t.used = false AND t.expires_at < NOW()) AS missed_last_2_forms
+            ) t WHERE t.used = false AND t.expires_at < NOW()) AS missed_last_2_forms,
+            -- Campos do app do aluno (Acompanhamento) — puramente informativos,
+            -- não entram em nenhum cálculo financeiro/BI, só alimentam a UI
+            -- de Acompanhamento (adesão ao app, sinal de risco por inatividade).
+            EXISTS(SELECT 1 FROM student_account_links l WHERE l.student_id = s.id) AS account_linked,
+            (SELECT w.id FROM workouts w WHERE w.student_id=s.id AND w.status='ativa' LIMIT 1) AS active_workout_id,
+            (SELECT w.updated_at FROM workouts w WHERE w.student_id=s.id AND w.status='ativa' LIMIT 1) AS active_workout_since,
+            (SELECT MAX(we.finished_at) FROM workout_executions we WHERE we.student_id=s.id AND we.finished_at IS NOT NULL) AS last_workout_at
         FROM students s
         JOIN subscriptions sub ON sub.student_id = s.id
         JOIN plans p ON p.id = sub.plan_id
@@ -1932,6 +2095,28 @@ def create_student(data: StudentCreate, conn=Depends(get_db), _=Depends(get_curr
           data.weight_initial, data.height_cm, data.bf_initial, data.notes,
           data.gender, data.birth_date, data.country, data.state, data.city,
           data.dietary_restrictions))
+
+@app.patch("/api/students/{student_id}")
+def update_student(student_id: str, data: dict, conn=Depends(get_db), current=Depends(get_current_user)):
+    """Edição pontual do cadastro do aluno — hoje usado principalmente pra
+    completar o e-mail antes de convidar pro app (login do aluno é por
+    código de e-mail, então sem e-mail não dá pra convidar)."""
+    _assert_own_student(conn, student_id, current)
+    allowed = ['name', 'phone', 'email', 'notes']
+    fields, values = [], []
+    for k in allowed:
+        if data.get(k) is not None:
+            v = data[k].strip() if isinstance(data[k], str) else data[k]
+            if k == 'email':
+                if v and '@' not in v:
+                    raise HTTPException(400, "E-mail inválido")
+                v = v.lower() if v else None
+            fields.append(f"{k} = %s")
+            values.append(v)
+    if not fields:
+        raise HTTPException(400, "Nenhum campo para atualizar")
+    values.append(student_id)
+    return execute(conn, f"UPDATE students SET {', '.join(fields)} WHERE id=%s RETURNING id, name, phone, email", tuple(values))
 
 # ═══════════════════════════════════════════════════════════════
 #  PERSONALS — PATCH PERFIL
@@ -2641,6 +2826,14 @@ def generate_form_token(data: dict, conn=Depends(get_db), _=Depends(get_current_
     form_type   = data.get("type", "semanal")
     if not student_id or not personal_id:
         raise HTTPException(400, "student_id e personal_id obrigatorios")
+    # Quem já tem login no app não recebe mais o formulário semanal — o app
+    # já cobre frequência, peso e humor. Nutrição/dieta fica pra uma fase
+    # futura (cruzamento com a página de nutri). Mensal/trimestral continuam
+    # pra todo mundo (fotos, %BF, medidas não vêm do app ainda).
+    if form_type == "semanal":
+        tem_app = query(conn, "SELECT 1 FROM student_account_links WHERE student_id=%s", (student_id,))
+        if tem_app:
+            raise HTTPException(400, "Este aluno já tem acesso ao app — o formulário semanal não é mais necessário pra ele.")
     token = secrets.token_urlsafe(16)
     execute(conn, """
         INSERT INTO form_tokens (token, student_id, personal_id, form_type)

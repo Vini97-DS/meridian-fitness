@@ -241,6 +241,8 @@ abas/sessões novas).
 - `PATCH /api/treino/fichas/{workout_id}/status` — ativar/encerrar
 - `DELETE /api/treino/fichas/{workout_id}`
 - `GET /api/treino/execucoes/{student_id}` — histórico de execuções do aluno, visão do profissional
+- `GET /api/treino/acompanhamento/{student_id}` — calendário (90d), frequência prevista×feita por semana, qualidade do treino/aderência por semana, evolução de carga por exercício, últimas 10 sessões. `{"has_app": false}` se o aluno não tem conta no app. Fuso fixo `America/Sao_Paulo` pra bucketizar calendário/semanas (ver "App do Aluno" abaixo)
+- `PATCH /api/students/{student_id}` — edição pontual (hoje: completar e-mail antes de convidar pro app)
 
 ### App do Aluno (`typ: student`)
 - `POST /api/aluno/auth/request-code`, `POST /api/aluno/auth/verify-code`
@@ -288,9 +290,11 @@ Busca de aluno (`#studentSearchInput` + `.student-search-item`, não é um
 `<select>` simples) → carrega dados reais
 Fotos comparativas (início vs atual) · Stats: peso perdido, redução BF
 Gráficos: Evolução de Peso, Frequência, Humor · Respostas de formulários, Timeline, Engajamento
-Botões: Gerar Link Semanal/Mensal/Trimestral
+Botões: Gerar Link Mensal (Semanal some pra quem tem app — ver abaixo)
 **Ficha de Treino** do aluno: ativa + histórico + atribuir modelo/criar direto
 **Treinos Executados**: histórico de execuções com esforço/humor/comentário (toggle, carrega sob demanda)
+**Dados do app** (só pra quem tem login vinculado — estado vazio claro pros demais): calendário de frequência (30/90d, fuso `America/Sao_Paulo`), previsto×feito por semana, qualidade do treino (50% aderência + 30% humor + 20% esforço) + aderência por semana, evolução de carga por exercício (seletor + carga máx/tonelagem), últimas 10 sessões concluídas. Peso lançado no app entra na mesma série do gráfico de Evolução de Peso (visão Semana), marcado por origem.
+**Adesão ao app**: badge "já acessou/ainda não acessou" + botão "Convidar para o app" no cabeçalho do aluno (pede e-mail antes se faltar), stat agregado no topo da aba. Sinal de risco "sem treinar há X dias" (`TRAINING_GAP_RISK_DAYS=7` em `js/dashboard.js`) só pra quem tem ficha ativa + app — aparece na busca/filtro de Acompanhamento, isolado da aba BI (não usa `isExpiryRisk`/`isFeedbackDelayed`/`renderChurnListFromAPI`, que são exclusivos de lá).
 
 ### Treinos
 Biblioteca de exercícios (busca, criar, seed inicial de 80)
@@ -367,6 +371,14 @@ backend (ver "Resolvidos recentemente" pra entender por quê).
 
 Tipo "semestral" foi removido (redundante com mensal) — só
 semanal/mensal/trimestral existem hoje.
+
+**Semanal só pra quem não tem app:** aluno com login no app do treino
+(`student_account_links`) não recebe mais o semanal — frequência, peso e
+humor já vêm de lá (séries/execução). `POST /api/form/generate` recusa
+gerar link `semanal` pra aluno com app (400); o botão "Gerar Link
+Semanal" some no perfil dele em Acompanhamento. Mensal/trimestral
+continuam pra todo mundo (fotos, %BF, medidas, nutrição ainda não vêm do
+app). Nutrição/dieta cruzada com o app fica pra uma fase futura.
 
 ---
 
@@ -458,3 +470,4 @@ opcionais). Deploy automático a cada push em `main` (GitHub integration).
 - "Renovação cria linha duplicada": investigado a fundo — a query `DISTINCT ON (s.id)` de `/api/students/{personal_id}` já está correta hoje (testada contra o único caso real de renovação em produção, devolve 1 linha). O que existia era uma aluna de dado de demo/seed cadastrada 2x por coincidência (mesmo telefone, timestamps idênticos) — removida manualmente, sem relação com o fluxo de renovação. Band-aid defensivo de dedup no frontend (`loadStudentsFromAPI`) mantido como rede de segurança, inofensivo.
 - IDs duplicados em `dashboard.html`: `kpi-mrr-val` e `kpi-ticket-val` apareciam tanto no `<div>` externo quanto no `<span>` interno (copy-paste) — removido do `<div>`, só o `<span>` carrega o id agora (mesmo padrão dos cards de CAC/LTV).
 - MRR e demais valores monetários não abreviam mais em notação "K" — `fmtMoney()` sempre mostra o valor exato. Decisão explícita: dado financeiro/de negócio exige clareza total, nunca arredondamento visual.
+- Acompanhamento de Alunos ganhou os dados reais do app (frequência, qualidade/aderência, evolução de carga, últimas sessões, peso mesclado, adesão/convite ao app, sinal de risco por inatividade) — sem tocar na aba BI & Negócio nem em métrica financeira. Formulário semanal removido pra quem já tem login no app (frequência/peso/humor já vêm de lá); nutrição/dieta cruzada com o app fica pra uma fase futura.

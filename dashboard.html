@@ -1140,6 +1140,12 @@ canvas{background:transparent!important}
     </div>
   </div>
 
+  <!-- ADESÃO AO APP -->
+  <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.2);padding:12px 18px;display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <div style="font-size:16px">📱</div>
+    <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--white)" id="acomp-app-adoption-text">Carregando adesão ao app...</div>
+  </div>
+
   <!-- STUDENT FILTER -->
   <div class="student-filter" style="position:sticky;top:49px;z-index:90;background:var(--navy);padding:12px 40px;margin:0 -40px;border-bottom:1px solid rgba(201,168,76,0.08)">
     <span class="filter-label">Selecionar Aluno:</span>
@@ -1160,6 +1166,7 @@ canvas{background:transparent!important}
       <button id="btn-gerar-link-semanal"   onclick="gerarLinkFormulario('semanal')"   class="vbtn vbtn-blue" style="font-size:9px">Gerar Link Semanal</button>
       <button id="btn-gerar-link-mensal"    onclick="gerarLinkFormulario('mensal')"    class="vbtn" style="font-size:9px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);color:var(--purple)">Gerar Link Mensal</button>
     </div>
+    <div id="form-semanal-app-note" style="display:none;font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:12px">📱 Este aluno já tem acesso ao app — frequência, peso e humor já vêm de lá, então o formulário semanal não é mais pedido pra ele.</div>
     <div id="form-link-result" style="display:none;padding:12px;background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15)">
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px">✓ Link gerado — copie e envie pelo WhatsApp</div>
       <div id="form-link-url" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--silver);word-break:break-all;margin-bottom:8px"></div>
@@ -1318,6 +1325,62 @@ canvas{background:transparent!important}
         <div class="panel-badge">HUMOR</div>
       </div>
       <div class="chart-wrap" style="height:220px"><canvas id="moodChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- DADOS DO APP (execução de treino pelo próprio aluno) ───────────── -->
+  <div id="acomp-app-empty" class="panel" style="margin-bottom:20px;text-align:center;padding:40px 20px;display:none">
+    <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--dim)" id="acomp-app-empty-text">Este aluno ainda não tem acesso ao app de treino.</div>
+  </div>
+
+  <div id="acomp-app-section" style="display:none">
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Frequência — Treino pelo App</div>
+          <div class="panel-sub">Dias treinados · previsto vs. realizado por semana</div>
+        </div>
+        <div class="weight-toggle">
+          <button id="acomp-cal-30" class="weight-toggle-btn" onclick="setAcompCalRange(30)">30d</button>
+          <button id="acomp-cal-90" class="weight-toggle-btn active" onclick="setAcompCalRange(90)">90d</button>
+        </div>
+      </div>
+      <div id="acomp-calendar" style="margin-top:12px"></div>
+      <div class="chart-wrap" style="height:160px;margin-top:16px"><canvas id="acompFreqChart"></canvas></div>
+    </div>
+
+    <div class="grid g2" style="margin-bottom:20px">
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Qualidade do Treino</div>
+            <div class="panel-sub">Aderência 50% · humor 30% · esforço 20% — por semana</div>
+          </div>
+          <div class="panel-badge" id="acomp-quality-badge">—</div>
+        </div>
+        <div class="chart-wrap" style="height:220px"><canvas id="acompQualityChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Evolução de Carga</div>
+            <div class="panel-sub">Maior carga e tonelagem por sessão</div>
+          </div>
+          <select class="v-select" id="acomp-exercise-select" style="width:auto;font-size:9px;padding:4px 8px" onchange="renderAcompLoadChart()"></select>
+        </div>
+        <div class="chart-wrap" style="height:220px"><canvas id="acompLoadChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Últimas Sessões Concluídas</div>
+          <div class="panel-sub">Avaliação do próprio aluno pós-treino</div>
+        </div>
+        <div class="panel-badge">APP</div>
+      </div>
+      <div id="acomp-last-sessions" style="margin-top:8px"></div>
     </div>
   </div>
 

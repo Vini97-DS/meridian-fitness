@@ -917,7 +917,7 @@ function renderWeightChart() {
   const wd  = weightChartView === 'semana' ? s?.weightWeek : s?.weightMonth;
 
   if (sub) sub.textContent = weightChartView === 'semana'
-    ? 'Peso reportado nos check-ins semanais'
+    ? 'Peso do formulário semanal + do app (losango roxo = lançado no app)'
     : 'Peso reportado nos check-ins mensais · 📷 marca meses com foto de progresso';
 
   if (!wd?.labels?.length) {
@@ -926,6 +926,7 @@ function renderWeightChart() {
   }
 
   const hasPhoto = wd.hasPhoto || [];
+  const origin   = wd.origin || [];   // 'app' | 'form' — só na visão Semana
   mkChart('weightChart', {
     type:'line',
     data:{
@@ -934,10 +935,10 @@ function renderWeightChart() {
         label:'Peso (kg)', data:wd.kg,
         borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.06)',
         fill:true, tension:0.4, borderWidth:2.5,
-        pointRadius:          wd.kg.map((_,i)=> hasPhoto[i] ? 7 : 4),
-        pointStyle:           wd.kg.map((_,i)=> hasPhoto[i] ? 'rectRot' : 'circle'),
-        pointBackgroundColor: wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : GOLD),
-        pointBorderColor:     wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : GOLD),
+        pointRadius:          wd.kg.map((_,i)=> hasPhoto[i] ? 7 : origin[i]==='app' ? 6 : 4),
+        pointStyle:           wd.kg.map((_,i)=> hasPhoto[i] ? 'rectRot' : origin[i]==='app' ? 'rectRot' : 'circle'),
+        pointBackgroundColor: wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : origin[i]==='app' ? PURPLE : GOLD),
+        pointBorderColor:     wd.kg.map((_,i)=> hasPhoto[i] ? GREEN : origin[i]==='app' ? PURPLE : GOLD),
       }]
     },
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
@@ -945,7 +946,10 @@ function renderWeightChart() {
         legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}},
         tooltip:{...tt, callbacks:{ label: ctx => {
           const base = 'Peso: ' + ctx.parsed.y + 'kg';
-          return hasPhoto[ctx.dataIndex] ? base + ' · 📷 com foto de progresso' : base;
+          if (hasPhoto[ctx.dataIndex]) return base + ' · 📷 com foto de progresso';
+          if (origin[ctx.dataIndex] === 'app') return base + ' · lançado no app';
+          if (origin[ctx.dataIndex] === 'form') return base + ' · formulário';
+          return base;
         }}}
       },
       scales:{x:{grid:{display:false},ticks:{color:SILV,font:{size:8},maxRotation:45}},
@@ -1012,6 +1016,12 @@ function loadStudentsFromAPI(data) {
       daysToExpire: s.days_to_expire ?? null,
       lastCheckinAt: s.last_checkin_at || null,
       missedLast2Forms: !!s.missed_last_2_forms,
+      email:    s.email || null,
+      phone:    s.phone || null,
+      accountLinked:     !!s.account_linked,
+      hasActiveWorkout:  !!s.active_workout_id,
+      activeWorkoutSince: s.active_workout_since || null,
+      lastWorkoutAt:      s.last_workout_at || null,
       plan:     (s.plan_name || '—') + (s.price_paid ? ' — '+currencySymbol()+Math.round(s.price_paid)+'/mês' : ''),
       channel:  capitalize(s.channel),
       ltv:      fmtMoney(s.ltv_total || 0),
@@ -1046,6 +1056,7 @@ function loadStudentsFromAPI(data) {
   renderTopTableFromAPI(data);
   updateStudent();
   syncStudentSearchInput();
+  updateAppAdoptionStat();
 }
 
 // ── BUSCA DE ALUNO (substitui o dropdown gigante por campo de texto) ──
@@ -1075,11 +1086,32 @@ function toggleChurnRiskFilter(btn) {
   filterStudentSearch(input ? input.value : '');
 }
 
-// Risco combinado (vencimento OU atraso de feedback) pra filtro/badges na busca
+// Quantos dias sem treinar (via app) disparam o sinal de risco no
+// Acompanhamento. Só um numero aqui — "configuravel" no sentido de ser um
+// unico ponto pra ajustar, sem precisar de tela de configuracao pra isso.
+const TRAINING_GAP_RISK_DAYS = 7;
+
+// Sinal "sem treinar há X dias" — SÓ pra quem tem ficha ativa E login no
+// app (sem os dois, não dá pra dizer nada sobre frequência real). Usa
+// last_workout_at; se nunca treinou, usa a data em que a ficha ativa foi
+// atribuída como referência. Isolado do churn rate de negócio da aba BI —
+// não usa isExpiryRisk/isFeedbackDelayed/renderChurnListFromAPI (que
+// alimentam só a aba BI) e não escreve em nenhum campo financeiro.
+function isTrainingGapRisk(st) {
+  if (!st.hasActiveWorkout || !st.accountLinked) return { risk: false, days: null };
+  const ref = st.lastWorkoutAt || st.activeWorkoutSince;
+  if (!ref) return { risk: false, days: null };
+  const days = Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
+  return { risk: days >= TRAINING_GAP_RISK_DAYS, days };
+}
+
+// Risco combinado (vencimento OU atraso de feedback OU sem treinar) pra
+// filtro/badges na busca — todos de natureza diferente, não exclusivos.
 function studentRiskInfo(st) {
   const expiry  = isExpiryRisk(st.daysToExpire);
   const delayed = isFeedbackDelayed(st.lastCheckinAt, st.sinceRaw, st.missedLast2Forms);
-  return { expiry, delayed, any: expiry || delayed };
+  const gap     = isTrainingGapRisk(st);
+  return { expiry, delayed, gap: gap.risk, gapDays: gap.days, any: expiry || delayed || gap.risk };
 }
 
 function filterStudentSearch(query) {
@@ -1094,6 +1126,7 @@ function filterStudentSearch(query) {
         const tags = [];
         if (s.risk.expiry)  tags.push('<span style="color:var(--red)">● vencimento</span>');
         if (s.risk.delayed) tags.push('<span style="color:var(--purple)">● atraso</span>');
+        if (s.risk.gap)     tags.push('<span style="color:var(--amber)">● '+s.risk.gapDays+'d sem treinar</span>');
         const riskHtml = tags.length ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;margin-left:6px">'+tags.join(' ')+'</span>' : '';
         return '<div class="student-search-item" data-id="'+s.id+'">'+escHtml(s.name)+riskHtml+'</div>';
       }).join('')
@@ -1206,11 +1239,15 @@ async function loadStudentCheckins(studentId) {
     });
   }
 
-  // Peso — visão Semana (todos os check-ins semanais com peso, cronológico)
-  const weekly = data.filter(c=>c.type==='semanal' && c.weight_reported).slice().reverse();
+  // Peso — visão Semana: check-ins do formulário semanal + peso lançado
+  // pelo próprio aluno no app (tipo 'treino', registrado ao fim do
+  // treino, cadência semanal) — série única, cronológica, origem marcada
+  // pra diferenciar visualmente (ver renderWeightChart).
+  const weekly = data.filter(c=>(c.type==='semanal' || c.type==='treino') && c.weight_reported).slice().reverse();
   s.weightWeek = {
     labels: weekly.map(c=>new Date(c.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),
     kg:     weekly.map(c=>parseFloat(c.weight_reported)),
+    origin: weekly.map(c=>c.type==='treino' ? 'app' : 'form'),
   };
 
   // Peso — visão Mês (check-ins mensais, marcando quem tem foto de progresso)
@@ -1347,12 +1384,258 @@ function renderEngagementPanel(eng) {
   engPanel.insertAdjacentHTML('beforeend', barsHtml);
 }
 
+// ── ACOMPANHAMENTO: dados do app do aluno (frequência real, qualidade,
+// evolução de carga, últimas sessões) ───────────────────────────────────
+let _acompAppData = null;  // cache da resposta da API pro aluno selecionado
+let _acompCalRange = 90;   // 30 | 90
+
+function setAcompCalRange(n) {
+  _acompCalRange = n;
+  document.getElementById('acomp-cal-30')?.classList.toggle('active', n === 30);
+  document.getElementById('acomp-cal-90')?.classList.toggle('active', n === 90);
+  renderAcompCalendar();
+}
+
+async function loadAcompApp(studentId) {
+  _acompAppData = null;
+  const emptyEl = document.getElementById('acomp-app-empty');
+  const sectionEl = document.getElementById('acomp-app-section');
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (sectionEl) sectionEl.style.display = 'none';
+  try {
+    const data = await api('/treino/acompanhamento/' + studentId);
+    _acompAppData = data;
+    if (!data.has_app) {
+      document.getElementById('acomp-app-empty-text').textContent = 'Este aluno ainda não tem acesso ao app de treino.';
+      if (emptyEl) emptyEl.style.display = 'block';
+      return;
+    }
+    if (sectionEl) sectionEl.style.display = 'block';
+    renderAcompCalendar();
+    renderAcompQualityChart();
+    renderAcompExerciseSelect();
+    renderAcompLoadChart();
+    renderAcompLastSessions();
+  } catch (e) {
+    document.getElementById('acomp-app-empty-text').textContent = 'Não consegui carregar os dados do app: ' + e.message;
+    if (emptyEl) emptyEl.style.display = 'block';
+  }
+}
+
+function renderAcompCalendar() {
+  const el = document.getElementById('acomp-calendar');
+  if (!el || !_acompAppData?.calendar) return;
+  const days = _acompAppData.calendar.slice(-_acompCalRange);
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,13px);gap:3px">'
+    + days.map(d => {
+        const dt = new Date(d.date + 'T12:00:00');
+        const label = dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+        const color = d.trained ? GREEN : 'rgba(168,178,189,0.12)';
+        return `<div title="${label}${d.trained ? ' · treinou' : ''}" style="width:13px;height:13px;border-radius:3px;background:${color}"></div>`;
+      }).join('')
+    + '</div>';
+
+  const fd = _acompAppData.weekly || [];
+  if (fd.length) {
+    mkChart('acompFreqChart', {
+      type: 'bar',
+      data: {
+        labels: fd.map(w => new Date(w.week_start + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })),
+        datasets: [
+          { label:'Feito', data: fd.map(w=>w.done), backgroundColor: GOLD+'88', borderColor: GOLD, borderWidth:1.5, borderRadius:3 },
+          { label:'Previsto', data: fd.map(w=>w.planned), type:'line', borderColor: SILV+'66', borderDash:[4,3], pointRadius:0, borderWidth:1.5 },
+        ]
+      },
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins: { legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}}, tooltip:{...tt} },
+        scales: { x:{grid:{display:false},ticks:{color:SILV,font:{size:8}}}, y:{grid,ticks:{color:SILV},suggestedMin:0} } }
+    });
+  } else { mkEmptyChart('acompFreqChart', 'Sem treinos registrados ainda'); }
+}
+
+function renderAcompQualityChart() {
+  const allWeeks = _acompAppData?.weekly || [];
+  const withData = allWeeks.filter(w => w.quality_score !== null);
+  const badge = document.getElementById('acomp-quality-badge');
+  if (badge) badge.textContent = withData.length ? withData[withData.length-1].quality_score + '/100' : '—';
+
+  if (!allWeeks.length) { mkEmptyChart('acompQualityChart', 'Sem treinos registrados ainda'); return; }
+  mkChart('acompQualityChart', {
+    type: 'line',
+    data: {
+      labels: allWeeks.map(w => new Date(w.week_start + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })),
+      datasets: [
+        { label:'Qualidade', data: allWeeks.map(w=>w.quality_score), borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.08)', fill:true, tension:0.4, borderWidth:2.5, pointRadius:4, spanGaps:true },
+        { label:'Aderência %', data: allWeeks.map(w=>w.adherence_pct), borderColor:BLUE, borderDash:[3,3], pointRadius:0, borderWidth:1.5, spanGaps:true },
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}}, tooltip:{...tt} },
+      scales: { x:{grid:{display:false},ticks:{color:SILV,font:{size:8}}}, y:{grid,ticks:{color:SILV},suggestedMin:0,suggestedMax:100} } }
+  });
+}
+
+function renderAcompExerciseSelect() {
+  const sel = document.getElementById('acomp-exercise-select');
+  if (!sel) return;
+  const exercises = _acompAppData?.exercises || [];
+  sel.innerHTML = exercises.length
+    ? exercises.map(ex => '<option value="'+ex.key+'">'+escHtml(ex.exercise_name)+'</option>').join('')
+    : '<option value="">Sem exercícios registrados</option>';
+}
+
+function renderAcompLoadChart() {
+  const sel = document.getElementById('acomp-exercise-select');
+  const key = sel?.value;
+  const ex = (_acompAppData?.exercises || []).find(e => e.key === key);
+  if (!ex || !ex.points.length) { mkEmptyChart('acompLoadChart', 'Sem registros de carga ainda'); return; }
+  mkChart('acompLoadChart', {
+    type: 'line',
+    data: {
+      labels: ex.points.map(p => new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })),
+      datasets: [
+        { label:'Carga máx (kg)', data: ex.points.map(p=>p.max_load), borderColor:GOLD, backgroundColor:'rgba(201,168,76,0.08)', fill:true, tension:0.3, borderWidth:2.5, pointRadius:4, yAxisID:'y' },
+        { label:'Tonelagem (kg)', data: ex.points.map(p=>p.tonnage), borderColor:PURPLE, borderDash:[3,3], pointRadius:3, borderWidth:1.5, yAxisID:'y1' },
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{labels:{color:SILV,usePointStyle:true,font:{size:9}}}, tooltip:{...tt} },
+      scales: {
+        x:  { grid:{display:false}, ticks:{color:SILV,font:{size:8}} },
+        y:  { position:'left',  grid, ticks:{color:GOLD,font:{size:9}}, suggestedMin:0 },
+        y1: { position:'right', grid:{display:false}, ticks:{color:PURPLE,font:{size:9}}, suggestedMin:0 },
+      } }
+  });
+}
+
+function renderAcompLastSessions() {
+  const el = document.getElementById('acomp-last-sessions');
+  if (!el) return;
+  const sessions = _acompAppData?.last_sessions || [];
+  if (!sessions.length) {
+    el.innerHTML = '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--dim);padding:12px 0">Nenhuma sessão concluída ainda.</div>';
+    return;
+  }
+  const moodEmoji = ['😣','😕','😐','🙂','😄'];
+  el.innerHTML = sessions.map(s => {
+    const emoji = s.mood_score ? moodEmoji[Math.max(1, Math.min(5, s.mood_score)) - 1] : '';
+    const dt = new Date(s.date + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    const setsInfo = s.sets_total != null ? s.sets_done + '/' + s.sets_total + ' séries' : s.sets_done + ' séries';
+    return `<div style="border:1px solid rgba(168,178,189,0.1);padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--white)">${escHtml(s.session_name)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim)">${dt}</div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px">${s.duration_min} min · ${setsInfo} · esforço ${s.effort_score ?? '—'}/5 ${emoji}</div>
+      ${s.comment ? `<div style="font-size:10px;color:var(--silver);margin-top:4px">"${escHtml(s.comment)}"</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Convite ao app + indicador de adesão ────────────────────────────────
+function renderStudentAppBadges(s, studentId) {
+  const el = document.getElementById('studentBadges');
+  if (!el) return;
+  if (s.accountLinked) {
+    el.innerHTML = '<span style="font-family:\'DM Mono\',monospace;font-size:9px;padding:3px 10px;border-radius:999px;background:rgba(74,222,128,0.12);color:var(--green)">📱 já acessou o app</span>';
+    return;
+  }
+  el.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:3px 10px;border-radius:999px;background:rgba(168,178,189,0.1);color:var(--dim)">📱 ainda não acessou o app</span>
+    <button onclick="abrirConviteApp('${studentId}')" style="margin-left:8px;font-family:'DM Mono',monospace;font-size:9px;padding:4px 12px;background:transparent;border:1px solid rgba(167,139,250,0.3);color:var(--purple);cursor:pointer;border-radius:4px">Convidar para o app</button>
+    <div id="convite-app-box-${studentId}"></div>`;
+}
+
+function updateAppAdoptionStat() {
+  const el = document.getElementById('acomp-app-adoption-text');
+  if (!el) return;
+  const all = Object.values(students);
+  if (!all.length) { el.textContent = 'Sem alunos cadastrados ainda.'; return; }
+  const comApp = all.filter(s => s.accountLinked).length;
+  const pct = Math.round(comApp / all.length * 100);
+  el.textContent = comApp + ' de ' + all.length + ' alunos ativos já têm acesso ao app (' + pct + '%)';
+}
+
+async function abrirConviteApp(studentId) {
+  const s = students[studentId];
+  if (!s) return;
+  const box = document.getElementById('convite-app-box-' + studentId);
+  if (!box) return;
+  if (!s.email) {
+    box.innerHTML = `
+      <div style="margin-top:8px;padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);max-width:360px">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">O login do app é por e-mail. Cadastre o e-mail deste aluno antes de convidar.</div>
+        <input class="v-select" id="convite-email-input-${studentId}" type="email" placeholder="email@exemplo.com" style="margin-bottom:8px" />
+        <button class="vbtn vbtn-green" style="padding:6px 12px" onclick="salvarEmailEConvidar('${studentId}')">Salvar e convidar</button>
+        <div id="convite-email-msg-${studentId}" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--red);margin-top:6px"></div>
+      </div>`;
+    return;
+  }
+  mostrarConviteGerado(studentId);
+}
+
+async function salvarEmailEConvidar(studentId) {
+  const input = document.getElementById('convite-email-input-' + studentId);
+  const msg = document.getElementById('convite-email-msg-' + studentId);
+  const email = (input?.value || '').trim().toLowerCase();
+  if (!email || !email.includes('@') || !email.includes('.')) {
+    if (msg) msg.textContent = 'Informe um e-mail válido.';
+    return;
+  }
+  try {
+    await api('/students/' + studentId, { method:'PATCH', body: JSON.stringify({ email }) });
+    students[studentId].email = email;
+    mostrarConviteGerado(studentId);
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+  }
+}
+
+function mostrarConviteGerado(studentId) {
+  const s = students[studentId];
+  const box = document.getElementById('convite-app-box-' + studentId);
+  if (!box || !s) return;
+  const link = location.origin + '/aluno/' + _trPersonalId();
+  const firstName = (s.name || '').split(' ')[0];
+  const msg = `Oi ${firstName}! Agora você pode acompanhar seu treino direto pelo celular 💪\n\nAcesse: ${link}\n\nUse o e-mail ${s.email} pra entrar — você recebe um código por e-mail, sem precisar de senha.`;
+  const waLink = s.phone ? 'https://wa.me/55' + s.phone.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg) : null;
+  box.innerHTML = `
+    <div style="margin-top:8px;padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);max-width:360px">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px;white-space:pre-wrap">${escHtml(msg)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="vbtn vbtn-green" style="padding:6px 12px;font-size:9px" onclick="copiarMensagemConvite('${studentId}')">Copiar mensagem</button>
+        ${waLink ? `<a href="${waLink}" target="_blank" class="vbtn" style="padding:6px 12px;font-size:9px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:var(--green);text-decoration:none">Abrir no WhatsApp</a>` : ''}
+      </div>
+      <div id="convite-copy-msg-${studentId}" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green);margin-top:6px"></div>
+    </div>`;
+  box.dataset.msg = msg;
+}
+
+function copiarMensagemConvite(studentId) {
+  const box = document.getElementById('convite-app-box-' + studentId);
+  const msg = box?.dataset?.msg;
+  const fb = document.getElementById('convite-copy-msg-' + studentId);
+  if (!msg) return;
+  navigator.clipboard.writeText(msg).then(() => { if (fb) fb.textContent = '✓ Copiado'; }).catch(() => { if (fb) fb.textContent = 'Erro ao copiar'; });
+}
+
 function updateStudent() {
   const sel = document.getElementById('studentSelect');
   if (!sel?.value) return;
   const s = students[sel.value];
   if (!s) return;
   if (!s._checkinsLoaded) { s._checkinsLoaded = true; loadStudentCheckins(sel.value); }
+  loadAcompApp(sel.value);
+  renderStudentAppBadges(s, sel.value);
+
+  // Aluno com app não recebe mais o formulário semanal — frequência, peso
+  // e humor já vêm de lá (nutrição fica pra uma fase futura, com a página
+  // de nutri). Mensal/trimestral continuam normalmente pra todo mundo.
+  const btnSemanal = document.getElementById('btn-gerar-link-semanal');
+  const noteSemanal = document.getElementById('form-semanal-app-note');
+  if (btnSemanal) {
+    btnSemanal.style.display = s.accountLinked ? 'none' : '';
+  }
+  if (noteSemanal) noteSemanal.style.display = s.accountLinked ? 'block' : 'none';
 
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('studentAvatar',  s.avatar);
