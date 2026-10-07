@@ -1322,18 +1322,30 @@ canvas{background:transparent!important}
     <div class="panel">
       <div class="panel-header">
         <div>
-          <div class="panel-title">Fichas de treino</div>
-          <div class="panel-sub">Monte a ficha por dia. O aluno vê a ficha no app.</div>
+          <div class="panel-title">Modelos de ficha</div>
+          <div class="panel-sub">Fichas sem aluno. Atribua a um aluno quando estiver pronta — a cópia fica independente do modelo.</div>
         </div>
-        <button class="vbtn vbtn-green" onclick="abrirNovaFicha()">+ Nova ficha</button>
+        <button class="vbtn vbtn-green" onclick="abrirNovaFicha()">+ Novo modelo</button>
       </div>
 
       <div id="tr-form-ficha" style="display:none;padding:14px;border:1px solid rgba(201,168,76,0.2);margin:12px 0">
-        <div class="v-field"><label class="v-label">Nome da ficha *</label><input class="v-input" id="tr-ficha-nome" type="text" placeholder="Ex: Hipertrofia 3x na semana" /></div>
-        <div id="tr-ficha-dias" style="margin-top:12px"></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px">
+          <div class="v-field"><label class="v-label">Nome da ficha *</label><input class="v-input" id="tr-ficha-nome" type="text" placeholder="Ex: Hipertrofia 3x na semana" /></div>
+          <div class="v-field"><label class="v-label">Objetivo</label><input class="v-input" id="tr-ficha-objetivo" type="text" placeholder="Ex: hipertrofia" /></div>
+          <div class="v-field"><label class="v-label">Nível</label>
+            <select class="v-select" id="tr-ficha-nivel">
+              <option value="">—</option>
+              <option value="iniciante">Iniciante</option>
+              <option value="intermediario">Intermediário</option>
+              <option value="avancado">Avançado</option>
+            </select>
+          </div>
+        </div>
+        <div class="v-field"><label class="v-label">Observações</label><input class="v-input" id="tr-ficha-obs" type="text" /></div>
+        <div id="tr-ficha-sessoes" style="margin-top:12px"></div>
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-          <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="adicionarDia()">+ Dia</button>
-          <button class="vbtn vbtn-green" onclick="salvarFicha()">Salvar ficha</button>
+          <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="adicionarSessao()">+ Treino</button>
+          <button class="vbtn vbtn-green" onclick="salvarFicha()">Salvar como modelo</button>
           <button class="vbtn" style="background:transparent;border:1px solid var(--dim);color:var(--dim)" onclick="fecharNovaFicha()">Cancelar</button>
         </div>
         <div id="tr-ficha-erro" style="display:none;margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)"></div>

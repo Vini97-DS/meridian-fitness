@@ -3247,9 +3247,16 @@ async function salvarExercicio() {
   } catch (e) { erro.textContent = e.message; erro.style.display = 'block'; }
 }
 
+const TR_WEEKDAY_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+let _trStudents = null;
+let _trAssignOpenId = null;
+
 function abrirNovaFicha() {
-  _trDraft = { dias: [ { label: 'A', exercicios: [] } ] };
+  _trDraft = { sessoes: [ { nome: 'A', weekdays: [], exercicios: [] } ] };
   document.getElementById('tr-ficha-nome').value = '';
+  document.getElementById('tr-ficha-objetivo').value = '';
+  document.getElementById('tr-ficha-nivel').value = '';
+  document.getElementById('tr-ficha-obs').value = '';
   document.getElementById('tr-form-ficha').style.display = 'block';
   renderDraft();
 }
@@ -3259,47 +3266,65 @@ function fecharNovaFicha() {
   document.getElementById('tr-form-ficha').style.display = 'none';
 }
 
-function adicionarDia() {
+function adicionarSessao() {
   const letras = 'ABCDEFGHIJ';
-  const label = letras[_trDraft.dias.length] || ('Dia ' + (_trDraft.dias.length + 1));
-  _trDraft.dias.push({ label, exercicios: [] });
+  const nome = letras[_trDraft.sessoes.length] || ('Treino ' + (_trDraft.sessoes.length + 1));
+  _trDraft.sessoes.push({ nome, weekdays: [], exercicios: [] });
   renderDraft();
 }
 
-function removerDia(i) {
-  _trDraft.dias.splice(i, 1);
+function removerSessao(i) {
+  _trDraft.sessoes.splice(i, 1);
   renderDraft();
 }
 
-function adicionarExercicioAoDia(i) {
+function toggleWeekdayDraft(i, dia) {
+  const s = _trDraft.sessoes[i];
+  const pos = s.weekdays.indexOf(dia);
+  if (pos >= 0) s.weekdays.splice(pos, 1); else s.weekdays.push(dia);
+  renderDraft();
+}
+
+function adicionarExercicioASessao(i) {
   const sel = document.getElementById('tr-draft-ex-' + i);
   const exId = sel.value;
   if (!exId) return;
   const ex = _trExercicios.find(e => e.id === exId);
-  _trDraft.dias[i].exercicios.push({ exercise_id: exId, name: ex.name, sets: 3, reps: '8-12', target_load: '', rest_seconds: 60 });
+  _trDraft.sessoes[i].exercicios.push({
+    exercise_id: exId, name: ex.name, sets: 3, reps_min: 8, reps_max: 12,
+    load_value: '', load_unit: 'kg', rest_seconds: 60,
+  });
   renderDraft();
 }
 
 function removerExercicioDraft(i, j) {
-  _trDraft.dias[i].exercicios.splice(j, 1);
+  _trDraft.sessoes[i].exercicios.splice(j, 1);
   renderDraft();
 }
 
 function atualizarCampoDraft(i, j, campo, valor) {
-  const ex = _trDraft.dias[i].exercicios[j];
-  ex[campo] = (campo === 'sets' || campo === 'rest_seconds') ? parseInt(valor, 10) || 0 : valor;
+  const ex = _trDraft.sessoes[i].exercicios[j];
+  ex[campo] = ['sets','reps_min','reps_max','rest_seconds'].includes(campo) ? (parseInt(valor, 10) || 0)
+    : campo === 'load_value' ? (valor === '' ? '' : parseFloat(valor))
+    : valor;
 }
 
 function renderDraft() {
-  const el = document.getElementById('tr-ficha-dias');
+  const el = document.getElementById('tr-ficha-sessoes');
   const opts = _trExercicios.map(e => '<option value="'+e.id+'">'+escHtml(e.name)+' ('+escHtml(e.muscle_group)+')</option>').join('');
-  el.innerHTML = _trDraft.dias.map((d, i) => `
+  el.innerHTML = _trDraft.sessoes.map((s, i) => `
     <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="v-field" style="width:120px"><label class="v-label">Dia</label><input class="v-input" value="${escHtml(d.label)}" oninput="_trDraft.dias[${i}].label=this.value" /></div>
-        ${_trDraft.dias.length > 1 ? '<button onclick="removerDia('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">remover dia</button>' : ''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <div class="v-field" style="width:160px;margin-bottom:0"><label class="v-label">Treino</label><input class="v-input" value="${escHtml(s.nome)}" oninput="_trDraft.sessoes[${i}].nome=this.value" /></div>
+        ${_trDraft.sessoes.length > 1 ? '<button onclick="removerSessao('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">remover treino</button>' : ''}
       </div>
-      ${d.exercicios.map((ex, j) => `
+      <div style="margin-bottom:8px">
+        <label class="v-label">Dias da semana (opcional)</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${TR_WEEKDAY_LABELS.map((lbl, d) => `<button type="button" onclick="toggleWeekdayDraft(${i},${d})" style="font-size:10px;padding:5px 9px;border-radius:4px;cursor:pointer;border:1px solid ${s.weekdays.includes(d)?'var(--gold)':'var(--dim)'};background:${s.weekdays.includes(d)?'rgba(201,168,76,0.15)':'transparent'};color:${s.weekdays.includes(d)?'var(--gold)':'var(--dim)'}">${lbl}</button>`).join('')}
+        </div>
+      </div>
+      ${s.exercicios.map((ex, j) => `
         <div style="border-top:1px solid rgba(168,178,189,0.08);padding:8px 0">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
             <div style="font-size:12px;color:var(--white);min-width:0;overflow-wrap:break-word">${escHtml(ex.name)}</div>
@@ -3307,14 +3332,15 @@ function renderDraft() {
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px">
             <div><label class="v-label">Séries</label><input class="v-input" type="number" min="1" value="${ex.sets}" onchange="atualizarCampoDraft(${i},${j},'sets',this.value)" /></div>
-            <div><label class="v-label">Repetições</label><input class="v-input" type="text" value="${escHtml(ex.reps)}" onchange="atualizarCampoDraft(${i},${j},'reps',this.value)" /></div>
-            <div><label class="v-label">Carga</label><input class="v-input" type="text" value="${escHtml(ex.target_load)}" placeholder="kg" onchange="atualizarCampoDraft(${i},${j},'target_load',this.value)" /></div>
+            <div><label class="v-label">Reps mín.</label><input class="v-input" type="number" min="1" value="${ex.reps_min}" onchange="atualizarCampoDraft(${i},${j},'reps_min',this.value)" /></div>
+            <div><label class="v-label">Reps máx.</label><input class="v-input" type="number" min="1" value="${ex.reps_max}" onchange="atualizarCampoDraft(${i},${j},'reps_max',this.value)" /></div>
+            <div><label class="v-label">Carga (kg)</label><input class="v-input" type="number" step="0.5" value="${ex.load_value}" placeholder="opcional" onchange="atualizarCampoDraft(${i},${j},'load_value',this.value)" /></div>
             <div><label class="v-label">Descanso (s)</label><input class="v-input" type="number" min="0" value="${ex.rest_seconds}" onchange="atualizarCampoDraft(${i},${j},'rest_seconds',this.value)" /></div>
           </div>
         </div>`).join('')}
       <div style="display:flex;gap:8px;margin-top:6px">
         <select class="v-select" id="tr-draft-ex-${i}" style="flex:1">${opts}</select>
-        <button class="vbtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold)" onclick="adicionarExercicioAoDia(${i})">+ Exercício</button>
+        <button class="vbtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold)" onclick="adicionarExercicioASessao(${i})">+ Exercício</button>
       </div>
     </div>`).join('');
 }
@@ -3324,14 +3350,20 @@ async function salvarFicha() {
   erro.style.display = 'none';
   const nome = document.getElementById('tr-ficha-nome').value.trim();
   if (!nome) { erro.textContent = 'Dê um nome à ficha.'; erro.style.display = 'block'; return; }
-  if (!_trDraft.dias.some(d => d.exercicios.length)) { erro.textContent = 'Adicione pelo menos um exercício.'; erro.style.display = 'block'; return; }
+  if (!_trDraft.sessoes.some(s => s.exercicios.length)) { erro.textContent = 'Adicione pelo menos um exercício.'; erro.style.display = 'block'; return; }
   try {
     await api('/treino/fichas', { method:'POST', body: JSON.stringify({
       personal_id: _trPersonalId(), name: nome,
-      days: _trDraft.dias.map(d => ({ label: d.label, exercises: d.exercicios.map(ex => ({
-        exercise_id: ex.exercise_id, sets: ex.sets, reps: ex.reps,
-        target_load: ex.target_load || null, rest_seconds: ex.rest_seconds,
-      })) })),
+      goal: document.getElementById('tr-ficha-objetivo').value.trim() || null,
+      level: document.getElementById('tr-ficha-nivel').value || null,
+      notes: document.getElementById('tr-ficha-obs').value.trim() || null,
+      sessions: _trDraft.sessoes.map(s => ({
+        name: s.nome, weekdays: s.weekdays.length ? s.weekdays : null,
+        exercises: s.exercicios.map(ex => ({
+          exercise_id: ex.exercise_id, sets: ex.sets, reps_min: ex.reps_min, reps_max: ex.reps_max,
+          load_value: ex.load_value === '' ? null : ex.load_value, rest_seconds: ex.rest_seconds,
+        })),
+      })),
     })});
     fecharNovaFicha();
     _trFichas = await api('/treino/fichas/' + _trPersonalId());
@@ -3339,26 +3371,62 @@ async function salvarFicha() {
   } catch (e) { erro.textContent = e.message; erro.style.display = 'block'; }
 }
 
+const TR_LEVEL_LABELS = { iniciante: 'Iniciante', intermediario: 'Intermediário', avancado: 'Avançado' };
+
 function renderFichas() {
   const el = document.getElementById('tr-fichas-lista');
   if (!el) return;
-  if (!_trFichas.length) { el.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:12px 0">Nenhuma ficha ainda. Clique em + Nova ficha.</div>'; return; }
+  if (!_trFichas.length) { el.innerHTML = '<div style="font-size:11px;color:var(--dim);padding:12px 0">Nenhum modelo ainda. Clique em + Novo modelo.</div>'; return; }
   el.innerHTML = _trFichas.map(w => `
     <div style="border:1px solid rgba(168,178,189,0.1);padding:12px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap">
         <div style="font-size:13px;color:var(--white)">${escHtml(w.name)}</div>
-        <button onclick="excluirFicha('${w.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">excluir</button>
+        <div style="display:flex;gap:10px;flex-shrink:0">
+          <button onclick="toggleAtribuirPainel('${w.id}')" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px">atribuir a aluno</button>
+          <button onclick="excluirFicha('${w.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px">excluir</button>
+        </div>
       </div>
-      ${w.days.map(d => `
+      ${(w.goal || w.level) ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:8px">${w.goal ? escHtml(w.goal) : ''}${w.goal && w.level ? ' · ' : ''}${w.level ? TR_LEVEL_LABELS[w.level] || escHtml(w.level) : ''}</div>` : ''}
+      <div id="tr-atribuir-${w.id}" style="display:${_trAssignOpenId===w.id?'flex':'none'};gap:8px;align-items:center;margin-bottom:10px;padding:8px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.15)">
+        <select class="v-select" id="tr-atribuir-select-${w.id}" style="flex:1"></select>
+        <button class="vbtn vbtn-green" style="padding:6px 12px" onclick="confirmarAtribuicao('${w.id}')">Confirmar</button>
+      </div>
+      <div id="tr-atribuir-msg-${w.id}" style="font-size:10px;color:var(--green);margin-bottom:6px"></div>
+      ${w.sessions.map(s => `
         <div style="margin-bottom:6px">
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.1em">DIA ${escHtml(d.label)}</div>
-          ${d.exercises.map(ex => `<div style="font-size:11px;color:var(--silver)">${escHtml(ex.exercise_name)} · ${ex.sets}× ${escHtml(ex.reps)}${ex.target_load ? ' · '+escHtml(ex.target_load) : ''} · descanso ${ex.rest_seconds}s</div>`).join('')}
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.1em">${escHtml(s.name).toUpperCase()}${s.weekdays && s.weekdays.length ? ' · ' + s.weekdays.map(d=>TR_WEEKDAY_LABELS[d]).join('/') : ''}</div>
+          ${s.exercises.map(ex => `<div style="font-size:11px;color:var(--silver)">${escHtml(ex.exercise_name)} · ${ex.sets}× ${ex.reps_min===ex.reps_max?ex.reps_min:(ex.reps_min+'-'+ex.reps_max)}${ex.load_value ? ' · '+ex.load_value+(ex.load_unit||'kg') : ''} · descanso ${ex.rest_seconds}s</div>`).join('')}
         </div>`).join('')}
     </div>`).join('');
 }
 
+async function toggleAtribuirPainel(workoutId) {
+  _trAssignOpenId = _trAssignOpenId === workoutId ? null : workoutId;
+  renderFichas();
+  if (_trAssignOpenId !== workoutId) return;
+  if (!_trStudents) {
+    try { _trStudents = await api('/students/' + _trPersonalId()); } catch (e) { _trStudents = []; }
+  }
+  const sel = document.getElementById('tr-atribuir-select-' + workoutId);
+  if (sel) sel.innerHTML = _trStudents.map(s => '<option value="'+s.id+'">'+escHtml(s.name)+'</option>').join('') || '<option value="">Nenhum aluno cadastrado</option>';
+}
+
+async function confirmarAtribuicao(workoutId) {
+  const sel = document.getElementById('tr-atribuir-select-' + workoutId);
+  const msg = document.getElementById('tr-atribuir-msg-' + workoutId);
+  const studentId = sel && sel.value;
+  if (!studentId) return;
+  try {
+    await api('/treino/fichas/' + workoutId + '/atribuir', { method:'POST', body: JSON.stringify({ student_id: studentId }) });
+    const nome = (_trStudents.find(s => s.id === studentId) || {}).name || 'aluno';
+    msg.textContent = '✓ Atribuída a ' + nome + '. Ficha ativa anterior dele(a), se havia, foi encerrada.';
+    _trAssignOpenId = null;
+    setTimeout(() => { msg.textContent = ''; renderFichas(); }, 4000);
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = e.message; }
+}
+
 async function excluirFicha(id) {
-  if (!confirm('Excluir esta ficha?')) return;
+  if (!confirm('Excluir este modelo?')) return;
   try {
     await api('/treino/fichas/' + id, { method:'DELETE' });
     _trFichas = await api('/treino/fichas/' + _trPersonalId());

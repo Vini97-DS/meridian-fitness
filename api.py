@@ -353,6 +353,49 @@ def create_users_table():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # Treino — alinha o modelo ao padrao de mercado: ficha pode ser
+            # MODELO (student_id nulo, biblioteca do personal) ou FICHA
+            # ATRIBUIDA (student_id preenchido, clone independente do modelo).
+            # workout_days vira workout_sessions (nome livre + dias da semana
+            # opcionais); reps e carga viram campos estruturados; video_url
+            # na ficha e snapshot do exercicio no momento da atribuicao.
+            for col_sql in [
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS student_id UUID REFERENCES students(id)",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS goal TEXT",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS level TEXT",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS starts_on DATE",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS ends_on DATE",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS notes TEXT",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS status TEXT",
+                "ALTER TABLE workouts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()",
+                # idempotente: so funciona na 1a vez, depois workout_days ja nao existe mais
+                "ALTER TABLE workout_days RENAME TO workout_sessions",
+                "ALTER TABLE workout_sessions RENAME COLUMN label TO name",
+                "ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS weekdays INT[]",
+                "ALTER TABLE workout_exercises RENAME COLUMN day_id TO session_id",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS reps_min INT NOT NULL DEFAULT 8",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS reps_max INT NOT NULL DEFAULT 12",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS load_value NUMERIC(6,2)",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS load_unit TEXT NOT NULL DEFAULT 'kg'",
+                "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS video_url TEXT",
+                # colunas antigas (texto livre), substituidas pelas estruturadas acima
+                "ALTER TABLE workout_exercises DROP COLUMN IF EXISTS reps",
+                "ALTER TABLE workout_exercises DROP COLUMN IF EXISTS target_load",
+            ]:
+                try:
+                    cur2.execute(col_sql)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+            try:
+                # 1 ficha ativa por aluno — garantido no banco, nao so na aplicacao
+                cur2.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS one_active_workout_per_student
+                    ON workouts (student_id) WHERE status = 'ativa'
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # student_acquisition_costs — custo de CADA PROFISSIONAL adquirir
             # um ALUNO (Nivel 1), nao confundir com acquisition_costs acima
             # (custo do Meridian adquirir um PROFISSIONAL, Nivel 2). "amount"
@@ -1097,6 +1140,13 @@ def _assert_own_workout(conn, workout_id: str, current: dict) -> None:
         raise HTTPException(404, "Ficha não encontrada")
     _assert_own_personal(conn, str(rows[0]["personal_id"]), current)
 
+def _assert_own_student(conn, student_id: str, current: dict) -> str:
+    rows = query(conn, "SELECT personal_id FROM students WHERE id=%s", (student_id,))
+    if not rows:
+        raise HTTPException(404, "Aluno não encontrado")
+    _assert_own_personal(conn, str(rows[0]["personal_id"]), current)
+    return str(rows[0]["personal_id"])
+
 def _valid_video_url(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
@@ -1117,22 +1167,38 @@ class ExerciseUpdate(BaseModel):
     instructions: Optional[str] = None
     video_url:    Optional[str] = None
 
+WORKOUT_LEVELS = ("iniciante", "intermediario", "avancado")
+
 class WorkoutExerciseIn(BaseModel):
     exercise_id:  str
     sets:         int = 3
-    reps:         str = "8-12"
-    target_load:  Optional[str] = None
+    reps_min:     int = 8
+    reps_max:     int = 12
+    load_value:   Optional[float] = None
+    load_unit:    str = "kg"
     rest_seconds: int = 60
     notes:        Optional[str] = None
 
-class WorkoutDayIn(BaseModel):
-    label:     str
+class WorkoutSessionIn(BaseModel):
+    name:      str
+    weekdays:  Optional[list[int]] = None
     exercises: list[WorkoutExerciseIn] = []
 
 class WorkoutCreate(BaseModel):
     personal_id: str
     name:        str
-    days:        list[WorkoutDayIn] = []
+    goal:        Optional[str] = None
+    level:       Optional[str] = None
+    starts_on:   Optional[str] = None
+    ends_on:     Optional[str] = None
+    notes:       Optional[str] = None
+    sessions:    list[WorkoutSessionIn] = []
+
+class WorkoutAssign(BaseModel):
+    student_id: str
+
+class WorkoutStatusUpdate(BaseModel):
+    status: str
 
 @app.get("/api/treino/exercicios/{personal_id}")
 def list_exercises(personal_id: str, q: Optional[str] = None, group: Optional[str] = None,
@@ -1193,56 +1259,124 @@ def update_exercise(exercise_id: str, data: ExerciseUpdate, conn=Depends(get_db)
     values.append(exercise_id)
     return execute(conn, f"UPDATE exercises SET {', '.join(fields)} WHERE id=%s RETURNING id", tuple(values))
 
-@app.get("/api/treino/fichas/{personal_id}")
-def list_workouts(personal_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
-    _assert_own_personal(conn, personal_id, current)
-    workouts = query(conn, "SELECT id, name, created_at FROM workouts WHERE personal_id=%s ORDER BY created_at DESC", (personal_id,))
+def _attach_sessions(conn, workouts: list) -> None:
     for w in workouts:
-        w["days"] = query(conn, """
-            SELECT d.id, d.label, d.position FROM workout_days d
-            WHERE d.workout_id=%s ORDER BY d.position
+        w["sessions"] = query(conn, """
+            SELECT id, name, weekdays, position FROM workout_sessions
+            WHERE workout_id=%s ORDER BY position
         """, (w["id"],))
-        for d in w["days"]:
-            d["exercises"] = query(conn, """
+        for s in w["sessions"]:
+            s["exercises"] = query(conn, """
                 SELECT we.id, we.exercise_id, e.name AS exercise_name, e.muscle_group,
-                       we.position, we.sets, we.reps, we.target_load, we.rest_seconds, we.notes
+                       we.position, we.sets, we.reps_min, we.reps_max,
+                       we.load_value, we.load_unit, we.rest_seconds, we.notes, we.video_url
                 FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
-                WHERE we.day_id=%s ORDER BY we.position
-            """, (d["id"],))
+                WHERE we.session_id=%s ORDER BY we.position
+            """, (s["id"],))
+
+def _insert_sessions(conn, workout_id: str, sessions) -> None:
+    for pos, s in enumerate(sessions):
+        sess = execute(conn, """
+            INSERT INTO workout_sessions (workout_id, name, weekdays, position)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (workout_id, s.name.strip() or f"Treino {pos+1}", s.weekdays, pos))
+        for epos, ex in enumerate(s.exercises):
+            exrow = query(conn, "SELECT video_url FROM exercises WHERE id=%s", (ex.exercise_id,))
+            video = exrow[0]["video_url"] if exrow else None
+            execute(conn, """
+                INSERT INTO workout_exercises
+                    (session_id, exercise_id, position, sets, reps_min, reps_max,
+                     load_value, load_unit, rest_seconds, notes, video_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (sess["id"], ex.exercise_id, epos, ex.sets, ex.reps_min, ex.reps_max,
+                  ex.load_value, ex.load_unit, ex.rest_seconds, ex.notes, video))
+
+@app.get("/api/treino/fichas/{personal_id}")
+def list_workouts(personal_id: str, student_id: Optional[str] = None,
+                   conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_personal(conn, personal_id, current)
+    if student_id:
+        _assert_own_student(conn, student_id, current)
+        workouts = query(conn, """
+            SELECT * FROM workouts WHERE personal_id=%s AND student_id=%s ORDER BY created_at DESC
+        """, (personal_id, student_id))
+    else:
+        workouts = query(conn, """
+            SELECT * FROM workouts WHERE personal_id=%s AND student_id IS NULL ORDER BY created_at DESC
+        """, (personal_id,))
+    _attach_sessions(conn, workouts)
     return workouts
 
 @app.post("/api/treino/fichas")
 def create_workout(data: WorkoutCreate, conn=Depends(get_db), current=Depends(get_current_user)):
     _assert_own_personal(conn, data.personal_id, current)
-    if not data.name.strip():
+    name = data.name.strip()
+    if not name:
         raise HTTPException(400, "Nome da ficha obrigatório")
-    if not data.days:
-        raise HTTPException(400, "A ficha precisa de pelo menos um dia")
-    for day in data.days:
-        for ex in day.exercises:
+    if not data.sessions:
+        raise HTTPException(400, "A ficha precisa de pelo menos um treino")
+    if data.level and data.level not in WORKOUT_LEVELS:
+        raise HTTPException(400, "Nível inválido")
+    for s in data.sessions:
+        for ex in s.exercises:
             _assert_own_exercise(conn, ex.exercise_id, current)
     workout = execute(conn, """
-        INSERT INTO workouts (personal_id, name) VALUES (%s, %s) RETURNING id
-    """, (data.personal_id, data.name.strip()))
-    for pos, day in enumerate(data.days):
-        d = execute(conn, """
-            INSERT INTO workout_days (workout_id, label, position) VALUES (%s, %s, %s) RETURNING id
-        """, (workout["id"], day.label.strip() or f"Dia {pos+1}", pos))
-        for epos, ex in enumerate(day.exercises):
-            execute(conn, """
-                INSERT INTO workout_exercises (day_id, exercise_id, position, sets, reps, target_load, rest_seconds, notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (d["id"], ex.exercise_id, epos, ex.sets, ex.reps, ex.target_load, ex.rest_seconds, ex.notes))
+        INSERT INTO workouts (personal_id, name, goal, level, starts_on, ends_on, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+    """, (data.personal_id, name, data.goal, data.level, data.starts_on, data.ends_on, data.notes))
+    _insert_sessions(conn, workout["id"], data.sessions)
     return {"id": str(workout["id"])}
+
+@app.post("/api/treino/fichas/{workout_id}/atribuir")
+def assign_workout(workout_id: str, data: WorkoutAssign, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_workout(conn, workout_id, current)
+    personal_id = _assert_own_student(conn, data.student_id, current)
+    src_rows = query(conn, "SELECT * FROM workouts WHERE id=%s", (workout_id,))
+    src = src_rows[0]
+    if str(src["personal_id"]) != personal_id:
+        raise HTTPException(403, "Ficha não pertence ao profissional deste aluno")
+    execute(conn, "UPDATE workouts SET status='encerrada', updated_at=NOW() WHERE student_id=%s AND status='ativa'",
+            (data.student_id,))
+    clone = execute(conn, """
+        INSERT INTO workouts (personal_id, student_id, name, goal, level, starts_on, ends_on, notes, status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ativa') RETURNING id
+    """, (personal_id, data.student_id, src["name"], src["goal"], src["level"],
+          src["starts_on"], src["ends_on"], src["notes"]))
+    sessions = query(conn, """
+        SELECT id, name, weekdays, position FROM workout_sessions WHERE workout_id=%s ORDER BY position
+    """, (workout_id,))
+    for s in sessions:
+        new_sess = execute(conn, """
+            INSERT INTO workout_sessions (workout_id, name, weekdays, position)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (clone["id"], s["name"], s["weekdays"], s["position"]))
+        exs = query(conn, "SELECT * FROM workout_exercises WHERE session_id=%s ORDER BY position", (s["id"],))
+        for ex in exs:
+            execute(conn, """
+                INSERT INTO workout_exercises
+                    (session_id, exercise_id, position, sets, reps_min, reps_max,
+                     load_value, load_unit, rest_seconds, notes, video_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (new_sess["id"], ex["exercise_id"], ex["position"], ex["sets"], ex["reps_min"], ex["reps_max"],
+                  ex["load_value"], ex["load_unit"], ex["rest_seconds"], ex["notes"], ex["video_url"]))
+    return {"id": str(clone["id"])}
+
+@app.patch("/api/treino/fichas/{workout_id}/status")
+def update_workout_status(workout_id: str, data: WorkoutStatusUpdate, conn=Depends(get_db), current=Depends(get_current_user)):
+    _assert_own_workout(conn, workout_id, current)
+    if data.status not in ("ativa", "encerrada"):
+        raise HTTPException(400, "Status inválido")
+    return execute(conn, "UPDATE workouts SET status=%s, updated_at=NOW() WHERE id=%s RETURNING id",
+                    (data.status, workout_id))
 
 @app.delete("/api/treino/fichas/{workout_id}")
 def delete_workout(workout_id: str, conn=Depends(get_db), current=Depends(get_current_user)):
     _assert_own_workout(conn, workout_id, current)
     execute(conn, """
-        DELETE FROM workout_exercises WHERE day_id IN
-          (SELECT id FROM workout_days WHERE workout_id=%s)
+        DELETE FROM workout_exercises WHERE session_id IN
+          (SELECT id FROM workout_sessions WHERE workout_id=%s)
     """, (workout_id,))
-    execute(conn, "DELETE FROM workout_days WHERE workout_id=%s", (workout_id,))
+    execute(conn, "DELETE FROM workout_sessions WHERE workout_id=%s", (workout_id,))
     execute(conn, "DELETE FROM workouts WHERE id=%s", (workout_id,))
     return {"ok": True}
 
