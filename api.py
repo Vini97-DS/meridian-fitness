@@ -469,6 +469,36 @@ def create_users_table():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # Privacidade do aluno: aceite versionado de termos + pedidos de
+            # exclusao/exportacao de dados (processados manualmente por ora).
+            # Testado antes num branch do Neon (br-aged-tooth-aqt8dopv, deletado).
+            try:
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS student_consents (
+                        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        account_id  UUID NOT NULL REFERENCES student_accounts(id),
+                        version     TEXT NOT NULL,
+                        accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE (account_id, version)
+                    )
+                """)
+                cur2.execute("""
+                    CREATE TABLE IF NOT EXISTS privacy_requests (
+                        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        account_id  UUID NOT NULL REFERENCES student_accounts(id),
+                        type        TEXT NOT NULL,
+                        status      TEXT NOT NULL DEFAULT 'pendente',
+                        note        TEXT,
+                        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        resolved_at TIMESTAMPTZ,
+                        CONSTRAINT privacy_requests_type_check CHECK (type IN ('exclusao','exportacao')),
+                        CONSTRAINT privacy_requests_status_check CHECK (status IN ('pendente','concluido'))
+                    )
+                """)
+                cur2.execute("CREATE INDEX IF NOT EXISTS privacy_requests_status_idx ON privacy_requests(status, created_at DESC)")
+                conn.commit()
+            except Exception:
+                conn.rollback()
             # student_acquisition_costs — custo de CADA PROFISSIONAL adquirir
             # um ALUNO (Nivel 1), nao confundir com acquisition_costs acima
             # (custo do Meridian adquirir um PROFISSIONAL, Nivel 2). "amount"
@@ -1141,6 +1171,120 @@ def aluno_me(current=Depends(get_current_student), conn=Depends(get_db)):
         WHERE l.account_id = %s
     """, (current["sub"],))
     return {"email": current["email"], "name": current.get("name"), "students": students_rows}
+
+# ═══════════════════════════════════════════════════════════════
+#  PRIVACIDADE DO ALUNO — termos versionados + exclusão/exportação
+# ═══════════════════════════════════════════════════════════════
+# RASCUNHO — texto placeholder. O Vinicius substitui pelo texto jurídico
+# definitivo antes de usar com alunos reais; o mecanismo de versionamento
+# já funciona (bump em TERMS_VERSION força todo mundo a re-aceitar).
+TERMS_VERSION = "1.0"
+TERMS_TEXT = """TERMOS DE USO E POLÍTICA DE PRIVACIDADE (rascunho v1.0)
+
+Este é um texto provisório — será substituído pelo texto jurídico definitivo.
+
+1. QUE DADOS COLETAMOS
+Nome, e-mail, telefone, dados físicos (peso, % de gordura, medidas),
+respostas de formulários de acompanhamento, fotos de progresso e dados de
+treino (séries, cargas, avaliações pós-treino).
+
+2. PARA QUE USAMOS
+Para que seu profissional acompanhe sua evolução e monte/ajuste seus
+treinos. Não vendemos nem compartilhamos seus dados com terceiros para
+fins de marketing.
+
+3. QUEM TEM ACESSO
+Você e o profissional responsável pelo seu acompanhamento. A equipe do
+Meridian pode acessar dados tecnicamente para suporte e manutenção.
+
+4. ONDE SEUS DADOS FICAM ARMAZENADOS
+Dados estruturados (cadastro, treinos, avaliações): banco de dados Neon.
+Fotos de progresso: Cloudinary. Hospedagem da aplicação: Vercel. Envio do
+código de acesso por e-mail: Resend.
+
+5. SEUS DIREITOS
+Você pode solicitar a exclusão da sua conta ou a exportação dos seus
+dados a qualquer momento, pelo próprio app, na seção "Privacidade".
+
+6. CONTATO
+Dúvidas sobre privacidade: fale com o profissional que te acompanha."""
+
+def _terms_accepted(conn, account_id: str) -> bool:
+    rows = query(conn, "SELECT 1 FROM student_consents WHERE account_id=%s AND version=%s", (account_id, TERMS_VERSION))
+    return bool(rows)
+
+@app.get("/api/aluno/termos")
+def aluno_termos(conn=Depends(get_db)):
+    """Publica — o texto precisa aparecer antes mesmo de qualquer aceite."""
+    return {"version": TERMS_VERSION, "text": TERMS_TEXT}
+
+@app.get("/api/aluno/termos/status")
+def aluno_termos_status(current=Depends(get_current_student), conn=Depends(get_db)):
+    return {"accepted": _terms_accepted(conn, current["sub"]), "version": TERMS_VERSION}
+
+class TermosAceite(BaseModel):
+    version: str
+
+@app.post("/api/aluno/termos/aceitar")
+def aluno_termos_aceitar(data: TermosAceite, current=Depends(get_current_student), conn=Depends(get_db)):
+    if data.version != TERMS_VERSION:
+        raise HTTPException(400, "Versão dos termos desatualizada — recarregue a página")
+    execute(conn, """
+        INSERT INTO student_consents (account_id, version) VALUES (%s, %s)
+        ON CONFLICT (account_id, version) DO NOTHING
+    """, (current["sub"], TERMS_VERSION))
+    return {"ok": True}
+
+class PrivacyRequestIn(BaseModel):
+    type: str
+    note: Optional[str] = None
+
+@app.post("/api/aluno/privacidade/solicitar")
+def aluno_privacidade_solicitar(data: PrivacyRequestIn, current=Depends(get_current_student), conn=Depends(get_db)):
+    if data.type not in ("exclusao", "exportacao"):
+        raise HTTPException(400, "Tipo inválido")
+    row = execute(conn, """
+        INSERT INTO privacy_requests (account_id, type, note) VALUES (%s, %s, %s)
+        RETURNING id, type, status, created_at
+    """, (current["sub"], data.type, (data.note or "").strip()[:500] or None))
+    return row
+
+@app.get("/api/aluno/privacidade/solicitacoes")
+def aluno_privacidade_solicitacoes(current=Depends(get_current_student), conn=Depends(get_db)):
+    return query(conn, """
+        SELECT id, type, status, note, created_at, resolved_at FROM privacy_requests
+        WHERE account_id=%s ORDER BY created_at DESC
+    """, (current["sub"],))
+
+# ── Admin: fila de pedidos de privacidade (processamento manual) ───────
+@app.get("/api/admin/privacy-requests")
+def admin_privacy_requests(admin_key: str, status: Optional[str] = None, conn=Depends(get_db)):
+    _check_admin_key(admin_key)
+    sql = """
+        SELECT pr.id, pr.type, pr.status, pr.note, pr.created_at, pr.resolved_at,
+               sa.email AS account_email
+        FROM privacy_requests pr JOIN student_accounts sa ON sa.id = pr.account_id
+    """
+    params = []
+    if status:
+        sql += " WHERE pr.status=%s"; params.append(status)
+    sql += " ORDER BY pr.created_at DESC"
+    return query(conn, sql, tuple(params))
+
+class PrivacyRequestResolve(BaseModel):
+    admin_key: str
+    status: str
+
+@app.patch("/api/admin/privacy-requests/{request_id}")
+def admin_privacy_request_resolve(request_id: str, data: PrivacyRequestResolve, conn=Depends(get_db)):
+    _check_admin_key(data.admin_key)
+    if data.status not in ("pendente", "concluido"):
+        raise HTTPException(400, "Status inválido")
+    resolved_at = "NOW()" if data.status == "concluido" else "NULL"
+    return execute(conn, f"""
+        UPDATE privacy_requests SET status=%s, resolved_at={resolved_at} WHERE id=%s
+        RETURNING id, status
+    """, (data.status, request_id))
 
 @app.get("/api/aluno/treino")
 def aluno_treino(personal_id: str, current=Depends(get_current_student), conn=Depends(get_db)):

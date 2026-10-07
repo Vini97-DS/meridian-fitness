@@ -435,6 +435,31 @@
       </div>
     </div>
 
+    <!-- Privacidade (LGPD) -->
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Solicitações de Privacidade</div>
+        <div class="section-sub">Pedidos de exclusão de conta e exportação de dados feitos por alunos</div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>E-mail</th>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th>Nota</th>
+            <th>Pedido em</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbl-privacy-requests">
+          <tr><td colspan="6" class="empty">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /app -->
 
@@ -558,7 +583,49 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ── Load all ──────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadOverview(), loadMeridianMetrics(), loadGrowth(_growthMonths), loadInvites(), loadAcquisitionCosts()]);
+  await Promise.all([loadOverview(), loadMeridianMetrics(), loadGrowth(_growthMonths), loadInvites(), loadAcquisitionCosts(), loadPrivacyRequests()]);
+}
+
+// ── Privacidade (LGPD) ──────────────────────────────────
+async function loadPrivacyRequests() {
+  const tbody = document.getElementById('tbl-privacy-requests');
+  try {
+    const rows = await adminGet('privacy-requests');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhuma solicitação ainda.</td></tr>';
+      return;
+    }
+    const typeLabel = { exclusao: 'Exclusão de conta', exportacao: 'Exportação de dados' };
+    tbody.innerHTML = rows.map(r => {
+      const badge = r.status === 'concluido'
+        ? '<span class="badge badge-green">Concluído</span>'
+        : '<span class="badge badge-amber">Pendente</span>';
+      const action = r.status === 'pendente'
+        ? `<button onclick="resolverPrivacyRequest('${r.id}')" style="background:none;border:1px solid #1e2030;color:#94a3b8;cursor:pointer;font-size:11px;padding:5px 10px;border-radius:6px">Marcar concluído</button>`
+        : '';
+      return `
+        <tr>
+          <td>${esc(r.account_email)}</td>
+          <td>${esc(typeLabel[r.type] || r.type)}</td>
+          <td>${badge}</td>
+          <td>${r.note ? esc(r.note) : '—'}</td>
+          <td>${fmtDate(r.created_at)}</td>
+          <td>${action}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Erro: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function resolverPrivacyRequest(id) {
+  if (!confirm('Confirma que esta solicitação já foi processada manualmente?')) return;
+  try {
+    await adminPatch('privacy-requests/' + id, { status: 'concluido' });
+    await loadPrivacyRequests();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
 }
 
 async function loadOverview() {

@@ -134,6 +134,9 @@
         <button class="btn btn-ghost" id="btn-logout" style="width:auto;min-height:40px;padding:0 16px;font-size:13px;margin-top:0">Sair</button>
       </div>
     </div>
+    <div style="text-align:center;margin:-10px 0 16px">
+      <button type="button" id="btn-abrir-privacidade" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline">Privacidade e meus dados</button>
+    </div>
 
     <div class="card" id="treino-vazio" style="display:none"></div>
     <div class="card" id="treino-erro" style="display:none">
@@ -180,6 +183,37 @@
     <div id="historico-lista"></div>
   </section>
 
+  <!-- Termos de uso / privacidade (bloqueante no primeiro acesso e sempre que a versão mudar) -->
+  <section id="step-termos" class="card hidden">
+    <h1>Termos de Uso e Privacidade</h1>
+    <p id="termos-versao-label" style="margin-bottom:10px"></p>
+    <div id="termos-texto" style="max-height:260px;overflow-y:auto;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px"></div>
+    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="chk-termos" style="width:20px;height:20px;flex-shrink:0;margin-top:2px" />
+      <span style="font-size:13px;color:var(--text)">Li e aceito os Termos de Uso e a Política de Privacidade.</span>
+    </label>
+    <button class="btn" id="btn-termos-continuar" disabled>Continuar</button>
+    <div class="msg err" id="msg-termos"></div>
+  </section>
+
+  <!-- Privacidade e meus dados -->
+  <section id="step-privacidade" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+      <h1 style="margin:0;font-size:18px">Privacidade e meus dados</h1>
+      <button class="btn btn-ghost" id="btn-privacidade-voltar" style="width:auto;min-height:36px;padding:0 14px;font-size:13px;margin-top:0">Voltar</button>
+    </div>
+    <div class="card">
+      <p style="margin:0 0 12px">Você pode solicitar a exportação dos seus dados ou a exclusão da sua conta a qualquer momento. Pedidos são analisados e processados pela equipe do Meridian.</p>
+      <button class="btn btn-ghost" id="btn-sol-exportacao" style="margin-bottom:10px">Solicitar exportação dos meus dados</button>
+      <button class="btn btn-ghost" id="btn-sol-exclusao" style="color:var(--danger);border-color:var(--danger)">Solicitar exclusão da minha conta</button>
+      <div class="msg" id="msg-privacidade"></div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Minhas solicitações</div>
+      <div id="privacidade-lista"><p class="placeholder">Nenhuma solicitação ainda.</p></div>
+    </div>
+  </section>
+
   <!-- Link inválido -->
   <section id="step-invalid" class="card hidden">
     <h1>Link inválido</h1>
@@ -224,7 +258,7 @@
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const $ = id => document.getElementById(id);
-  const STEPS = ['step-email','step-code','step-home','step-invalid','step-execucao','step-resumo','step-historico'];
+  const STEPS = ['step-email','step-code','step-home','step-invalid','step-execucao','step-resumo','step-historico','step-termos','step-privacidade'];
   const show = id => { STEPS.forEach(s => $(s).classList.add('hidden')); $(id).classList.remove('hidden'); };
   const setMsg = (id, text, isErr) => { const el = $(id); el.textContent = text || ''; el.className = 'msg' + (isErr ? ' err' : ''); };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -311,6 +345,12 @@
   });
 
   async function enterHome() {
+    const status = await api('/api/aluno/termos/status');
+    if (!status.accepted) { await mostrarTermos(); return; }
+    await entrarNoHome();
+  }
+
+  async function entrarNoHome() {
     const me = await api('/api/aluno/me');
     const mine = (me.students || []).filter(s => s.personal_id === personalId);
     const fullName = mine[0] ? mine[0].name : ((me.name && me.name !== me.email) ? me.name : '');
@@ -320,6 +360,71 @@
     show('step-home');
     loadTreino();
   }
+
+  // ── Termos de uso / privacidade (bloqueante) ──────────────────────────
+  let _termosVersion = null;
+  async function mostrarTermos() {
+    const t = await api('/api/aluno/termos');
+    _termosVersion = t.version;
+    $('termos-versao-label').textContent = 'Versão ' + t.version + ' — leia com atenção antes de continuar.';
+    $('termos-texto').textContent = t.text;
+    $('chk-termos').checked = false;
+    $('btn-termos-continuar').disabled = true;
+    $('msg-termos').textContent = '';
+    show('step-termos');
+  }
+  $('chk-termos').addEventListener('change', () => { $('btn-termos-continuar').disabled = !$('chk-termos').checked; });
+  $('btn-termos-continuar').addEventListener('click', async () => {
+    const btn = $('btn-termos-continuar'); btn.disabled = true;
+    try {
+      await api('/api/aluno/termos/aceitar', { method: 'POST', body: JSON.stringify({ version: _termosVersion }) });
+      await entrarNoHome();
+    } catch (e) {
+      setMsg('msg-termos', e.message, true);
+      btn.disabled = !$('chk-termos').checked;
+    }
+  });
+
+  // ── Privacidade e meus dados (exportação/exclusão) ────────────────────
+  const PRIV_TYPE_LABELS = { exclusao: 'Exclusão da conta', exportacao: 'Exportação de dados' };
+  $('btn-abrir-privacidade').addEventListener('click', abrirPrivacidade);
+  $('btn-privacidade-voltar').addEventListener('click', () => show('step-home'));
+
+  async function abrirPrivacidade() {
+    show('step-privacidade');
+    setMsg('msg-privacidade', '');
+    await carregarSolicitacoes();
+  }
+
+  async function carregarSolicitacoes() {
+    const el = $('privacidade-lista');
+    try {
+      const list = await api('/api/aluno/privacidade/solicitacoes');
+      if (!list.length) { el.innerHTML = '<p class="placeholder">Nenhuma solicitação ainda.</p>'; return; }
+      el.innerHTML = list.map(r => {
+        const statusLabel = r.status === 'concluido' ? '<span class="pill" style="border-color:#16a34a;color:#16a34a">Concluído</span>' : '<span class="pill">Pendente</span>';
+        return `<div class="ex-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <strong>${esc(PRIV_TYPE_LABELS[r.type] || r.type)}</strong>${statusLabel}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">${new Date(r.created_at).toLocaleDateString('pt-BR')}</div>
+          ${r.note ? `<div style="font-size:13px;margin-top:6px">"${esc(r.note)}"</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) { el.innerHTML = '<p class="placeholder">Não consegui carregar suas solicitações.</p>'; }
+  }
+
+  async function solicitarPrivacidade(tipo, confirmMsg) {
+    if (!confirm(confirmMsg)) return;
+    setMsg('msg-privacidade', '');
+    try {
+      await api('/api/aluno/privacidade/solicitar', { method: 'POST', body: JSON.stringify({ type: tipo }) });
+      setMsg('msg-privacidade', 'Solicitação registrada. Nossa equipe vai processar em breve.');
+      await carregarSolicitacoes();
+    } catch (e) { setMsg('msg-privacidade', e.message, true); }
+  }
+  $('btn-sol-exportacao').addEventListener('click', () => solicitarPrivacidade('exportacao', 'Confirma a solicitação de exportação dos seus dados?'));
+  $('btn-sol-exclusao').addEventListener('click', () => solicitarPrivacidade('exclusao', 'Confirma a solicitação de exclusão da sua conta? Essa ação é definitiva assim que processada.'));
 
   // ── Treino de hoje ──────────────────────────────────────
   const WEEKDAY_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
