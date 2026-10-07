@@ -448,13 +448,13 @@ opcionais). Deploy automático a cada push em `main` (GitHub integration).
 
 ## Problemas conhecidos (pendentes M1)
 1. Gráficos BI: sazonalidade, meta vs realizado, performance por canal, ROI — precisam de queries adicionais na API
-2. Renovação ainda cria linha duplicada — DISTINCT ON precisa de índice composto no Neon
-3. IDs duplicados pré-existentes em `dashboard.html`: `kpi-mrr-val` e `kpi-ticket-val` aparecem 2x — não introduzidos recentemente, pendente de limpeza
-4. MRR no card de KPI arredonda pra notação "K" (ex: "20.5K") — às vezes esconde o valor exato que se quer demonstrar; decisão de UX adiada
-5. Texto dos Termos de Uso do app do aluno é **rascunho placeholder** — falta o texto jurídico definitivo (trocar `TERMS_TEXT`/subir `TERMS_VERSION` em `api.py`)
-6. Exclusão/exportação de dados do aluno é **100% manual** hoje (sem automação que de fato apague/exporte) — fila em `/admin`, processo documentado em `docs/privacidade.md`
+2. Texto dos Termos de Uso do app do aluno é **rascunho placeholder** — falta o texto jurídico definitivo (trocar `TERMS_TEXT`/subir `TERMS_VERSION` em `api.py`)
+3. Exclusão/exportação de dados do aluno é **100% manual** hoje (sem automação que de fato apague/exporte) — fila em `/admin`, processo documentado em `docs/privacidade.md`
 
 ## Resolvidos recentemente
 - Tipo de formulário "semestral" removido (redundante com mensal) — só semanal/mensal/trimestral
 - Envio do form mensal/trimestral quebrava com "Unexpected token 'R', is not valid JSON" — causa raiz: 4 fotos em base64 dentro do JSON estouravam o limite fixo de 4.5MB de request body das Serverless Functions da Vercel (a Vercel rejeita antes do Python rodar, devolvendo texto puro). Corrigido: fotos agora sobem direto do navegador pro Cloudinary (unsigned upload preset `meridian_checkin_photos`, cloud `elbxkooi`, hardcoded em `form.html`) e só a URL resultante vai no JSON pro backend.
 - App do aluno completo (login por código, branding white-label, PWA, ficha do dia, execução de séries com timer/offline, avaliação pós-treino, privacidade/termos) — módulo "Treino" das entregas 2.1 a 2.4 + PRIVACIDADE.
+- "Renovação cria linha duplicada": investigado a fundo — a query `DISTINCT ON (s.id)` de `/api/students/{personal_id}` já está correta hoje (testada contra o único caso real de renovação em produção, devolve 1 linha). O que existia era uma aluna de dado de demo/seed cadastrada 2x por coincidência (mesmo telefone, timestamps idênticos) — removida manualmente, sem relação com o fluxo de renovação. Band-aid defensivo de dedup no frontend (`loadStudentsFromAPI`) mantido como rede de segurança, inofensivo.
+- IDs duplicados em `dashboard.html`: `kpi-mrr-val` e `kpi-ticket-val` apareciam tanto no `<div>` externo quanto no `<span>` interno (copy-paste) — removido do `<div>`, só o `<span>` carrega o id agora (mesmo padrão dos cards de CAC/LTV).
+- MRR e demais valores monetários não abreviam mais em notação "K" — `fmtMoney()` sempre mostra o valor exato. Decisão explícita: dado financeiro/de negócio exige clareza total, nunca arredondamento visual.

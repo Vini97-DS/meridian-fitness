@@ -316,7 +316,8 @@ function currencySymbol() {
 function fmtMoney(n) {
   const sym = currencySymbol();
   if (!n || n === 0) return sym + '0';
-  if (n >= 1000) return sym + (n/1000).toFixed(1) + 'K';
+  // Valor exato sempre — números de negócio/financeiro não podem arredondar
+  // em notação "K", precisão é exigida (decisão explícita do usuário).
   return sym + Math.round(n).toLocaleString('pt-BR');
 }
 function calcTime(since) {
