@@ -11,7 +11,7 @@ async function proAcompanhamento(browser, projectUse, alunoNome = "Aluno E2E") {
   await loginAsPro(pro);
   await pro.goto("/dashboard");
   await pro.getByRole("button", { name: /Acompanhamento de Alunos/ }).click();
-  await pro.locator("#studentSearchInput").click();
+  await pro.locator("#studentSearchInput").fill("");
   await pro.locator(".student-search-item", { hasText: alunoNome }).first().click();
   return { pro, ctx };
 }
