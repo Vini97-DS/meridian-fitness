@@ -27,6 +27,6 @@ export BASE_URL="http://127.0.0.1:$GWPORT" TEST_DB_HOST_ALLOWLIST="127.0.0.1"
 cd "$E2E" || exit 2
 node fixtures/seed.mjs seed || { echo "seed falhou"; tail -20 "$D/api.log"; exit 2; }
 eval "$(node fixtures/issue-tokens.mjs --export)"
-npx playwright test "$@"; RC=$?
-[ $RC -ne 0 ] && { echo "--- api.log (últimas linhas) ---"; tail -15 "$D/api.log"; }
+node lib/run.mjs "$@"; RC=$?
+[ $RC -ne 0 ] && { echo "--- api.log (últimas linhas) ---"; tail -40 "$D/api.log"; }
 exit $RC

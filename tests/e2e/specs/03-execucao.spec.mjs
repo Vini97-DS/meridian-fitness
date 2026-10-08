@@ -22,22 +22,29 @@ test.describe("3. Execução do treino", () => {
     await expect(banner.locator(".timer-big")).not.toHaveText(t1);
   });
 
-  test("3.2 avançar pelos exercícios, concluir, avaliar (esforço obrigatório) e enviar recado @smoke", async ({ page, db }) => {
-    gap(test, "Não há campo explícito 'recado ao profissional' (existe 'Comentário (opcional)' — o teste aceita rótulo coment/recado, mas a tela de resumo/envio de recado ainda não existe).");
+  test("3.2 avançar pelos exercícios, concluir e avaliar (esforço obrigatório) @smoke", async ({ page, db }) => {
     await openHome(page);
     await startWorkout(page);
-    await expect(page.getByText("Supino reto")).toBeVisible();
-    await expect(page.getByText("Tríceps corda")).toBeVisible();
+    await expect(page.locator("#exec-lista").getByText("Supino reto")).toBeVisible();
+    await expect(page.locator("#exec-lista").getByText("Tríceps corda")).toBeVisible();
     await completeAllSets(page);
     await expect(page.locator("#exec-lista .set-row .btn-set.done")).toHaveCount(6);
-    await finishWorkout(page, { effort: 4, mood: 5, comment: "recado e2e: tudo certo" });
+    await finishWorkout(page, { effort: 4, mood: 5, comment: "tudo certo" });
     await dismissWeightModal(page);
     await expect(page.getByRole("button", { name: "Voltar ao início" })).toBeVisible();
     await expect.poll(async () => (await executions(db)).length).toBe(1);
     const [e] = await executions(db);
-    expect(e).toMatchObject({ session_name: SESSION_NAMES.A, effort_score: 4, mood_score: 5, comment: "recado e2e: tudo certo", sets: 6 });
+    expect(e).toMatchObject({ session_name: SESSION_NAMES.A, effort_score: 4, mood_score: 5, comment: "tudo certo", sets: 6 });
     expect(e.finished_at).not.toBeNull();
-    await expect(page.getByText(/recado (enviado|ao profissional)/i)).toBeVisible();   // confirmação do recado
+  });
+
+  test("3.2b enviar recado ao profissional ao concluir @smoke", async ({ page }) => {
+    gap(test, "Não existe um passo/confirmação de 'recado ao profissional'; só o campo 'Comentário (opcional)' na avaliação.");
+    await openHome(page);
+    await startWorkout(page);
+    await completeAllSets(page);
+    await finishWorkout(page, { comment: "recado e2e" });
+    await expect(page.getByText(/recado (enviado|ao profissional)/i)).toBeVisible({ timeout: 4000 });
   });
 
   test("3.3 sair do treino pede confirmação e mantém o progresso @smoke", async ({ page }) => {

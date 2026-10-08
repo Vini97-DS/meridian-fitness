@@ -17,7 +17,7 @@ export default defineConfig({
   testMatch: /.*\.spec\.mjs/,
   outputDir: "./reports/artifacts",
   globalSetup: "./lib/global-setup.mjs",
-  timeout: 90_000,
+  timeout: 40_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,          // banco de teste compartilhado → execução sequencial

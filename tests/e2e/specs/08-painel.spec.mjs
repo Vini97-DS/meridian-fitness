@@ -10,7 +10,9 @@ async function abrirAluno(page, nome = "Aluno E2E") {
 }
 
 test.describe("8. Painel do profissional", () => {
-  test.beforeEach(async ({ page }) => { await loginAsPro(page); await page.goto("/dashboard"); });
+  test.beforeEach(async ({ page }) => { await loginAsPro(page);
+    page.on("response", async (r) => { if (r.url().includes("/api/") && r.status() >= 400) console.log(`[api ${r.status()}] ${r.url().replace(/.*\/api/, "/api")} ${(await r.text().catch(() => "")).slice(0, 160)}`); });
+    await page.goto("/dashboard"); });
 
   test("8.1 abre com a sessão de teste (sem voltar ao login)", async ({ page }) => {
     await expect(page.getByRole("button", { name: /BI & Negócio/ })).toBeVisible();

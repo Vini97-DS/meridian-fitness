@@ -16,7 +16,14 @@ export async function loginAsStudent(page) {
     } catch (e) {}
   }, [studentToken()]);
 }
+// O dashboard carrega Chart.js de um CDN e QUEBRA a inicialização inteira se o CDN não responde (Chart is not defined).
+// Os e2e não testam gráficos: servimos um stub local para não depender de rede externa (só no teste, nunca no app).
+export async function stubChartCdn(context) {
+  await context.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/Chart\.js\//, (r) => r.fulfill({ status: 200, contentType: "application/javascript",
+    body: "window.Chart=function(){return{destroy(){},update(){},data:{datasets:[]},options:{}}};window.Chart.register=function(){};window.Chart.defaults={font:{},plugins:{legend:{labels:{}}}};" }));
+}
 export async function loginAsPro(page) {
+  await stubChartCdn(page.context());
   await page.context().addInitScript(([tok, user]) => {
     try { localStorage.setItem("mf_token", tok); localStorage.setItem("mf_user", JSON.stringify(user)); } catch (e) {}
   }, [proToken(), { id: IDS.user, name: "Personal E2E", email: "personal@e2e.meridian.test", personal_id: IDS.personal, bio: "", especialidade: "" }]);
@@ -50,7 +57,7 @@ export async function finishWorkout(page, { effort = 3, mood = 4, comment = "" }
   if (comment) await modal.getByLabel(/coment|recado/i).fill(comment);
   await expect(confirm).toBeEnabled();
   await confirm.click();
-  await expect(page.getByText("Treino concluído")).toBeVisible();
+  await expect(page.getByText("Treino concluído", { exact: true })).toBeVisible();
 }
 export async function dismissWeightModal(page) {
   const agora = page.getByRole("button", { name: "Agora não" });

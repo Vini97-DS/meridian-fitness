@@ -16,3 +16,7 @@ CREATE TABLE IF NOT EXISTS checkins (id UUID PRIMARY KEY DEFAULT gen_random_uuid
   training_feedback TEXT, trainings_done INT, had_pain BOOLEAN, pain_description TEXT, nutrition_notes TEXT, mood_score INT, energy_score INT, weight_reported NUMERIC, bf_measured NUMERIC,
   general_notes TEXT, intensity_score INT, nutrition_score INT, created_at TIMESTAMPTZ DEFAULT NOW(), responded_at TIMESTAMPTZ);
 CREATE TABLE IF NOT EXISTS leads (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), personal_id UUID REFERENCES personals(id), name TEXT, phone TEXT, channel TEXT, status TEXT, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS form_tokens (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), student_id UUID REFERENCES students(id), personal_id UUID REFERENCES personals(id), token TEXT UNIQUE,
+  form_type TEXT, used BOOLEAN DEFAULT FALSE, expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS progress_photos (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), student_id UUID REFERENCES students(id), url TEXT, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS invites (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT, created_at TIMESTAMPTZ DEFAULT NOW());

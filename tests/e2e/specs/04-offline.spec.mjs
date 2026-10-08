@@ -55,7 +55,9 @@ test.describe("4. Offline e sincronização", () => {
     for (let i = 0; i < 2; i++) {
       for (const item of fila) {
         const r = await request.post(baseURL + item.path, { headers: auth(studentToken()), data: item.body });
-        expect(r.status(), `${item.path} reenviado`).toBeLessThan(400);
+        // /iniciar e /finalizar são idempotentes (2xx). Séries reenviadas DEPOIS de finalizado são recusadas (400) — seguro: nada duplica.
+        const limite = item.path.endsWith("/series") ? 500 : 400;
+        expect(r.status(), `${item.path} reenviado → ${r.status()} ${await r.text()}`).toBeLessThan(limite);
       }
     }
     const depois = await executions(db);
