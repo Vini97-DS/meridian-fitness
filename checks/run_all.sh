@@ -9,6 +9,7 @@ cd "$ROOT"
 
 # Segurança: recusa alvos que parecem produção.
 BASE_URL="${BASE_URL:-}"
+USER_BASE_URL="$BASE_URL"   # a URL informada pelo usuário (H usa só esta, nunca o servidor sintético)
 if [ "${ALLOW_PRODUCTION_URL:-}" != "1" ] && [[ "$BASE_URL" == *"meridian-fitness.vercel.app"* && "$BASE_URL" != *"-git-"* ]]; then
   echo "✖ BASE_URL aponta para PRODUÇÃO ($BASE_URL). Use um preview da Vercel ligado ao branch de teste do Neon." >&2
   exit 2
@@ -74,6 +75,8 @@ step D "Lighthouse + PWA"           node "$HERE/d_lighthouse.mjs"
 step E "acessibilidade (axe)"       node "$HERE/e_axe.mjs"
 step F "tamanho e orçamento"        "$PY" "$HERE/f_size.py"
 step G "cabeçalhos e PWA"           "$PY" "$HERE/g_headers.py"
+export USER_BASE_URL
+step H "testes e2e (smoke)"         "$PY" "$HERE/h_e2e.py"
 
 "$PY" "$HERE/summarize.py"
 exit $?

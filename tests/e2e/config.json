@@ -1,0 +1,16 @@
+{
+  "blockedHosts": ["meridian-fitness.vercel.app", "meridianstrategy.de", "meridian.app"],
+  "blockedDbHosts": ["ep-rapid-mud-aqm3dzos.c-8.us-east-1.aws.neon.tech"],
+  "timezone": "America/Sao_Paulo",
+  "locale": "pt-BR",
+  "ids": {
+    "user": "e2e00000-0000-4000-8000-000000000001",
+    "personal": "e2e00000-0000-4000-8000-000000000002",
+    "student": "e2e00000-0000-4000-8000-000000000003",
+    "studentB": "e2e00000-0000-4000-8000-000000000004",
+    "account": "e2e00000-0000-4000-8000-000000000005",
+    "plan": "e2e00000-0000-4000-8000-000000000006",
+    "workout": "e2e00000-0000-4000-8000-000000000007"
+  },
+  "emailDomain": "e2e.meridian.test"
+}

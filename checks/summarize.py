@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 from common import CHECKS, REPORTS, SEVERITIES, SEV_PT, CHECK_NAMES
 
-SLUG = {"A": "A-dependencias", "B": "B-segredos", "C": "C-lint", "D": "D-lighthouse", "E": "E-axe", "F": "F-tamanho", "G": "G-headers"}
+SLUG = {"A": "A-dependencias", "B": "B-segredos", "C": "C-lint", "D": "D-lighthouse", "E": "E-axe", "F": "F-tamanho", "G": "G-headers", "H": "H-e2e"}
 base = json.loads((CHECKS / "baseline.json").read_text())
 accepted = {a["id"]: a for a in base.get("accepted", [])}
 results, rc = {}, 0

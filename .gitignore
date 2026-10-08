@@ -11,3 +11,9 @@ checks/.venv/
 checks/node_modules/
 checks/.env
 checks/bin/
+
+# tests/e2e (testes de fumaça)
+tests/e2e/reports/
+tests/e2e/node_modules/
+tests/e2e/.env
+tests/e2e/local/.venv/

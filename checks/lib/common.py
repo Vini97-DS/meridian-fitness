@@ -15,6 +15,7 @@ CHECK_NAMES = {
     "E": "Acessibilidade e contraste (axe)",
     "F": "Tamanho e orçamento de carregamento",
     "G": "Cabeçalhos e PWA (passivo)",
+    "H": "Testes e2e (smoke)",
 }
 
 
