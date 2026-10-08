@@ -45,8 +45,8 @@ max_client_conn = 2000
 logfile = $D/pgb.log
 pidfile = $D/pgb.pid
 INI
-  echo '"postgres" ""' >"$D/users.txt"
-  pgbouncer -q "$D/pgb.ini" & PIDS+=($!); sleep 1
+  echo '"postgres" ""' >"$D/users.txt"; chown postgres "$D/users.txt" "$D/pgb.ini" 2>/dev/null
+  run_pg "pgbouncer -q $D/pgb.ini" & PIDS+=($!); sleep 2   # pgbouncer não roda como root
   export DATABASE_URL="postgresql://postgres@127.0.0.1:$BOUNCER/load"
 fi
 
