@@ -5,3 +5,9 @@ __pycache__/
 venv/
 .venv/
 .DS_Store
+# checks/ (suíte de checagens somente-leitura)
+checks/reports/
+checks/.venv/
+checks/node_modules/
+checks/.env
+checks/bin/

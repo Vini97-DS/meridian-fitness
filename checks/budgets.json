@@ -1,0 +1,14 @@
+{
+  "lighthouse": {
+    "performance_min": 80,
+    "accessibility_min": 90,
+    "best_practices_min": 90,
+    "lcp_ms_max": 2500,
+    "student_home_js_kb_max": 250
+  },
+  "size": {
+    "fonts_kb_max": 200,
+    "sw_precache_kb_max": 1536,
+    "large_file_kb": 150
+  }
+}

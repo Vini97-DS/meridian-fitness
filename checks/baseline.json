@@ -1,0 +1,4 @@
+{
+  "_doc": "Achados aceitos conscientemente. Cada item: {\"id\": \"<id do achado no SUMMARY.md>\", \"reason\": \"por quê\", \"date\": \"AAAA-MM-DD\"}. Achado aceito não bloqueia e aparece como 'aceito'.",
+  "accepted": []
+}

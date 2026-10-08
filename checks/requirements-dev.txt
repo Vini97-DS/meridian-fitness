@@ -1,0 +1,5 @@
+# Ferramentas de checagem — SOMENTE dev, nunca entram no deploy (o Vercel
+# lê só o requirements.txt da raiz).
+pip-audit>=2.7
+detect-secrets>=1.5
+ruff>=0.6

@@ -1,0 +1,64 @@
+name: checks
+# Suíte SOMENTE LEITURA (ver checks/README.md). Sem segredos no YAML: só GitHub Secrets referenciados.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "URL do PREVIEW da Vercel (ligado ao branch de teste do Neon). NUNCA produção."
+        required: true
+      only:
+        description: "Checagens a rodar (letras separadas por espaço)"
+        default: "A B C D E F G"
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    # A, B, C, F — em PRs e pushes na branch principal
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      CHECKS_ONLY: "A B C F"
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # B varre o histórico inteiro
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: gitleaks (binário open source)
+        run: |
+          mkdir -p checks/bin
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz -C checks/bin gitleaks
+      - run: ./checks/run_all.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: checks-reports, path: checks/reports/ }
+
+  live:
+    # D, E, G — só manualmente (precisam de URL)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      CHECKS_ONLY: ${{ inputs.only }}
+      TEST_STUDENT_TOKEN: ${{ secrets.TEST_STUDENT_TOKEN }}
+      TEST_PERSONAL_ID: ${{ secrets.TEST_PERSONAL_ID }}
+      TEST_PRO_TOKEN: ${{ secrets.TEST_PRO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Chromium
+        run: npx --yes playwright-core@1.56.1 install --with-deps chromium
+      - run: ./checks/run_all.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: checks-reports, path: checks/reports/ }

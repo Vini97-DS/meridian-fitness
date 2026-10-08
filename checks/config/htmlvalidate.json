@@ -1,0 +1,22 @@
+{
+  "extends": ["html-validate:recommended"],
+  "rules": {
+    "no-inline-style": "off",
+    "attribute-boolean-style": "off",
+    "attribute-empty-style": "off",
+    "void-style": "off",
+    "no-trailing-whitespace": "off",
+    "long-title": "off",
+    "prefer-native-element": "off",
+    "no-implicit-button-type": "off",
+    "doctype-style": "off",
+    "element-case": "off",
+    "attr-quotes": "off",
+    "attr-case": "off",
+    "script-element": "off",
+    "no-redundant-role": "off",
+    "text-content": "off",
+    "heading-level": "off",
+    "no-missing-references": "warn"
+  }
+}
